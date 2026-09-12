@@ -1,0 +1,26 @@
+# dsh-apollo bundle patch: inserts the single host-plane row for this package
+# into the profile roster. Applied as a profile bundle layer (the
+# `dsh.bundle.patch` manifest field); activate with
+# `dsh plugin --profile <name> add link:<path-to>/dsh-apollo`.
+#
+# One row on purpose. The row's module specifier must be the bare package name
+# because the browser half (`dsh.client` → exports "./client") is discovered
+# from the row's package manifest: `dsh-client-modules` only accepts a bare or
+# two-segment scoped specifier, and it rejects a second active row resolving to
+# the same package name ("resolves from multiple active Loader sources"). So
+# the one node half does all three jobs:
+#
+#   1. registers the packaged skills/ tree on the skill registry's global layer
+#      (every preset mounting tool-skill then exposes the catalog);
+#   2. syncs the packaged presets/eng/ tree into <dshHome>/.agent-presets on
+#      boot, because DSH scans only the shipped root and the user root;
+#   3. mounts the settings-panel host half (/eng-panel/api/config) and, when
+#      the row config sets `declareOwnsHost: true`, the trusted-proxy tap.
+#
+# Row config (all optional): `trustedHosts: string[]` (reverse-proxy
+# authorities allowed to call the panel route), `declareOwnsHost: boolean`
+# (inject the boot global that makes the official client treat a proxied page
+# as loopback; off by default — enable only behind a trusted proxy).
+- insert:
+    - id: apollo-skills
+      name: dsh-apollo
