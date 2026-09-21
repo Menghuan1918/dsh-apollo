@@ -25,7 +25,7 @@ dsh --profile <name> --dump-config   # 应出现 "# == dsh-apollo" 层与 apollo
 重启该 profile 的 dsh 进程后生效：
 
 - 新会话的技能目录包含下列流程技能（技能注册在全局层，任何挂载 `tool-skill` 的 preset 都看得到）；
-- 包内 `presets/eng/` 被同步进 `<dshHome>/.agent-presets/eng`，预设选择器里出现「工程模式」。预设根虽在启动早期扫描，但同步发生在首个请求之前，**一次重启即可**（2026-09-12 在隔离 `DSH_HOME` 上实测：首次启动后副本已存在且与包内校验和一致）。
+- 包内 `presets/` 下每个预设被同步进 `<dshHome>/.agent-presets`，预设选择器里出现「工程模式」与「工程模式(无提问)」。预设根虽在启动早期扫描，但同步发生在首个请求之前，**一次重启即可**（2026-09-12 在隔离 `DSH_HOME` 上实测：首次启动后副本已存在且与包内校验和一致）。
 
 把工程模式设为默认（用户级设置，不随仓库分发）：
 
@@ -40,7 +40,7 @@ agent-presets:
 ```sh
 dsh plugin --profile <name> remove dsh-apollo
 # 同步副本不会自动删除，需要时手动清理：
-rm -rf ~/.dsh/.agent-presets/eng
+rm -rf ~/.dsh/.agent-presets/eng ~/.dsh/.agent-presets/eng-noask
 ```
 
 ## 流程技能
@@ -77,6 +77,8 @@ rm -rf ~/.dsh/.agent-presets/eng
 | `plugins/wait-subagent/` | `wait_subagent` 工具：一次调用并发等待全部直接子代理，只回短 done 行，内容交还框架的 settlement notice |
 | `plugins/mode-instructions/` | eng 专属提示词段：退出守卫契约 + 子代理委派/编排纪律（只写其它表面未述的 delta；委派纪律原在全局 `~/.dsh/AGENTS.md`，2026-09-11 迁入；模型档位留在全局，因其跟随本机路由配置） |
 | `plugins/lib/atlas-config.js` | `<dshHome>/eng.json` 读取（旧名 `atlas.json` 只读回退） |
+
+`presets/eng-noask/`（工程模式(无提问)）是 `presets/eng/` 的整树拷贝再剔除一行：`tool-ask-user` 行整行删除（会话没有 `ask_user_question` 工具），preset 本地提示词段加无提问纪律（不提问、自主决策、假设写进报告），plan-mode 提示词里两处 `ask_user_question` 引用同步改写。退出守卫等其余行为与工程模式一致，`eng.json` 配置两预设共用。改 eng 后把树重拷一遍再重做剔除——`node --test` 会拦住两树漂移超出该行的分叉。
 
 预设是内置 `standard` 的整棵拷贝（DSH 没有 extends/include 机制，插件也无法新增预设根）。拷贝就会漂移：`node --test` 里的 `tests/upstream-drift.test.mjs` 拿本机 DSH 的 `standard` 对照，**上游有而 eng 没有的行直接判失败并列出该补哪一行**，并挡住未声明的配置差异。2026-09-12 补回的上游行是 `@deepseek-ai/dsh-tool-present`（缺失时静默没有 `present` 工具）。
 

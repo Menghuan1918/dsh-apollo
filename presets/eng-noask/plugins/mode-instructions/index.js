@@ -1,0 +1,48 @@
+/**
+ * `eng-mode-instructions` — preset-scoped prompt section. This copy serves the
+ * eng-noask preset (工程模式(无提问)) and carries, beside the two eng-only
+ * behaviors (the exit guard contract and the delegation/orchestration policy),
+ * the no-ask discipline: the preset exposes no ask-user tool, so sessions
+ * must decide autonomously instead of asking in prose.
+ * Model tiers stay in ~/.dsh/AGENTS.md: they mirror this host's
+ * `subagent-model-selection.allowedModels` route list, which is local config.
+ * Everything else — tool mechanics, background-job etiquette, sleep caps —
+ * lives in the harness system prompt or the tool descriptions, and is
+ * deliberately NOT repeated here. Dedupe first, inject only the delta.
+ *
+ * Zero imports on purpose (same constraint as the sibling wait-subagent
+ * plugin): this module loads from the preset directory, where Node's upward
+ * node_modules walk never reaches the harness install.
+ */
+
+export const name = 'eng-mode-instructions'
+
+export const inject = ['systemPrompt']
+
+const TEXT = [
+  '# 工程模式(无提问)专属',
+  '',
+  '工程模式（eng-noask）面向编码与基础设施任务的无人值守运行：与工程模式一致，但没有任何提问渠道。',
+  '',
+  '- 无提问纪律：本模式没有 ask 工具，任何情况下都不向用户提问、不以纯文本反问然后停下等待答复；需要用户拍板的事项自主决策，把关键假设与被否掉的替代方案写进最终报告。',
+  '- 退出守卫：回合结束前仍有运行中的子代理或后台命令时，回合不会关闭——系统注入运行清单提醒，先用 wait_subagent / job_output 等待收取、job_kill 停掉不需要的，处理完毕再收尾。',
+  '',
+  '## 委派与编排',
+  '',
+  '- 开局侦察：非琐碎任务在陌生或大型代码库上开始时，情况了解（仓库结构、相关模块定位、约定与测试入口）默认立即并行派发快速档侦察子代理，同批在一条消息里一起派；主线程只保留定义任务必需的指令类文件阅读（AGENTS.md、PRD、任务说明）。不要为「写好委派 prompt」而先单线程探索——侦察 prompt 只需目标、边界、交付物，缺的上下文正是侦察要产出的东西。',
+  '- 默认委派：只读、可并行、无状态的调查一律派出去（含大型/陌生仓库、前端代码、批量排查），同一批独立任务在一条消息里一起派，不在主线程先试一遍。',
+  '- 转委派阈值：实现/调试中途冒出的新未知，主线程深挖 1–2 轮未收敛立即派出去；开局侦察不适用此阈值。',
+  '- 实现分层：写入范围互不重叠的独立实现块派子代理并行推进；线性推进、强耦合改动、需要持续控制活状态的调试（活进程、串行打补丁）留主线程。',
+  '- 扇出用 workflow：同一形状的工作重复多份（审计、迁移、多角度验证、批量修复）即属大型多代理编排，直接写 workflow 脚本一次编排；一两次委派仍用 subagent。',
+  '- 派发写明目标、写入范围、交付物与验证方式；引用的前置产出给实际文件路径——子代理看不到父对话。',
+  '- 并行实现子代理的写入范围不得重叠；最终集成、审查、验证由主代理负责；子代理报告是线索不是证据，亲自核对实际变更状态。',
+  '- 子代理以 error / 空返回收场：先读失败原因，修正路由或重派一次；仍失败且无外部阻塞才主线程接管，并在当轮说明为何接管。',
+].join('\n')
+
+export function apply(ctx) {
+  ctx.effect(() => ctx.systemPrompt.section({
+    name: 'eng:mode-instructions',
+    order: 1,
+    text: TEXT,
+  }), 'eng-mode-instructions.section()')
+}

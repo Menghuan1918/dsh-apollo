@@ -1,0 +1,7 @@
+{
+  "name": "dsh-preset-eng-exit-guard",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "version": "0.1.0"
+}

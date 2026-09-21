@@ -2,9 +2,11 @@
  * 上游漂移自检：eng 预设是内置 `standard` 预设的整棵 fork，DSH 升级后上游新增
  * 的行不会自动传过来（2026-09-12 已因此漏掉 `@deepseek-ai/dsh-tool-present`）。
  *
- * 两类检查：
+ * 三类检查：
  * 1. **漂移**：eng 与上游 standard 去掉注释/空行后只允许有白名单内的差异；出现
  *    白名单外的差异（尤其是上游有 eng 没有的行）即失败，提示把哪一行带过来。
+ *    eng-noask（工程模式(无提问)）是 eng 的整树拷贝再剔除 tool-ask-user 行：
+ *    单独对齐 eng，唯一允许差异即该行；模块解析与副本一致性检查覆盖两个预设。
  * 2. **两份副本一致**：`node --test` 会把包内 `presets/eng/` 同步进
  *    `<dshHome>/.agent-presets/eng`（与 dsh 启动时的 sync-on-boot 同一个函数），
  *    改完源树不跑测试直接重启，跑的就是旧副本——这里直接堵掉。
@@ -24,6 +26,10 @@ import { dshHome, syncPresetTrees } from '../src/preset-sync.js'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url))
 const ENG_PRESET = join(PACKAGE_ROOT, 'presets', 'eng')
+const ENG_NOASK_PRESET = join(PACKAGE_ROOT, 'presets', 'eng-noask')
+
+/** eng-noask 相对 eng 唯一允许的行差异：整行剔除的 ask 工具行。 */
+const NOASK_REMOVED_ROW = 'tool-ask-user -> @deepseek-ai/dsh-tool-ask-user'
 
 /**
  * 本包相对上游 standard 的有意差异。eng 只做加法与一处调参：
@@ -180,25 +186,43 @@ test('eng 预设的行与上游 standard 对齐，差异只有白名单', (t) =>
   }
 })
 
+test('eng-noask 预设的行与 eng 对齐，唯一差异是剔除的 ask 行', () => {
+  const engFile = join(ENG_PRESET, 'agent.cordis.yml')
+  const noaskFile = join(ENG_NOASK_PRESET, 'agent.cordis.yml')
+  const expected = topLevelEntries(engFile).filter((entry) => entry !== NOASK_REMOVED_ROW)
+  assert.deepEqual(topLevelEntries(noaskFile), expected,
+    'eng-noask 应恰为 eng 去掉 tool-ask-user 行；改完 eng 先整树重拷再重做剔除，勿手工分叉')
+  // 同 id 行的 config 键值与 eng 一致（plan-mode 的 section 正文是有意改写，键级比较不涉及）。
+  const engConfigs = configOfRows(engFile)
+  for (const [id, config] of configOfRows(noaskFile)) {
+    const reference = engConfigs.get(id)
+    assert.notEqual(reference, undefined, `eng-noask 多出了 eng 没有的行 ${id}`)
+    for (const [key, value] of config) {
+      assert.equal(reference.get(key), value, `eng-noask.${id}.${key} 与 eng 不同：唯一允许差异是删除 ask 行`)
+    }
+  }
+})
+
 test('eng 预设引用的每个模块都能在 DSH 里解析到', (t) => {
   const root = dshPackageRoot()
   if (root === undefined) {
     t.skip('本机没有 DSH 安装，跳过模块解析检查')
     return
   }
-  const specifiers = normalizedRows(join(ENG_PRESET, 'agent.cordis.yml'))
-    .filter((row) => row.startsWith('name:'))
-    .map((row) => row.slice('name:'.length).trim().replace(/^'(.*)'$/, '$1'))
-  const bare = specifiers.filter((name) => name.startsWith('@deepseek-ai/'))
-  assert.equal(bare.length > 20, true, '应解析出全部上游行名')
-
   const moduleRoot = join(root, 'node_modules')
-  const unresolved = bare.filter((name) => {
-    const [scope, pkg] = name.split('/')
-    // 子路径行（如 `.../list-agents`）只要包在即可，具体子路径由 loader 解析。
-    return !existsSync(join(moduleRoot, scope, pkg))
-  })
-  assert.deepEqual(unresolved, [], `eng 引用了本机 DSH 解析不到的模块：\n${unresolved.join('\n')}`)
+  for (const presetDir of [ENG_PRESET, ENG_NOASK_PRESET]) {
+    const specifiers = normalizedRows(join(presetDir, 'agent.cordis.yml'))
+      .filter((row) => row.startsWith('name:'))
+      .map((row) => row.slice('name:'.length).trim().replace(/^'(.*)'$/, '$1'))
+    const bare = specifiers.filter((name) => name.startsWith('@deepseek-ai/'))
+    assert.equal(bare.length > 20, true, `${presetDir} 应解析出全部上游行名`)
+    const unresolved = bare.filter((name) => {
+      const [scope, pkg] = name.split('/')
+      // 子路径行（如 `.../list-agents`）只要包在即可，具体子路径由 loader 解析。
+      return !existsSync(join(moduleRoot, scope, pkg))
+    })
+    assert.deepEqual(unresolved, [], `${presetDir} 引用了本机 DSH 解析不到的模块：\n${unresolved.join('\n')}`)
+  }
 })
 
 test('包内 eng 源树与 <dshHome>/.agent-presets/eng 副本一致（顺带刷新副本）', () => {
@@ -206,13 +230,15 @@ test('包内 eng 源树与 <dshHome>/.agent-presets/eng 副本一致（顺带刷
   const result = syncPresetTrees(join(PACKAGE_ROOT, 'presets'), targetRoot)
   assert.deepEqual(result.failed, [], `同步失败：${JSON.stringify(result.failed)}`)
 
-  // 同步后逐文件比对：源树 ⊆ 副本且内容一致。
-  const sourceRoot = ENG_PRESET
-  const copyRoot = join(targetRoot, 'eng')
-  const files = walk(sourceRoot, copyRoot)
-  // 健全性检查：树被清空或走错目录时上面的逐文件断言会「零次通过」。
-  assert.equal(files.includes('agent.cordis.yml'), true, `源树里没有 agent.cordis.yml：${files.join(', ')}`)
-  assert.equal(files.length >= 10, true, `eng 源树文件数异常偏少：${files.length}`)
+  // 同步后逐文件比对：每个包内预设的源树 ⊆ 副本且内容一致。
+  const files = []
+  for (const id of ['eng', 'eng-noask']) {
+    const idFiles = walk(join(PACKAGE_ROOT, 'presets', id), join(targetRoot, id))
+    // 健全性检查：树被清空或走错目录时上面的逐文件断言会「零次通过」。
+    assert.equal(idFiles.includes('agent.cordis.yml'), true, `${id} 源树里没有 agent.cordis.yml：${idFiles.join(', ')}`)
+    assert.equal(idFiles.length >= 10, true, `${id} 源树文件数异常偏少：${idFiles.length}`)
+    files.push(...idFiles)
+  }
 })
 
 /** 递归比对源树与副本，返回源树里的相对路径列表。 */
