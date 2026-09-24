@@ -1,6 +1,6 @@
 {
   "name": "dsh-apollo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "DSH plugin: 把大任务拆成可独立验证的子任务并行执行，每个节点内置子代理审查，验证通过才合入；另含带退出守卫的 eng（工程模式）预设。零依赖、无构建。",
   "license": "GPL-3.0-or-later",
   "type": "module",
@@ -12,7 +12,8 @@
     "./package.json": "./package.json"
   },
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": "^0.1.7-rc.1"
   },
   "scripts": {
     "test": "node --test"
@@ -40,7 +41,11 @@
   },
   "dsh": {
     "bundle": {
-      "patch": "./cordis.patch.yml"
+      "patch": [
+        "./cordis.patch.yml",
+        "./presets/eng.patch.yml",
+        "./presets/eng-noask.patch.yml"
+      ]
     },
     "client": {
       "inject": [

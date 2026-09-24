@@ -11,14 +11,14 @@
  * 跨站防御而非认证：默认仅 loopback；经反向代理域名访问 GUI 时，把该权威加入
  * 本行 config 的 trustedHosts（后果上限：跨站请求翻转一个布尔开关）。
  *
- * 零依赖（node 内置模块）；dsh home 与 eng.json 读写和预设侧
- * presets/eng/plugins/lib/atlas-config.js 同构——改一处请同步另一处。
- * 旧文件名 atlas.json 只读回退：写入永远落 eng.json。
+ * 零依赖（node 内置模块）；dsh home 解析复用包内 src/dsh-home.js（预设侧
+ * plugins/lib/atlas-config.js 同一来源）；eng.json 读写与预设侧同构——改一处
+ * 请同步另一处。旧文件名 atlas.json 只读回退：写入永远落 eng.json。
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, isAbsolute, join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { resolveDshHome } from './dsh-home.js'
 
 export const name = 'eng-panel'
 
@@ -60,18 +60,6 @@ export function declareOwnsHostTap(html) {
 const MAX_BODY_BYTES = 4096
 
 // ── dsh home / eng.json ──────────────────────────────────────────────────────
-
-function resolveDshHome(env = process.env, home = homedir()) {
-  const raw = env.DSH_HOME
-  if (raw !== undefined && raw.trim() !== '') {
-    const trimmed = raw.trim()
-    const expanded = trimmed === '~' ? home
-      : trimmed.startsWith('~/') || trimmed.startsWith('~\\') ? join(home, trimmed.slice(2))
-      : trimmed
-    return isAbsolute(expanded) ? expanded : join(process.cwd(), expanded)
-  }
-  return join(home, '.dsh')
-}
 
 function engConfigPath() {
   return join(resolveDshHome(), 'eng.json')

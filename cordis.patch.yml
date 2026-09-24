@@ -1,6 +1,7 @@
 # dsh-apollo bundle patch: inserts the single host-plane row for this package
-# into the profile roster. Applied as a profile bundle layer (the
-# `dsh.bundle.patch` manifest field); activate with
+# into the profile roster. Applied as a profile bundle layer (the first entry
+# of the `dsh.bundle.patch` array in package.json — the eng/eng-noask preset
+# patches in presets/ load after it); activate with
 # `dsh plugin --profile <name> add link:<path-to>/dsh-apollo`.
 #
 # One row on purpose. The row's module specifier must be the bare package name
@@ -8,14 +9,17 @@
 # from the row's package manifest: `dsh-client-modules` only accepts a bare or
 # two-segment scoped specifier, and it rejects a second active row resolving to
 # the same package name ("resolves from multiple active Loader sources"). So
-# the one node half does all three jobs:
+# the one node half does both jobs:
 #
 #   1. registers the packaged skills/ tree on the skill registry's global layer
 #      (every preset mounting tool-skill then exposes the catalog);
-#   2. syncs the packaged presets/eng/ tree into <dshHome>/.agent-presets on
-#      boot, because DSH scans only the shipped root and the user root;
-#   3. mounts the settings-panel host half (/eng-panel/api/config) and, when
+#   2. mounts the settings-panel host half (/eng-panel/api/config) and, when
 #      the row config sets `declareOwnsHost: true`, the trusted-proxy tap.
+#
+# The presets themselves are separate bundle-patch rows (see
+# presets/eng.patch.yml and presets/eng-noask.patch.yml): since DSH 0.1.7 a
+# preset is an `insert` of a `@deepseek-ai/dsh-agent-preset` row, and the old
+# sync-into-<dshHome>/.agent-presets delivery is gone with that mechanism.
 #
 # Row config (all optional): `trustedHosts: string[]` (reverse-proxy
 # authorities allowed to call the panel route), `declareOwnsHost: boolean`

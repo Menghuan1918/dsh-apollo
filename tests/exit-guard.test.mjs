@@ -221,6 +221,25 @@ test('listChildren 抛错 → fail-open：不 steer 不崩溃并告警', async (
   })
 })
 
+test('jobs.list 收到 SessionId（0.1.7 参数语义），不是 Agent 对象', async () => {
+  await withConfig(ENABLED, async () => {
+    const seen = []
+    const jobs = {
+      list: (caller) => {
+        seen.push(caller)
+        return [{ id: 'job-1', kind: 'bash', label: 'build', status: 'running' }]
+      },
+    }
+    const ctx = makeCtx({ jobs })
+    const steered = await fireTurnStopping(ctx, { ...PARENT })
+    assert.equal(steered.length, 1)
+    // 0.1.7 起 JobRegistry.list(caller?: SessionId)：传 Agent 对象不报错但恒
+    // 不匹配，守卫会静默看不见任何 owned 后台任务——这里钉死调用参数形状。
+    assert.deepEqual(seen, ['parent-1'])
+    assert.match(steered[0].content[0].text, /job-1/)
+  })
+})
+
 test('jobs.list 抛错 → fail-open：不 steer 不崩溃并告警', async () => {
   await withConfig(ENABLED, async () => {
     const ctx = makeCtx({

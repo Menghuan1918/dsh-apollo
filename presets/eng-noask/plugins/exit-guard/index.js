@@ -87,7 +87,9 @@ async function collectRunning(ctx, agent) {
   const jobs = ctx.get('jobs')
   const runningJobs = jobs === undefined
     ? []
-    : jobs.list(agent).filter((job) => !JOB_TERMINAL.has(job.status))
+    // 0.1.7 起 JobRegistry.list 的参数是 SessionId（0.1.6 及以前是 Agent 对象）：
+    // 传 Agent 对象不报错但恒不匹配，守卫会静默看不见任何 owned 后台任务。
+    : jobs.list(agent.id).filter((job) => !JOB_TERMINAL.has(job.status))
   return { children, jobs: runningJobs }
 }
 

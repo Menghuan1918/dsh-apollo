@@ -1,65 +1,41 @@
 /**
- * apply 冒烟测试：以临时 DSH_HOME 调用宿主插件 apply，验证启动同步路径
- * （home 解析 → 预设树同步进 <home>/.agent-presets）端到端可用。
+ * apply 冒烟测试：以临时 DSH_HOME 调用宿主插件 apply，验证技能 provider
+ * 注册路径端到端可用，且不再向 DSH_HOME 写任何 `.agent-presets` 副本
+ * （0.1.7 起预设经 bundle patch 交付，sync-on-boot 已删除）。
  */
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, relative } from 'node:path'
-import { apply, bundledPresetsRoot, name } from '../src/index.js'
-import { syncOnePreset } from '../src/preset-sync.js'
+import { join } from 'node:path'
+import { apply, name } from '../src/index.js'
 
-function treeFiles(root) {
-  const out = []
-  const walk = (dir) => {
-    for (const entry of readdirSync(dir)) {
-      const path = join(dir, entry)
-      if (statSync(path).isDirectory()) walk(path)
-      else out.push(relative(root, path))
-    }
-  }
-  walk(root)
-  return out.sort()
-}
-
-test('插件导出契约：name / apply / bundledPresetsRoot', () => {
+test('插件导出契约：name / apply', () => {
   assert.equal(name, 'apollo-skills')
   assert.equal(typeof apply, 'function')
-  assert.equal(bundledPresetsRoot().endsWith('/presets/'), true)
 })
 
-test('apply：把捆绑预设同步进 DSH_HOME 的 .agent-presets', () => {
+test('apply：注册技能 provider，且不向 DSH_HOME 写 .agent-presets', async () => {
   const home = mkdtempSync(join(tmpdir(), 'eng-home-'))
-  const logs = []
+  const providers = []
+  const previous = process.env.DSH_HOME
   process.env.DSH_HOME = home
   try {
-    apply({ skills: { registerProvider: () => {} }, logger: { info: (...args) => logs.push(['info', ...args]), warn: (...args) => logs.push(['warn', ...args]) } })
+    apply({ skills: { registerProvider: (provider) => providers.push(provider) }, logger: console })
+    apply({ skills: { registerProvider: (provider) => providers.push(provider) }, logger: console })
   } finally {
-    delete process.env.DSH_HOME
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
   }
-
-  const targetRoot = join(home, '.agent-presets', 'eng')
-  const sourceRoot = bundledPresetsRoot()
-  assert.equal(statSync(targetRoot).isDirectory(), true)
-  // 同步结果与源树逐字节一致
-  assert.equal(syncOnePreset(join(sourceRoot, 'eng'), targetRoot), 'current')
-  assert.deepEqual(treeFiles(targetRoot), treeFiles(join(sourceRoot, 'eng')))
-  assert.equal(readFileSync(join(targetRoot, 'preset.yml'), 'utf8').includes('工程模式'), true)
-  assert.equal(logs.some((entry) => entry[0] === 'info'), true)
-  rmSync(home, { recursive: true, force: true })
-})
-
-test('apply：幂等，重复挂载不报错', () => {
-  const home = mkdtempSync(join(tmpdir(), 'eng-home-'))
-  process.env.DSH_HOME = home
-  try {
-    apply({ skills: { registerProvider: () => {} }, logger: console })
-    apply({ skills: { registerProvider: () => {} }, logger: console })
-  } finally {
-    delete process.env.DSH_HOME
-  }
-  assert.equal(statSync(join(home, '.agent-presets', 'eng', 'agent.cordis.yml')).isFile(), true)
+  assert.equal(providers.length, 2, '每次挂载都应注册一个技能 provider 工厂')
+  // registerProvider 收到的是惰性工厂；调用它拿 provider 本体。
+  const provider = providers[0]()
+  assert.equal(typeof provider.list, 'function')
+  assert.equal(typeof provider.get, 'function')
+  const skills = await provider.list()
+  assert.equal(skills.length > 0, true, '包内技能目录应被发现')
+  // 旧机制残留检查：预设交付已不走文件同步，home 里不应出现任何副本目录。
+  assert.equal(existsSync(join(home, '.agent-presets')), false, 'apply 不应再写 <dshHome>/.agent-presets')
   rmSync(home, { recursive: true, force: true })
 })

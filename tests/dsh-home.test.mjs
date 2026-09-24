@@ -1,12 +1,12 @@
 /**
- * DSH home 解析单元测试（src/preset-sync.js）：DSH_HOME 环境变量、~ 展开、
+ * DSH home 解析单元测试（src/dsh-home.js）：DSH_HOME 环境变量、~ 展开、
  * 相对路径、缺省值。
  */
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
-import { resolveDshHome } from '../src/preset-sync.js'
+import { resolveDshHome } from '../src/dsh-home.js'
 
 test('缺省：<home>/.dsh', () => {
   assert.equal(resolveDshHome({}, '/home/tester'), join('/home/tester', '.dsh'))

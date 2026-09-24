@@ -1,16 +1,20 @@
 /**
- * dsh-apollo — 单行宿主插件，一个包承担三件事：
+ * dsh-apollo — 单行宿主插件，一个包承担两件事：
  *
  * 1. **流程技能 provider**：把包内 `skills/<name>/SKILL.md` 注册到宿主技能
  *    注册表的全局层，任何挂载 tool-skill 的预设都能看到该目录；
- * 2. **工程模式预设同步**：把包内 `presets/` 树幂等同步进 `<dshHome>/
- *    .agent-presets`，使「工程模式」（eng）预设保持可用且与仓库一致；
- * 3. **设置面板 host 半边**：注册 fenced 的 `/eng-panel/api/config` 路由，
+ * 2. **设置面板 host 半边**：注册 fenced 的 `/eng-panel/api/config` 路由，
  *    供浏览器半边（`exports["./client"]`）读写 `<dshHome>/eng.json`。
  *
- * 三件事共用一行是因为 DSH 的硬约束：客户端半边的图行 id 必须是包名本身
+ * 两件事共用一行是因为 DSH 的硬约束：客户端半边的图行 id 必须是包名本身
  * （`dsh-client-modules` 只认裸包名/两段 scoped 名），且同一包名的多个活跃
  * loader 行会被 `reconcilePackage` 判为冲突，所以包只能占一行。
+ *
+ * 预设（eng / eng-noask）不再经过本文件：DSH 0.1.7 起预设以 bundle patch 里
+ * 的 `@deepseek-ai/dsh-agent-preset` insert 行交付（presets/eng.patch.yml、
+ * presets/eng-noask.patch.yml，由 package.json 的 dsh.bundle.patch 数组声明）；
+ * 旧的 `<dshHome>/.agent-presets` sync-on-boot 机制随 0.1.7 删除（该目录不再
+ * 被扫描）。
  *
  * 零依赖、无构建步骤；内容随包版本走，无 watcher——改动在进程重启后生效。
  */
@@ -19,7 +23,6 @@ import { readFile, readdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mountPanel } from './panel.js'
-import { dshHome, syncPresetTrees } from './preset-sync.js'
 
 const PROVIDER_NAME = 'dsh-apollo'
 /** Rank of bundled contributions in the local-provider ladder (user roots override). */
@@ -33,44 +36,10 @@ export const name = 'apollo-skills'
 /** Service required by the bundled skill provider. */
 export const inject = ['skills']
 
-/** 本包内捆绑的预设树绝对路径（`presets/`，带尾斜杠）。 */
-export function bundledPresetsRoot() {
-  return `${join(PACKAGE_ROOT, 'presets')}/`
-}
-
-/** Register the packaged skills provider, sync the preset tree, mount the panel. */
+/** Register the packaged skills provider and mount the panel. */
 export function apply(ctx, config) {
   ctx.skills.registerProvider(() => createProvider(ctx))
-  syncPresets(ctx)
   if (typeof ctx.inject === 'function') mountPanel(ctx, config)
-}
-
-/**
- * 把包内预设树同步进 harness home 的 agent-presets 发现根。
- * 幂等（逐字节对比，跳过已一致的树），重复挂载无害；失败只告警不抛错——
- * 同步故障不应阻止技能 provider 与面板就位。
- * @param ctx - 宿主插件上下文（仅用 `ctx.logger`，可缺省）。
- */
-function syncPresets(ctx) {
-  const targetRoot = join(dshHome(), '.agent-presets')
-  const log = ctx?.logger ?? console
-  try {
-    const result = syncPresetTrees(bundledPresetsRoot(), targetRoot)
-    for (const { id, error } of result.failed) {
-      log.warn?.(`dsh-apollo: preset ${id} sync failed: ${error}`)
-    }
-    if (result.synced.length > 0) {
-      log.info?.(`dsh-apollo: presets synced into ${targetRoot}: ${result.synced.join(', ')}`)
-    }
-    if (result.current.length > 0) {
-      log.info?.(`dsh-apollo: presets already current in ${targetRoot}: ${result.current.join(', ')}`)
-    }
-    if (result.retired.length > 0) {
-      log.info?.(`dsh-apollo: retired stale presets from ${targetRoot}: ${result.retired.join(', ')}`)
-    }
-  } catch (error) {
-    log.warn?.(`dsh-apollo: preset sync failed: ${error instanceof Error ? error.message : String(error)}`)
-  }
 }
 
 function createProvider(ctx) {

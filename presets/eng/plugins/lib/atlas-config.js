@@ -11,33 +11,15 @@
  * 兼容：旧文件名 `<dshHome>/atlas.json` 仍被读取（仅当 `eng.json` 缺失时），
  * 新写入只落 `eng.json`——面板首次保存即完成迁移。
  *
- * 零 bare import（预设目录的 node_modules 向上走不到 harness 安装）；
- * dsh home 解析与包内 src/preset-sync.js 同构，读写与 src/panel.js 同构
- * ——改一处请同步另一处。
+ * 零 bare import：预设插件经 `dsh-apollo/presets/*` 裸子路径从 profile 的
+ * node_modules 加载（包本体可达），包内相对引用即可回到 src/；dsh home 解析
+ * 复用包内 src/dsh-home.js，eng.json 读写与 src/panel.js 同构——改一处请同步
+ * 另一处。
  */
 
 import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { isAbsolute, join } from 'node:path'
-
-/**
- * 解析 DSH home 目录：DSH_HOME 环境变量优先（~ 展开、相对路径基于 CWD），
- * 缺省 `<home>/.dsh`。
- * @param env - 读取 DSH_HOME 的进程环境（测试注入点）。
- * @param home - 平台 home 目录回退（测试注入点）。
- * @returns 绝对 DSH home 路径。
- */
-function resolveDshHome(env = process.env, home = homedir()) {
-  const raw = env.DSH_HOME
-  if (raw !== undefined && raw.trim() !== '') {
-    const trimmed = raw.trim()
-    const expanded = trimmed === '~' ? home
-      : trimmed.startsWith('~/') || trimmed.startsWith('~\\') ? join(home, trimmed.slice(2))
-      : trimmed
-    return isAbsolute(expanded) ? expanded : join(process.cwd(), expanded)
-  }
-  return join(home, '.dsh')
-}
+import { join } from 'node:path'
+import { resolveDshHome } from '../../../../src/dsh-home.js'
 
 /** eng.json 的绝对路径（新文件名）。 */
 export function engConfigPath(env = process.env) {
