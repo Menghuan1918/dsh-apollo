@@ -342,3 +342,53 @@ test('两份 patch 引用的每个 @deepseek-ai 模块都能在本机 DSH 里解
     assert.deepEqual(unresolved, [], `${file} 引用了本机 DSH 解析不到的模块：\n${unresolved.join('\n')}`)
   }
 })
+
+// ── engines.dsh 声明（紧随模块解析之后：同属「本机 DSH」这一族事实）─────────────
+
+/**
+ * 解析一份 semver 实现：优先 `moduleRoot` 下的（隔离安装的 `node_modules/semver`），
+ * 否则退回 DSH 包自身的依赖（嵌套布局 `/…/dsh/node_modules/semver`）；两者都不可得
+ * 时返回 undefined（调用方 skip）。不硬编码任何全局安装路径。
+ */
+function semverOf(moduleRoot) {
+  for (const base of [moduleRoot, join(moduleRoot, '..', 'dsh')]) {
+    try {
+      return createRequire(join(base, 'index.js'))('semver')
+    } catch {
+      continue
+    }
+  }
+  return undefined
+}
+
+test('engines.dsh 的声明覆盖本机已安装版本与 rc 预发布版，且不误纳相邻版本', (t) => {
+  const root = dshPackageRoot()
+  const layout = dshLayout()
+  if (root === undefined || layout === undefined) {
+    t.skip('本机没有 0.1.7 的 npm 安装布局，跳过 engines 检查')
+    return
+  }
+  const semver = semverOf(layout.moduleRoot)
+  if (semver === undefined) {
+    t.skip('本机 DSH 安装里解析不到 semver，跳过 engines 检查')
+    return
+  }
+  const declared = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).engines?.dsh
+  assert.equal(typeof declared, 'string', 'package.json 需声明 engines.dsh')
+  // 装上更老的标签（0.1.6-）时不再断言覆盖：那是安装侧问题，不是本包声明的漂移。
+  const installed = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
+  if (installed.startsWith('0.1.7')) {
+    assert.equal(semver.satisfies(installed, declared), true,
+      `engines.dsh（${declared}）不覆盖本机已安装的 ${installed}`)
+  }
+  // 0.1.7 的预发布版必须逐个落在范围内——npm 的 range 默认不匹配预发布版，
+  // 所以 0.1.7-rc.2 这类版本恰好是「看着覆盖、实际不覆盖」的高发点。
+  for (const v of ['0.1.7-rc.1', '0.1.7-rc.2']) {
+    assert.equal(semver.satisfies(v, declared), true, `engines.dsh（${declared}）应覆盖 ${v}`)
+  }
+  // 下界是有意的：alpha.1/2 早于 rc.1（预发布序 alpha < rc），本包的 bundle patch
+  // 交付只从 rc.1 起验证过；上界挡住 0.1.8 与更高的次要版本。
+  for (const v of ['0.1.6-alpha.2', '0.1.7-alpha.1', '0.1.7-alpha.2', '0.1.8', '0.2.0']) {
+    assert.equal(semver.satisfies(v, declared), false, `engines.dsh（${declared}）不应把 ${v} 算作受支持`)
+  }
+})

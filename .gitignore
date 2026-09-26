@@ -1,1 +1,22 @@
 node_modules/
+
+# 凭据与本地环境：绝不入库（本包零依赖、无构建，仓库里不该出现这些）
+.env
+.env.*
+.credentials.yaml
+cookies.txt
+*.pem
+*.key
+
+# 运行时配置（dsh home 的文件，误拷进仓库即忽略；eng.json 是现名，atlas.json 为旧名回退）
+eng.json
+atlas.json
+
+# 临时/产物类文件
+*.log
+*.tgz
+*.zstd
+*.jsonl
+*.bak
+.plugin-manager/
+.DS_Store

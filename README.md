@@ -130,20 +130,21 @@ dsh plugin --profile <name> remove dsh-apollo
 
 ## 已知限制
 
+- **支持的 DSH 版本**：`engines.dsh: ">=0.1.7-rc.1 <0.1.8"`（上界挡住 0.1.8）。**0.1.7-rc.2 已实测零适配**（2026-09-26：本包测试 67/67、隔离 rc.2 实例里预设注册 / eng 会话挂载 / 技能目录 / 客户端半边 / 面板路由全通）；rc.1 与 rc.2 的上游预设基准逐字节相同，运行时接缝（`listChildren`、`agent/turn-stopping` 发射点、`jobs.list`、`ctx.skills` 注册）实现级一致。写这条范围时注意 npm 的 range **默认不匹配预发布版**——`>=0.1.7-rc.1` 之所以逐字带上 `-rc.1`，正是为了让 `0.1.7-rc.2` 这类版本落在范围内，别改成 `>=0.1.7`（那会排除所有 0.1.7 预发布版）。
 - 技能内容与预设无热更新，改完需重启对应 profile 的 dsh 进程；预设本地插件模块（`presets/*/plugins/**`）的改动同样要重启才会被 `config.plugins` 的裸子路径重新加载。
 - `exec` 的 `quality` 常量默认为空（子代理继承父会话路由），要固定质量档就在 `skills/exec/SKILL.md` 脚本顶部那一处写 `provider` / `model`；会话若启用了 `subagent-model-selection` 策略，路由必须落在本机允许清单内，否则显式档位会被直接拒绝。
-- `presets/eng.patch.yml` 的行集逐行引用上游 `@deepseek-ai/dsh-*` 包名，跨版本升级 DSH 后先 `node --test`：漂移自检会列出上游新增而 eng 未跟上的行；再重启。
-- `package.json` 只声明了 `react` peer，**有意**不声明 `@deepseek-ai/dsh-*` 的 peer：0.1.7 新增的兼容门禁会按 peer 条目做 semver 判定，把 `@deepseek-ai/*` 系列写进 peerDependencies 反而可能在 DSH 预发布/补丁版上被误拒；实际兼容性由 `engines.dsh: "^0.1.7-rc.1"`（声明式，当前 DSH 不强制）与漂移自检共同约束。
+- `presets/eng.patch.yml` 的行集逐行引用上游 `@deepseek-ai/dsh-*` 包名，跨版本升级 DSH 后先 `node --test`：漂移自检会列出上游新增而 eng 未跟上的行，并断言 `engines.dsh` 覆盖本机已安装版本，漂移就失败；再重启。
+- `package.json` 只声明了 `react` peer，**有意**不声明 `@deepseek-ai/dsh-*` 的 peer：0.1.7 新增的兼容门禁只按 peerDependencies 里的 `@deepseek-ai/dsh*` 条目做 semver 判定，把 `@deepseek-ai/*` 系列写进 peerDependencies 反而可能在 DSH 预发布/补丁版上被误拒；实际兼容性由上面的 `engines.dsh`（声明式，当前 DSH 不强制）与漂移自检共同约束。
 - 技能正文是中文的（含进技能目录的 `description`），`/exec` 注入子代理的 prompt 也是中文；非中文用户需要自行改文案。
-- 本包按 `link:` 或本地路径安装使用；未发布到任何 registry，仓库也还没有 remote。
+- 本包按 `link:`、本地路径或 `github:` 安装使用（`dsh plugin --profile <name> add github:Menghuan1918/dsh-apollo`）；未发布到任何 npm registry。
 
 ## 开发
 
 ```sh
-node --test          # 66 例：技能 provider、捆绑技能目录、预设 patch 结构与漂移自检、配置读取、退出守卫、wait_subagent、面板路由
+node --test          # 67 例：技能 provider、捆绑技能目录、预设 patch 结构与漂移自检（含 engines.dsh 版本覆盖断言）、配置读取、退出守卫、wait_subagent、面板路由
 ```
 
-漂移自检需要本机 DSH 带 `dsh-web-app/presets/standard.patch.yml`（0.1.7 布局；嵌套与 flat 都认），否则该两例 skip；可用 `DSH_PACKAGE_ROOT=<dsh 包目录>` 指向隔离预演安装来跑。`presets/eng.patch.yml` 是预设行清单的**唯一事实源**——旧机制（`agent.cordis.yml` + `preset.yml` + `.agent-presets` 同步副本）已删除，结构自检会拒绝它们复活。
+漂移自检需要本机 DSH 带 `dsh-web-app/presets/standard.patch.yml`（0.1.7 布局；嵌套与 flat 都认），否则其中三例 skip（漂移基准两例 + `engines.dsh` 覆盖断言）；可用 `DSH_PACKAGE_ROOT=<dsh 包目录>` 指向隔离预演安装来跑——换 DSH 版本预演时，把基准指向该版本即可检验 eng 是否漂移。`presets/eng.patch.yml` 是预设行清单的**唯一事实源**——旧机制（`agent.cordis.yml` + `preset.yml` + `.agent-presets` 同步副本）已删除，结构自检会拒绝它们复活。
 
 ## 许可
 
