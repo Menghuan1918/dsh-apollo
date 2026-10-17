@@ -14,8 +14,8 @@
  * 服务（dev server、watcher）用 pm2/systemd/裸 nohup 等脱离 DSH job 注册表
  * 的方式管理——守卫只看本地 job 注册表与直接子代理。
  *
- * 每次事件前重读 `<dshHome>/eng.json` 的 exitGuard（布尔开关，**默认关闭**，
- * 显式写 `true` 才生效；旧名 atlas.json 仍被回退读取），改配置即时生效。
+ * 每次事件读取当前 profile 的 Apollo Config.exitGuard（默认关闭）。
+ * 设置保存后即时生效；旧配置只由宿主执行一次性导入。
  * 查询失败（listChildren / jobs.list 抛错）按 fail-open 处理：告警并放行本次
  * 回合结束，避免查询故障把回合卡死。
  *
@@ -23,7 +23,7 @@
  * repeat-tool-reminder 的 plain-object 模式。
  */
 
-import { readEngConfig } from '../lib/atlas-config.js'
+import { currentConfig } from '../../../../src/config.js'
 
 export const name = 'eng-exit-guard'
 
@@ -98,7 +98,7 @@ export function apply(ctx) {
     const agent = payload?.agent
     if (agent === undefined || payload?.signal?.aborted) return
     try {
-      if (!readEngConfig().exitGuard) return
+      if (!currentConfig(ctx).exitGuard) return
       const { children, jobs } = await collectRunning(ctx, agent)
       if (children.length === 0 && jobs.length === 0) return
       if (payload.signal?.aborted) return

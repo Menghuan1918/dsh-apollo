@@ -1,85 +1,39 @@
-/**
- * 上游漂移自检：eng 预设是内置 `standard` 预设的整棵 fork，DSH 升级后上游新增
- * 的行不会自动传过来（2026-09-12 已因此漏掉 `@deepseek-ai/dsh-tool-present`）。
- *
- * 0.1.7 起预设机制换代：本包预设以 bundle patch 里的
- * `@deepseek-ai/dsh-agent-preset` insert 行交付（presets/eng.patch.yml、
- * presets/eng-noask.patch.yml），上游基准随之变为已安装 DSH 的
- * `dsh-web-app/presets/standard.patch.yml` 里 `preset-standard` 的
- * `config.plugins` 行集。旧基准（`dsh-agent-presets` 复数包的
- * presets/standard/agent.cordis.yml）在 0.1.7 不存在——旧实现曾因此静默
- * skip，这正是本文件要拦住的失效方式。
- *
- * 检查：
- * 1. **patch 结构**：每份 patch 恰一个 insert、`config.id` 为 eng/eng-noask
- *    （历史会话按它恢复，绝不可改名）；package.json 的 `dsh.bundle.patch`
- *    是引用两份 patch 的数组；源树里不允许再出现第二份行清单
- *    （agent.cordis.yml / preset.yml 必须不存在——单一事实源）。
- * 2. **漂移**：eng 与上游 standard 的 config.plugins 行集只允许白名单内差异
- *    （上游有而 eng 没有 ⇒ 直接失败并列出该补哪一行）；逐 key 配置比对是
- *    双向的——eng 有而上游没有的 key、上游有而 eng 没有的 key 都必须落在
- *    显式白名单，旧实现「undefined === undefined」式的静默通过不再可能。
- *    eng-noask（工程模式(无提问)）单独对齐 eng：唯一允许差异是剔除的
- *    tool-ask-user 行与 plan-mode section 的有意改写。
- * 3. **模块解析**：patch 文件里每个 `@deepseek-ai/*` 行名（含 insert 行自身的
- *    dsh-agent-preset）都能在本机 DSH 安装里解析到；子路径行只要父包在。
- *
- * 上游文件不存在（非 npm 布局、DSH 未安装、或本机装的是没有 patch 基准的
- * 0.1.6-）时跳过，不让本包在没有对应 harness 的环境里失败。
- * 运行：node --test
- */
-
+/** Strict preset comparison against an installed, supported DSH release. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import yaml from 'js-yaml'
 
-const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url))
-const ENG_PATCH = join(PACKAGE_ROOT, 'presets', 'eng.patch.yml')
-const NOASK_PATCH = join(PACKAGE_ROOT, 'presets', 'eng-noask.patch.yml')
-
-/** eng-noask 相对 eng 唯一允许的行差异：整行剔除的 ask 工具行。 */
-const NOASK_REMOVED_ROW = 'tool-ask-user -> @deepseek-ai/dsh-tool-ask-user'
-
-/**
- * eng 相对上游 standard 的有意差异。eng 只做加法与调参：
- * - 三个预设本地插件行（eng 独有，裸子路径指向本包，profile node_modules 解析）。
- */
-const EXTRA_ENG_ROWS = [
-  'tool-wait-subagent -> dsh-apollo/presets/eng/plugins/wait-subagent/index.js',
-  'eng-exit-guard -> dsh-apollo/presets/eng/plugins/exit-guard/index.js',
-  'eng-mode-instructions -> dsh-apollo/presets/eng/plugins/mode-instructions/index.js',
+const ROOT = fileURLToPath(new URL('../', import.meta.url))
+const ENG = join(ROOT, 'presets/eng.patch.yml')
+const NOASK = join(ROOT, 'presets/eng-noask.patch.yml')
+const ownRows = [
+  ['tool-wait-subagent', 'dsh-apollo/presets/eng/plugins/wait-subagent/index.js'],
+  ['eng-exit-guard', 'dsh-apollo/presets/eng/plugins/exit-guard/index.js'],
+  ['eng-mode-instructions', 'dsh-apollo/presets/eng/plugins/mode-instructions/index.js'],
 ]
+const thresholds = { thresholdChars: [16384, 8192], headChars: [8192, 4096], tailChars: [2048, 1024] }
+// Compare platform expressions as data. This test never evaluates !!js.
+const schema = yaml.DEFAULT_SCHEMA.extend(new yaml.Type('tag:yaml.org,2002:js', {
+  kind: 'scalar', construct: (source) => ({ javascript: source }),
+}))
+const document = (file) => yaml.load(readFileSync(file, 'utf8'), { schema })
+const manifest = () => JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+const declaration = (file) => document(file).flatMap((patch) => patch.insert ?? []).find((row) => row.name === '@deepseek-ai/dsh-agent-preset')
+const rowsOf = (file) => declaration(file).config.plugins
+const flatten = (rows) => rows.flatMap((row) => [row, ...(row.group === true ? flatten(row.config) : [])])
+const identities = (rows) => flatten(rows).filter((row) => row.id).map((row) => [row.id, row.name])
 
-/** tool-result-pruner 有意放大的阈值：eng 值 → 上游值（预设内注释说明了原因）。 */
-const PRUNER_OVERRIDES = new Map([
-  ['16384', '8192'],
-  ['8192', '4096'],
-  ['2048', '1024'],
-])
-
-/**
- * eng 有、上游没有的配置键（行 id、键、eng 值三元组，显式白名单）：
- * tool-jobs 的唤醒预算本机调大到 5000（上游 standard 根本没有这个键，
- * 旧实现逐 key 比较会在这里静默通过，现在必须显式声明）。
- */
-const EXTRA_ENG_KEYS = [
-  ['tool-jobs', 'maxConsecutiveWakes', '5000'],
-]
-
-// ── 定位本机 DSH 安装 ────────────────────────────────────────────────────────
-
-/**
- * 解析本机 DSH 安装根（dsh 包目录）。优先 `DSH_PACKAGE_ROOT`（便于在隔离预演
- * 安装上跑），其次沿 node 可执行文件向上找全局安装目录（`node_modules` 与
- * `lib/node_modules`，覆盖 nvm 与系统级 npm 两种布局），最后退回 node 自带的
- * 解析器；找不到返回 undefined，调用方跳过检查。
- */
 function dshPackageRoot() {
   const override = process.env.DSH_PACKAGE_ROOT
-  if (override !== undefined && existsSync(join(override, 'package.json'))) return override
+  if (override !== undefined) {
+    assert.ok(existsSync(join(override, 'package.json')), 'DSH_PACKAGE_ROOT 必须指向实际 DSH 包目录')
+    assert.equal(JSON.parse(readFileSync(join(override, 'package.json'), 'utf8')).name, '@deepseek-ai/dsh', 'DSH_PACKAGE_ROOT 必须指向 @deepseek-ai/dsh 包')
+    return override
+  }
   const relative = join('@deepseek-ai', 'dsh', 'package.json')
   let dir = dirname(process.execPath)
   for (let depth = 0; depth < 6; depth += 1) {
@@ -91,304 +45,117 @@ function dshPackageRoot() {
     if (parent === dir) break
     dir = parent
   }
-  try {
-    return dirname(createRequire(process.execPath).resolve('@deepseek-ai/dsh/package.json'))
-  } catch {
-    return undefined
-  }
+  try { return dirname(createRequire(process.execPath).resolve('@deepseek-ai/dsh/package.json')) } catch { return undefined }
 }
 
-/**
- * 定位 0.1.7 的上游基准 patch 与模块根，两种安装布局都兼容：
- * - 嵌套：`<dsh 包目录>/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml`
- * - flat：`<dsh 包目录>/../dsh-web-app/presets/standard.patch.yml`
- *   （`npm i --prefix` 的布局，dsh 与 dsh-web-app 平级躺在同一 scope 下）。
- * 找不到返回 undefined（调用方 skip——本机没有 0.1.7 预设布局时不该失败）。
- */
-function dshLayout() {
+function dshLayout(t) {
   const root = dshPackageRoot()
-  if (root === undefined) return undefined
-  const nestedPatch = join(root, 'node_modules', '@deepseek-ai', 'dsh-web-app', 'presets', 'standard.patch.yml')
-  if (existsSync(nestedPatch)) return { patch: nestedPatch, moduleRoot: join(root, 'node_modules') }
-  const scopeDir = dirname(root)
-  const flatPatch = join(scopeDir, 'dsh-web-app', 'presets', 'standard.patch.yml')
-  if (existsSync(flatPatch)) return { patch: flatPatch, moduleRoot: dirname(scopeDir) }
-  return undefined
-}
-
-// ── patch 文件解析（零依赖，逐行；缩进抹平）──────────────────────────────────
-
-/** 读文件按行切（去掉行尾 \r）。 */
-function fileLines(file) {
-  return readFileSync(file, 'utf8').split('\n').map((line) => line.replace(/\r$/, ''))
-}
-
-/**
- * 取 patch 文件 `config.plugins` 列表的行，缩进抹平到列表自身：从 8 空格的
- * `plugins:` 键起，到出现更浅缩进的非空行止，统一剥掉 10 空格列表缩进。注释
- * 行保留（后续 normalize 过滤），行距差异随之抹平。
- */
-function pluginsBlock(file) {
-  const lines = fileLines(file)
-  const start = lines.findIndex((line) => /^ {8}plugins:\s*$/.test(line))
-  assert.notEqual(start, -1, `${file} 缺少 8 空格缩进的 config.plugins 键`)
-  const rows = []
-  for (let i = start + 1; i < lines.length; i += 1) {
-    const line = lines[i]
-    if (line.trim() === '') continue
-    if (!line.startsWith('          ')) break
-    rows.push(line.slice(10))
+  const required = process.env.DSH_PACKAGE_ROOT !== undefined
+  if (root) {
+    const require = createRequire(join(root, 'package.json'))
+    let patch
+    let semver
+    try {
+      patch = join(dirname(require.resolve('@deepseek-ai/dsh-web-app/package.json')), 'presets/standard.patch.yml')
+      semver = require('semver')
+    } catch (error) {
+      if (required) throw new Error('指定的 DSH 安装缺少验证依赖', { cause: error })
+    }
+    const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
+    const compatible = semver?.satisfies(version, manifest().engines.dsh)
+    if (required) {
+      assert.ok(compatible, `指定的 DSH ${version} 不满足 ${manifest().engines.dsh}`)
+      assert.ok(patch && existsSync(patch), '指定的 DSH 安装缺少 standard.patch.yml 基准')
+    }
+    if (compatible && patch && existsSync(patch)) return { root, patch, require, semver, version }
   }
-  assert.equal(rows.length > 0, true, `${file} 的 config.plugins 是空列表`)
-  return rows
+  t.skip('未发现满足 engines.dsh 的本机 DSH 安装；显式设置 DSH_PACKAGE_ROOT 可启用验证')
 }
 
-/** 去掉注释与空行，并抹平缩进——只留「有哪些行」。 */
-function normalizedRows(lines) {
-  return lines
-    .map((line) => line.trim())
-    .filter((line) => line !== '' && !line.startsWith('#'))
-}
-
-/**
- * 行序列：把 `- id:` 列表项与紧随其后的 `name:` 折成 `id -> name` 一项。
- * 折叠断言比逐行断言更严——行序错位或缺配置项都会暴露，同时允许上游新增行
- * 被显式看见。缩进与引号差异被抹平：两者都不改变解析结果。
- */
-function rowEntries(lines) {
-  const entries = []
-  const rows = normalizedRows(lines)
-  for (let i = 0; i < rows.length; i += 1) {
-    const idMatch = /^- id:[ \t]*(.+)$/.exec(rows[i])
-    if (idMatch === null) continue
-    const id = idMatch[1].trim()
-    const next = rows[i + 1] ?? ''
-    entries.push(next.startsWith('name:') ? `${id} -> ${unquote(next.slice('name:'.length).trim())}` : id)
-  }
-  return entries
-}
-
-/**
- * 每个行的 `config:` 子树（id 行自身与 `name:` 行除外），键 → 值。
- * 块标量（`>-` / `|` 等）的正文并入键值（非空行以空格连接），使折叠写法与
- * 单行 plain 写法可比。嵌套键（group/isolate 下的行）归到其父键，不单独
- * 成为一项。行原文不再直接比较，避免把行距与缩进当成差异。
- */
-function configOfRows(lines) {
-  const configs = new Map()
-  let current
-  let nested = false
-  let blockKey = null
-  for (const raw of lines) {
-    const line = raw.trim()
-    if (line === '' || line.startsWith('#')) continue
-    if (blockKey !== null) {
-      // 块标量正文：直到下一行变回行标记或键值行为止。
-      if (/^- id:/.test(line) || /^([A-Za-z0-9_-]+):(?: |$)/.test(line)) {
-        blockKey = null
-      } else {
-        const previous = configs.get(current).get(blockKey)
-        configs.get(current).set(blockKey, previous === undefined || previous === '' ? line : `${previous} ${line}`)
-        continue
+/** Remove only the documented Apollo additions and exact tuning values. */
+function normalizedEng(rows) {
+  const normalized = structuredClone(rows).filter((row) => !ownRows.some(([id, name]) => row.id === id && row.name === name))
+  for (const row of flatten(normalized)) {
+    if (row.id === 'tool-jobs' && Object.hasOwn(row.config ?? {}, 'maxConsecutiveWakes')) {
+      assert.equal(row.config.maxConsecutiveWakes, 5000)
+      delete row.config.maxConsecutiveWakes
+      if (Object.keys(row.config).length === 0) delete row.config
+    }
+    if (row.id === 'tool-result-pruner') {
+      for (const [key, [eng, standard]] of Object.entries(thresholds)) {
+        assert.equal(row.config[key], eng, `eng 的 ${key} 必须保留有意调参`)
+        row.config[key] = standard
       }
     }
-    const idMatch = /^- id:[ \t]*(.+)$/.exec(line)
-    if (idMatch !== null) {
-      current = idMatch[1].trim()
-      configs.set(current, new Map())
-      nested = false
-      continue
-    }
-    if (current === undefined) continue
-    if (line.startsWith('name:')) continue
-    const keyValue = /^([A-Za-z0-9_-]+):[ \t]*(.*)$/.exec(line)
-    if (keyValue !== null) {
-      nested = /^[A-Za-z0-9_-]+:$/.test(line)
-      const key = nested ? `${keyValue[1]}.*` : keyValue[1]
-      const isBlock = !nested && /^(?:[|>])(?:[+-]|\d+)?$/.test(keyValue[2])
-      // 块标量的值在后续行：先把键置空，标记 intro（>- / | 等）不进值。
-      configs.get(current).set(key, nested || isBlock ? '' : keyValue[2])
-      if (isBlock) blockKey = key
-      continue
-    }
-    if (nested) {
-      const [key] = [...configs.get(current).keys()].slice(-1)
-      configs.get(current).set(key, `${configs.get(current).get(key)} ${line}`.trim())
-    }
   }
-  return configs
+  return normalized
 }
 
-/** 抹平 YAML 引号差异（`'x'` 与 `x` 解析为同一值）。 */
-function unquote(value) {
-  return value.replace(/^'(.*)'$/, '$1')
+function assertStandard(eng, standard) {
+  assert.deepEqual(normalizedEng(eng), standard, '预设存在白名单外差异（含嵌套配置、scope、disabled 和行序）')
 }
 
-/** 把 eng-noask 本地插件行的裸子路径折回 eng 路径，行集才能直接对比。 */
-const asEngPath = (entry) => entry.replace('dsh-apollo/presets/eng-noask/', 'dsh-apollo/presets/eng/')
-
-// ── 用例 ─────────────────────────────────────────────────────────────────────
-
-test('两份预设 patch 结构合法：单一 insert、config.id 不变、bundle.patch 数组引用、无第二份行清单', () => {
-  for (const [file, id, order] of [[ENG_PATCH, 'eng', 10], [NOASK_PATCH, 'eng-noask', 11]]) {
-    const lines = fileLines(file)
-    const inserts = lines.filter((line) => /^-\s*insert:\s*$/.test(line))
-    assert.equal(inserts.length, 1, `${file} 应恰好一个 insert，实际 ${inserts.length}`)
-    // config.id 是历史会话恢复所依的预设身份，order 避开内置 standard=1/ptc=2/minimal=3/cordis=4。
-    assert.match(lines.join('\n'), new RegExp(`^ {8}id: ${id}\\s*$`, 'm'), `${file} 的 config.id 应为 ${id}`)
-    assert.match(lines.join('\n'), new RegExp(`^ {8}order: ${order}\\s*$`, 'm'), `${file} 的 config.order 应为 ${order}`)
-    assert.match(lines.join('\n'), /^ {6}name: '@deepseek-ai\/dsh-agent-preset'\s*$/m, `${file} 的 insert 行 name 应为 dsh-agent-preset`)
+test('两份预设 patch 结构合法：身份稳定、bundle 引用唯一、无第二份行清单', () => {
+  for (const [file, id, order] of [[ENG, 'eng', 10], [NOASK, 'eng-noask', 11]]) {
+    const patches = document(file)
+    assert.equal(patches.length, 1)
+    assert.equal(patches[0].insert.length, 1)
+    const preset = declaration(file)
+    assert.equal(preset.config.id, id)
+    assert.equal(preset.config.order, order)
+    assert.ok(Array.isArray(preset.config.plugins) && preset.config.plugins.length)
+    for (const legacy of ['agent.cordis.yml', 'preset.yml']) assert.equal(existsSync(join(ROOT, 'presets', id, legacy)), false)
   }
-  const pkg = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8'))
-  assert.deepEqual(pkg.dsh?.bundle?.patch,
-    ['./cordis.patch.yml', './presets/eng.patch.yml', './presets/eng-noask.patch.yml'],
-    'package.json 的 dsh.bundle.patch 应为数组且引用两份预设 patch')
-  // 单一事实源：行清单只允许存在于 patch 文件，旧的 agent.cordis.yml/preset.yml
-  // 复活即意味着出现第二份会漂移的副本。
-  for (const id of ['eng', 'eng-noask']) {
-    assert.equal(existsSync(join(PACKAGE_ROOT, 'presets', id, 'agent.cordis.yml')), false,
-      `presets/${id}/agent.cordis.yml 不应存在：行清单的单一事实源是 presets/${id}.patch.yml`)
-    assert.equal(existsSync(join(PACKAGE_ROOT, 'presets', id, 'preset.yml')), false,
-      `presets/${id}/preset.yml 不应存在：元数据已并入 presets/${id}.patch.yml 的 config`)
+  assert.deepEqual(manifest().dsh.bundle.patch, ['./cordis.patch.yml', './presets/eng.patch.yml', './presets/eng-noask.patch.yml'])
+})
+
+test('eng 预设与上游 standard 完整对齐，差异只有声明的加法与调参', (t) => {
+  const layout = dshLayout(t)
+  if (!layout) return
+  const eng = rowsOf(ENG)
+  const standard = rowsOf(layout.patch)
+  assert.deepEqual(identities(eng).filter(([id]) => !identities(standard).some(([reference]) => reference === id)), ownRows)
+  assertStandard(eng, standard)
+})
+
+test('配置比较拒绝额外嵌套键和伪装成 pruner 调参的其他行', () => {
+  const standard = [{ id: 'tool-jobs', name: 'jobs' }]
+  const eng = [{ id: 'tool-jobs', name: 'jobs', config: { maxConsecutiveWakes: 5000 } }]
+  assertStandard(eng, standard)
+  assert.throws(() => assertStandard([{ ...eng[0], config: { ...eng[0].config, unexpected: true } }], standard), /白名单外差异/)
+  assert.throws(() => assertStandard([{ id: 'other', config: { thresholdChars: 16384 } }], [{ id: 'other', config: { thresholdChars: 8192 } }]), /白名单外差异/)
+  assert.throws(() => assertStandard([{ ...standard[0], disabled: true }], standard), /白名单外差异/)
+})
+
+test('eng-noask 恰为 eng 删除 ask 工具并改写提问纪律', () => {
+  const eng = rowsOf(ENG)
+  const noask = structuredClone(rowsOf(NOASK))
+  const asEngPath = (value) => value.replace('dsh-apollo/presets/eng-noask/', 'dsh-apollo/presets/eng/')
+  for (const row of flatten(noask)) {
+    if (row.name) row.name = asEngPath(row.name)
+    if (row.id === 'plan-mode') {
+      assert.equal(row.config.section.includes('ask_user_question'), false)
+      row.config.section = flatten(eng).find((item) => item.id === 'plan-mode').config.section
+    }
+  }
+  assert.deepEqual(noask, eng.filter((row) => row.id !== 'tool-ask-user'))
+})
+
+test('两份 patch 的完整模块导出子路径在目标 DSH 安装中均可解析', (t) => {
+  const layout = dshLayout(t)
+  if (!layout) return
+  for (const file of [ENG, NOASK]) {
+    const names = [declaration(file).name, ...flatten(rowsOf(file)).map((row) => row.name).filter((name) => name?.startsWith('@deepseek-ai/'))]
+    assert.ok(names.includes('@deepseek-ai/dsh-agent-preset') && names.includes('@deepseek-ai/dsh-tool-subagent'))
+    for (const name of names) assert.doesNotThrow(() => layout.require.resolve(name), `${name} 不可解析`)
   }
 })
 
-test('eng 预设的行与上游 standard 对齐，差异只有白名单', (t) => {
-  const layout = dshLayout()
-  if (layout === undefined) {
-    t.skip('本机 DSH 没有 dsh-web-app/presets/standard.patch.yml 基准（0.1.7 布局），跳过漂移检查')
-    return
-  }
-  const upstreamRows = pluginsBlock(layout.patch)
-  const engRows = pluginsBlock(ENG_PATCH)
-  const upstream = rowEntries(upstreamRows)
-  const eng = rowEntries(engRows)
-
-  // 顺序敏感：行序错位与新增/缺失行都在这里暴露。上游有、eng 没有 = 漏抄，
-  // 漏抄就是静默少一个能力，必须补进 presets/eng.patch.yml 的 config.plugins。
-  const extra = eng.filter((entry) => !upstream.includes(entry))
-  const missing = upstream.filter((entry) => !eng.includes(entry))
-  assert.deepEqual(missing, [], `eng 缺少上游行，请补进 presets/eng.patch.yml 的 config.plugins：\n${missing.join('\n')}`)
-  assert.deepEqual(extra, EXTRA_ENG_ROWS, 'eng 相对上游出现了白名单外的行')
-
-  // 嵌套 config 逐 key 比对（双向）：
-  // - eng 与上游都有的 key，值不同时只允许命中的 pruner 阈值映射；
-  // - eng 有而上游没有的 key，必须命中显式键白名单（不再静默通过）；
-  // - 上游有而 eng 没有的 key，直接失败（漏抄配置同样静默少能力）。
-  const upstreamConfigs = configOfRows(upstreamRows)
-  for (const [id, config] of configOfRows(engRows)) {
-    const reference = upstreamConfigs.get(id)
-    if (reference === undefined) {
-      assert.equal(EXTRA_ENG_ROWS.some((entry) => entry.startsWith(`${id} ->`)), true, `eng 多出的行 ${id} 不在白名单`)
-      continue
-    }
-    for (const [key, value] of config) {
-      const upstreamValue = reference.get(key)
-      if (upstreamValue === value) continue
-      const extraKey = EXTRA_ENG_KEYS.some(([rid, rkey, rvalue]) => rid === id && rkey === key && rvalue === value && upstreamValue === undefined)
-      if (extraKey) continue
-      const declared = PRUNER_OVERRIDES.get(value)
-      assert.equal(declared, upstreamValue,
-        `${id}.${key} 与上游不同且未声明：eng=${value} upstream=${upstreamValue}`)
-    }
-    for (const key of reference.keys()) {
-      if (config.has(key)) continue
-      assert.fail(`eng.${id} 缺少上游配置键 ${key}：请把该行配置同步进 presets/eng.patch.yml`)
-    }
-  }
-})
-
-test('eng-noask 预设的行与 eng 对齐，唯一差异是剔除的 ask 行与 plan-mode 改写', () => {
-  const engRows = pluginsBlock(ENG_PATCH)
-  const noaskRows = pluginsBlock(NOASK_PATCH)
-  const expected = rowEntries(engRows).filter((entry) => entry !== NOASK_REMOVED_ROW)
-  assert.deepEqual(rowEntries(noaskRows).map(asEngPath), expected,
-    'eng-noask 应恰为 eng 去掉 tool-ask-user 行；改完 eng 先整块重拷再重做剔除，勿手工分叉')
-  // 同 id 行的 config 键值双向比对；plan-mode 的 section 正文是有意改写（无提问
-  // 纪律改写了 ask_user_question 两处表述），键级白名单放行，其余必须一致。
-  const engConfigs = configOfRows(engRows)
-  for (const [id, config] of configOfRows(noaskRows)) {
-    const reference = engConfigs.get(id)
-    assert.notEqual(reference, undefined, `eng-noask 多出了 eng 没有的行 ${id}`)
-    for (const [key, value] of config) {
-      if (id === 'plan-mode' && key === 'section') continue
-      assert.equal(reference.get(key), value, `eng-noask.${id}.${key} 与 eng 不同：唯一允许差异是删除 ask 行与 plan-mode section 改写`)
-    }
-    for (const key of reference.keys()) {
-      if (config.has(key)) continue
-      assert.fail(`eng-noask.${id} 缺少 eng 配置键 ${key}`)
-    }
-  }
-})
-
-test('两份 patch 引用的每个 @deepseek-ai 模块都能在本机 DSH 里解析到', (t) => {
-  const layout = dshLayout()
-  if (layout === undefined) {
-    t.skip('本机 DSH 没有 0.1.7 预设布局，跳过模块解析检查')
-    return
-  }
-  for (const file of [ENG_PATCH, NOASK_PATCH]) {
-    // 全文件的行名（含 insert 行自身的 dsh-agent-preset），不只 plugins 块。
-    const specifiers = normalizedRows(fileLines(file))
-      .filter((row) => row.startsWith('name:'))
-      .map((row) => unquote(row.slice('name:'.length).trim()))
-    const bare = specifiers.filter((name) => name.startsWith('@deepseek-ai/'))
-    assert.equal(bare.length > 20, true, `${file} 应解析出全部上游行名`)
-    const unresolved = bare.filter((name) => {
-      const [scope, pkg] = name.split('/')
-      // 子路径行（如 `.../list-agents`）只要包在即可，具体子路径由 loader 解析。
-      return !existsSync(join(layout.moduleRoot, scope, pkg))
-    })
-    assert.deepEqual(unresolved, [], `${file} 引用了本机 DSH 解析不到的模块：\n${unresolved.join('\n')}`)
-  }
-})
-
-// ── engines.dsh 声明（紧随模块解析之后：同属「本机 DSH」这一族事实）─────────────
-
-/**
- * 解析一份 semver 实现：优先 `moduleRoot` 下的（隔离安装的 `node_modules/semver`），
- * 否则退回 DSH 包自身的依赖（嵌套布局 `/…/dsh/node_modules/semver`）；两者都不可得
- * 时返回 undefined（调用方 skip）。不硬编码任何全局安装路径。
- */
-function semverOf(moduleRoot) {
-  for (const base of [moduleRoot, join(moduleRoot, '..', 'dsh')]) {
-    try {
-      return createRequire(join(base, 'index.js'))('semver')
-    } catch {
-      continue
-    }
-  }
-  return undefined
-}
-
-test('engines.dsh 的声明覆盖本机已安装版本与 rc 预发布版，且不误纳相邻版本', (t) => {
-  const root = dshPackageRoot()
-  const layout = dshLayout()
-  if (root === undefined || layout === undefined) {
-    t.skip('本机没有 0.1.7 的 npm 安装布局，跳过 engines 检查')
-    return
-  }
-  const semver = semverOf(layout.moduleRoot)
-  if (semver === undefined) {
-    t.skip('本机 DSH 安装里解析不到 semver，跳过 engines 检查')
-    return
-  }
-  const declared = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')).engines?.dsh
-  assert.equal(typeof declared, 'string', 'package.json 需声明 engines.dsh')
-  // 装上更老的标签（0.1.6-）时不再断言覆盖：那是安装侧问题，不是本包声明的漂移。
-  const installed = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
-  if (installed.startsWith('0.1.7')) {
-    assert.equal(semver.satisfies(installed, declared), true,
-      `engines.dsh（${declared}）不覆盖本机已安装的 ${installed}`)
-  }
-  // 0.1.7 的预发布版必须逐个落在范围内——npm 的 range 默认不匹配预发布版，
-  // 所以 0.1.7-rc.2 这类版本恰好是「看着覆盖、实际不覆盖」的高发点。
-  for (const v of ['0.1.7-rc.1', '0.1.7-rc.2']) {
-    assert.equal(semver.satisfies(v, declared), true, `engines.dsh（${declared}）应覆盖 ${v}`)
-  }
-  // 下界是有意的：alpha.1/2 早于 rc.1（预发布序 alpha < rc），本包的 bundle patch
-  // 交付只从 rc.1 起验证过；上界挡住 0.1.8 与更高的次要版本。
-  for (const v of ['0.1.6-alpha.2', '0.1.7-alpha.1', '0.1.7-alpha.2', '0.1.8', '0.2.0']) {
-    assert.equal(semver.satisfies(v, declared), false, `engines.dsh（${declared}）不应把 ${v} 算作受支持`)
-  }
+test('engines.dsh 覆盖新 RC 与正式版，拒绝旧接口及相邻主版本', (t) => {
+  const layout = dshLayout(t)
+  if (!layout) return
+  const range = manifest().engines.dsh
+  assert.equal(layout.semver.satisfies(layout.version, range), true)
+  for (const version of ['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1', '0.2.2']) assert.equal(layout.semver.satisfies(version, range), true, version)
+  for (const version of ['0.1.7-rc.2', '0.2.0-rc.2', '0.2.0', '0.2.1-alpha.5', '0.2.1-rc.1', '0.3.0']) assert.equal(layout.semver.satisfies(version, range), false, version)
 })

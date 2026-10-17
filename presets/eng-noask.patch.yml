@@ -8,7 +8,7 @@
 # beyond the removed row. Keep the two in sync by editing `eng` first, then
 # redoing the copy.
 #
-# Declared as one `@deepseek-ai/dsh-agent-preset` insert row (the DSH 0.1.7
+# Declared as one `@deepseek-ai/dsh-agent-preset` insert row (the DSH 0.2.1
 # preset mechanism; the `<dshHome>/.agent-presets` scan root is gone).
 # `config.id` MUST stay `eng-noask`: it is the preset identity historical
 # sessions resume by. Preset-local plugin modules are referenced by bare
@@ -50,13 +50,11 @@
           # instructions (~/.dsh/AGENTS.md) and the preset's `eng:mode-instructions`
           # section, not in the persona. `eng:mode-instructions` owns the delegation
           # policy; the tiers stay global because they track local route config.
-          # DSH 0.1.5 renamed this row's single `text` key
-          # to `prefix` + optional `suffix`; the split below matches the upstream
-          # `standard` preset.
+          # 0.2.1's upstream `standard` preset carries `prefix` only: the working-
+          # directory `suffix` line it used to set is gone, and eng follows suit.
           - id: persona
             name: '@deepseek-ai/dsh-persona'
             config:
-              suffix: Your working directory is {{cwd}}.
               prefix: >-
                 You are a coding agent powered by the {{model}} model.
 
@@ -66,6 +64,13 @@
             name: '@deepseek-ai/dsh-agent-instructions'
             config:
               maxBytes: 65536
+
+          # 0.2.1 standard adds the per-step time context (sampled current time,
+          # browser time zone and elapsed time) so date/time reasoning does not depend
+          # on the model's own clock. It consumes host services and provides nothing,
+          # so it needs no realm.
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
 
           # ── shell ───────────────────────────────────────────────────────────────────
 
@@ -119,6 +124,12 @@
             config:
               maxConsecutiveWakes: 5000
 
+          # 0.2.1 standard adds the schedule tools (schedule_create/list/update/
+          # delete) over the host `schedule` service; they are per-session tools, so
+          # they need no realm.
+          - id: tool-schedule
+            name: '@deepseek-ai/dsh-tool-schedule'
+
           # ── skills ──────────────────────────────────────────────────────────────────
 
           # The skill REGISTRY lives in the host composition and is layered per scope:
@@ -157,7 +168,7 @@
                 name: '@deepseek-ai/dsh-plan-mode'
                 config:
                   section: |
-                        You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+                        You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
 
                         Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
 
@@ -237,7 +248,6 @@
                   provider: spawn
                   toolName: subagent
                   modelSelectionSettings: true
-                  backgroundMode: continuable
 
               # Fork omits model selection so provider/model stay equal to the parent and
               # the inherited history remains eligible for KV Cache reuse.
@@ -246,28 +256,6 @@
                 config:
                   provider: fork
                   toolName: subagent_fork
-                  backgroundMode: continuable
-
-              # Product providers are host-plane singletons. Copy this preset, then
-              # remove `disabled` from either ordinary tool row to expose that product
-              # only to agents composed from the copy.
-              - id: tool-subagent-codex
-                name: '@deepseek-ai/dsh-tool-subagent'
-                disabled: true
-                config:
-                  provider: codex
-                  toolName: subagent_codex
-                  backgroundMode: one-shot
-                  maxDepth: provider-managed
-
-              - id: tool-subagent-claude-code
-                name: '@deepseek-ai/dsh-tool-subagent'
-                disabled: true
-                config:
-                  provider: claude-code
-                  toolName: subagent_claude_code
-                  backgroundMode: one-shot
-                  maxDepth: provider-managed
 
               # 0.1.6-alpha.2 renamed `dsh-workflow-worker-thread` to `dsh-workflow-ptc`
               # (workflow orchestration in the shared sandboxed Node PTC runtime).
@@ -278,16 +266,6 @@
 
               - id: tool-workflow
                 name: '@deepseek-ai/dsh-tool-workflow'
-
-              # Off by default mirroring upstream 0.1.6: completion is a worker
-              # self-report, not an independent evaluation, and the tool description
-              # restricts ralph to runs the human explicitly asked for.
-              - id: tool-ralph
-                name: '@deepseek-ai/dsh-tool-ralph'
-                disabled: true
-                config:
-                  subagentProvider: spawn
-                  maxRounds: 64
 
           # ── remaining model-facing rows ─────────────────────────────────────────────
 
@@ -315,11 +293,15 @@
           - id: present
             name: '@deepseek-ai/dsh-tool-present'
 
-          # New in upstream 0.1.6; shipped disabled there too. Enable only in a copy of
-          # this plugins block (edits saved from the Web editor override config.plugins
-          # by row id from the profile patch).
+          # 0.2.1 ships both plugin surfaces disabled by default; enable either only in a
+          # copy of this plugins block (edits saved from the Web editor override
+          # config.plugins by row id from the profile patch).
           - id: tool-plugin-manager
             name: '@deepseek-ai/dsh-plugin-manager/tools'
+            disabled: true
+
+          - id: tool-plugin-market
+            name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
 
           # ── subagent waiting ─────────────────────────────────────────────────────────
@@ -328,9 +310,9 @@
           # the agent can block on a specific subagent (pi-style await_task semantics)
           # without giving up send_message continuations. The module specifier is a
           # bare subpath of this package (dsh-apollo/presets/eng-noask/plugins/...):
-          # 0.1.7 resolves config.plugins names from the profile directory's
-          # node_modules, where this package is installed or linked; it has zero bare
-          # imports on purpose.
+          # config.plugins names resolve from the profile directory's node_modules,
+          # where this package is installed or linked; it has zero bare imports on
+          # purpose.
           - id: tool-wait-subagent
             name: dsh-apollo/presets/eng-noask/plugins/wait-subagent/index.js
 
@@ -339,8 +321,8 @@
           # Preset-local plugin: pi-atlas 式退出守卫。回合结束（agent/turn-stopping）
           # 时若有运行中的直接子代理或后台任务，注入 next-step 提醒（agent.steer）
           # 强制回合继续，直到 wait_subagent / job_output / job_kill 处理完毕或用户
-          # 中断（被中断回合不触发）。开关存 <dshHome>/eng.json 的 exitGuard
-          # （默认开启，每次事件前重读；旧名 atlas.json 仍被回退读取）。监听器注册型
+          # 中断（被中断回合不触发）。开关为正式 Config.exitGuard，默认关闭，
+          # 每次事件读取当前值，设置保存后即时生效。监听器注册型
           # 插件，无服务发布，无需 realm。
           - id: eng-exit-guard
             name: dsh-apollo/presets/eng-noask/plugins/exit-guard/index.js
@@ -355,7 +337,7 @@
           # so it is scoped to sessions mounted on this preset and nothing else; injected
           # from the first request alongside the other sections.
           # This plugins block (presets/eng-noask.patch.yml) is the single source of truth;
-          # the 0.1.7 bundle-patch mechanism loads it straight from this file, with no
+          # the 0.2.1 bundle-patch mechanism loads it straight from this file, with no
           # boot-time copy in between.
           - id: eng-mode-instructions
             name: dsh-apollo/presets/eng-noask/plugins/mode-instructions/index.js

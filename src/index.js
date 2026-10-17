@@ -1,28 +1,15 @@
 /**
- * dsh-apollo — 单行宿主插件，一个包承担两件事：
- *
- * 1. **流程技能 provider**：把包内 `skills/<name>/SKILL.md` 注册到宿主技能
- *    注册表的全局层，任何挂载 tool-skill 的预设都能看到该目录；
- * 2. **设置面板 host 半边**：注册 fenced 的 `/eng-panel/api/config` 路由，
- *    供浏览器半边（`exports["./client"]`）读写 `<dshHome>/eng.json`。
- *
- * 两件事共用一行是因为 DSH 的硬约束：客户端半边的图行 id 必须是包名本身
- * （`dsh-client-modules` 只认裸包名/两段 scoped 名），且同一包名的多个活跃
- * loader 行会被 `reconcilePackage` 判为冲突，所以包只能占一行。
- *
- * 预设（eng / eng-noask）不再经过本文件：DSH 0.1.7 起预设以 bundle patch 里
- * 的 `@deepseek-ai/dsh-agent-preset` insert 行交付（presets/eng.patch.yml、
- * presets/eng-noask.patch.yml，由 package.json 的 dsh.bundle.patch 数组声明）；
- * 旧的 `<dshHome>/.agent-presets` sync-on-boot 机制随 0.1.7 删除（该目录不再
- * 被扫描）。
- *
- * 零依赖、无构建步骤；内容随包版本走，无 watcher——改动在进程重启后生效。
+ * Apollo's single host row registers bundled skills, profile-backed settings,
+ * and the CLI adapters that extend existing subagent tools. Presets are still
+ * delivered by bundle patches. Browser code remains a no-build closure factory.
  */
 
 import { readFile, readdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { mountPanel } from './panel.js'
+import { mountSettings } from './settings.js'
+import { mountSubagents } from './subagents.js'
+export { Config } from './config.js'
 
 const PROVIDER_NAME = 'dsh-apollo'
 /** Rank of bundled contributions in the local-provider ladder (user roots override). */
@@ -39,7 +26,10 @@ export const inject = ['skills']
 /** Register the packaged skills provider and mount the panel. */
 export function apply(ctx, config) {
   ctx.skills.registerProvider(() => createProvider(ctx))
-  if (typeof ctx.inject === 'function') mountPanel(ctx, config)
+  if (typeof ctx.inject === 'function') {
+    mountSettings(ctx, config)
+    mountSubagents(ctx, config)
+  }
 }
 
 function createProvider(ctx) {

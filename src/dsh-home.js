@@ -1,9 +1,14 @@
 /**
- * DSH home 目录解析：本包内的唯一事实源——宿主半边 `src/panel.js` 与预设本地
- * 插件 `presets/<id>/plugins/lib/atlas-config.js` 都从这里取，不再各持同构副本。
+ * DSH home 目录解析。
+ *
+ * 当前唯一消费方是 `src/settings.js`：它据此定位 `<dshHome>/eng.json`（旧名
+ * `atlas.json`）做一次**只读**的旧配置导入。预设本地插件不再各持一份同构副本
+ * ——`presets/<id>/plugins/lib/atlas-config.js` 已删除，预设插件改为直接读活配置
+ * （`src/config.js` 的 `currentConfig`）：设置本身早已是正式 Config，落在活动
+ * profile 的 `cordis.patch.yml` 里，本文件只服务于那次遗留文件迁移。
  *
  * 解析规则：DSH_HOME 环境变量优先（`~` 展开、相对路径基于进程 CWD），缺省
- * `<home>/.dsh`。零依赖（只用 node 内置模块），可从任意位置加载。
+ * `<home>/.dsh`。只用 node 内置模块，可从任意位置加载。
  */
 
 import { homedir } from 'node:os'

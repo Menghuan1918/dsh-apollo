@@ -9,22 +9,36 @@
 # from the row's package manifest: `dsh-client-modules` only accepts a bare or
 # two-segment scoped specifier, and it rejects a second active row resolving to
 # the same package name ("resolves from multiple active Loader sources"). So
-# the one node half does both jobs:
+# this one node half does every job:
 #
 #   1. registers the packaged skills/ tree on the skill registry's global layer
 #      (every preset mounting tool-skill then exposes the catalog);
-#   2. mounts the settings-panel host half (/eng-panel/api/config) and, when
-#      the row config sets `declareOwnsHost: true`, the trusted-proxy tap.
+#   2. mounts the formal row Config (src/config.js, a @deepseek-ai/schemastery
+#      schema) together with the configForm that edits it from Plugins →
+#      Apollo; volatile fields apply without reloading this row;
+#   3. registers the read-only capability endpoint /apollo/api/capabilities
+#      (src/panel.js), which that form reads to show where each CLI resolved;
+#   4. installs the CLI subagent bridge (src/subagents.js) over the existing
+#      subagent tools — it adds no tool of its own;
+#   5. when the row config sets `declareOwnsHost: true`, taps the index HTML so
+#      the official client treats a proxied page as loopback.
 #
-# The presets themselves are separate bundle-patch rows (see
-# presets/eng.patch.yml and presets/eng-noask.patch.yml): since DSH 0.1.7 a
-# preset is an `insert` of a `@deepseek-ai/dsh-agent-preset` row, and the old
-# sync-into-<dshHome>/.agent-presets delivery is gone with that mechanism.
+# Row config — two classes of fields (details in README, section 配置):
+#   - volatile, editable from the Web form: `exitGuard`,
+#     `subagents.{eng,global}`, `subagents.{codex,claude}.*`
+#     (enabled / executable / profile / permissionMode / defaultModel / models[]).
+#     Changes do NOT reload this row.
+#   - deployment flags, hand-written here, never edited from the Web form (the
+#     settings layer rejects writes outside the volatile paths):
+#     `trustedHosts: string[]` — reverse-proxy authorities additionally allowed
+#     to call /apollo/api/* (loopback is always trusted);
+#     `declareOwnsHost: boolean` — the boot global above; off by default,
+#     enable only behind a trusted proxy.
 #
-# Row config (all optional): `trustedHosts: string[]` (reverse-proxy
-# authorities allowed to call the panel route), `declareOwnsHost: boolean`
-# (inject the boot global that makes the official client treat a proxied page
-# as loopback; off by default — enable only behind a trusted proxy).
+# Presets are separate bundle-patch rows (presets/eng.patch.yml,
+# presets/eng-noask.patch.yml): a preset is an `insert` of a
+# `@deepseek-ai/dsh-agent-preset` row read straight from that file — the old
+# sync-into-<dshHome>/.agent-presets delivery no longer exists.
 - insert:
     - id: apollo-skills
       name: dsh-apollo

@@ -5,12 +5,11 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { apply, name } from '../presets/eng/plugins/exit-guard/index.js'
 
-/** 构造 fake ctx：捕获事件处理器，注入可控行的 subagents/agents/jobs。 */
+let liveConfig = {}
+
+/** Fake the same profile-backed live config used by the real guard. */
 function makeCtx({ children = [], agentStatus = new Map(), jobs } = {}) {
   const handlers = new Map()
   const warnings = []
@@ -20,7 +19,8 @@ function makeCtx({ children = [], agentStatus = new Map(), jobs } = {}) {
     on: (event, fn) => handlers.set(event, fn),
     subagents: { listChildren: async () => children },
     agents: { get: (id) => agentStatus.get(id) },
-    get: (serviceName) => (serviceName === 'jobs' ? jobs : undefined),
+    get: (serviceName) => serviceName === 'jobs' ? jobs : serviceName === 'configEditor'
+      ? { entries: () => [{ options: { id: 'apollo-skills' }, fiber: { config: liveConfig } }] } : undefined,
     logger: { warn: (text) => warnings.push(text) },
   }
 }
@@ -36,24 +36,11 @@ async function fireTurnStopping(ctx, agent, { aborted = false } = {}) {
   return steered
 }
 
-/**
- * 临时 DSH_HOME + 指定 eng.json 内容（旧名 atlas.json 仍被回退读取）。
- * 守卫默认关闭，故「应触发」的用例都必须显式写入开启配置。
- * @param content - 配置文件内容；undefined 表示不写任何配置文件（走默认）。
- * @param run - 在临时 home 生效期间执行的用例体。
- */
+/** Change the live configuration without reloading the guard. */
 function withConfig(content, run) {
-  const home = mkdtempSync(join(tmpdir(), 'eng-guard-'))
-  const prev = process.env.DSH_HOME
-  if (content !== undefined) writeFileSync(join(home, 'eng.json'), content)
-  process.env.DSH_HOME = home
-  return Promise.resolve()
-    .then(() => run())
-    .finally(() => {
-      if (prev === undefined) delete process.env.DSH_HOME
-      else process.env.DSH_HOME = prev
-      rmSync(home, { recursive: true, force: true })
-    })
+  const previous = liveConfig
+  liveConfig = content === undefined ? {} : JSON.parse(content)
+  return Promise.resolve().then(run).finally(() => { liveConfig = previous })
 }
 
 const PARENT = { id: 'parent-1' }
