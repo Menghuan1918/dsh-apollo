@@ -4,10 +4,11 @@
  * 为什么需要：这三个模块的价值全在「细节必须与真实 CLI 一致」——argv 少一个 `-a never`
  * 就会在无人值守管道里挂死，root 选项挪到 `exec` 之后续接就会失效，把 reasoning 当正文
  * 就会把思考过程写进会话。这些错误本地跑一次真实 CLI 才看得见，代价高且不稳定，所以把
- * **实测抓到的真实事件样本**固化成 fixture 在这里断言（语义等价于真机，成本为 0）。
+ * **真实事件形态的脱敏 fixture** 固化在这里断言：只复刻字段与结构，不声称与真机输出
+ * 语义等价。
  *
- * 真实样本来源（codex-cli 0.162.1 / Claude Code 2.1.300，各两轮：新建 + 续接）：
- * - codex：`codex -p meliai -s read-only -a never -C <cwd> exec --json --skip-git-repo-check -c 'model_reasoning_effort="low"' -`
+ * 事件形态参考（codex-cli 0.162.1 / Claude Code 2.1.300）：
+ * - codex：`codex -p <profile> -s read-only -a never -C <cwd> exec --json --skip-git-repo-check -c 'model_reasoning_effort="low"' -`
  * - claude：`claude --print --output-format stream-json --verbose --permission-mode plan --permission-prompts none --effort low`
  * 运行：node --test
  */
@@ -18,6 +19,11 @@ import { Readable } from 'node:stream'
 import { MAX_ERROR_CHARS, readJsonLines, sanitizeError } from '../src/cli/jsonl.js'
 import { buildCommand as buildCodexCommand, createParser as createCodexParser } from '../src/cli/codex.js'
 import { buildCommand as buildClaudeCommand, createParser as createClaudeParser } from '../src/cli/claude.js'
+
+// 合成 fixture 标识：保留 UUID / profile 的形状，但与任何真机会话无关。
+const CODEX_THREAD_ID = '11111111-1111-4111-8111-111111111111'
+const CLAUDE_SESSION_ID = '22222222-2222-4222-8222-222222222222'
+const CODEX_PROFILE = 'test-profile'
 
 /** 把一组 chunk 喂进 readJsonLines，收齐所有产出的事件。 */
 async function collect(chunks, options) {
@@ -121,7 +127,7 @@ test('codex buildCommand: 完整 argv 精确匹配（root 选项在 exec 之前�
     cwd: '/work',
     model: 'gpt-5-codex',
     effort: 'high',
-    profile: 'meliai',
+    profile: CODEX_PROFILE,
     permissionMode: 'read-only',
     prompt: 'hi',
   })
@@ -129,7 +135,7 @@ test('codex buildCommand: 完整 argv 精确匹配（root 选项在 exec 之前�
   assert.deepEqual(result.argv, [
     'codex',
     '-p',
-    'meliai',
+    CODEX_PROFILE,
     '-s',
     'read-only',
     '-a',
@@ -155,9 +161,9 @@ test('codex buildCommand: 续接时 -p/-s/-a/-C 全部留在 exec 之前（exec 
     cwd: '/work',
     model: 'gpt-5-codex',
     effort: 'low',
-    profile: 'meliai',
+    profile: CODEX_PROFILE,
     permissionMode: 'read-only',
-    remoteId: '01a14357-1204-7031-b83d-68581050d0d7',
+    remoteId: CODEX_THREAD_ID,
     prompt: 'next turn',
   })
   const execAt = argv.indexOf('exec')
@@ -165,7 +171,7 @@ test('codex buildCommand: 续接时 -p/-s/-a/-C 全部留在 exec 之前（exec 
     assert.ok(argv.indexOf(flag) !== -1, `缺少 ${flag}`)
     assert.ok(argv.indexOf(flag) < execAt, `${flag} 必须位于 exec 之前`)
   }
-  assert.deepEqual(argv.slice(execAt, execAt + 3), ['exec', 'resume', '01a14357-1204-7031-b83d-68581050d0d7'])
+  assert.deepEqual(argv.slice(execAt, execAt + 3), ['exec', 'resume', CODEX_THREAD_ID])
   assert.deepEqual(argv.slice(execAt + 3), ['--json', '--skip-git-repo-check', '-m', 'gpt-5-codex', '-c', 'model_reasoning_effort="low"', '-'])
   assert.equal(argv.at(-1), '-')
   assert.equal(input, 'next turn')
@@ -219,16 +225,16 @@ test('claude buildCommand: argv 精确匹配，prompt 只走 stdin', () => {
 test('claude buildCommand: 续接追加 --resume，且忽略 cwd/profile', () => {
   const { argv } = buildClaudeCommand({
     cwd: '/work',
-    profile: 'meliai',
+    profile: CODEX_PROFILE,
     permissionMode: 'dontAsk',
-    remoteId: 'c6ffb5b4-60ea-4c80-bb76-23d6a1c04118',
+    remoteId: CLAUDE_SESSION_ID,
     prompt: 'next',
   })
-  assert.deepEqual(argv.slice(-2), ['--resume', 'c6ffb5b4-60ea-4c80-bb76-23d6a1c04118'])
+  assert.deepEqual(argv.slice(-2), ['--resume', CLAUDE_SESSION_ID])
   assert.ok(argv.includes('--permission-prompts'))
   // claude 没有 cwd 选项（--add-dir 只是追加可写目录），profile 也是 codex 专属。
   assert.ok(!argv.includes('/work'))
-  assert.ok(!argv.includes('meliai'))
+  assert.ok(!argv.includes(CODEX_PROFILE))
 })
 
 test('claude buildCommand: 非法取值在构造期就抛 TypeError', () => {
@@ -240,9 +246,9 @@ test('claude buildCommand: 非法取值在构造期就抛 TypeError', () => {
 
 // ─────────────────────────── codex：事件语义 ───────────────────────────
 
-/** 真实首轮 codex 事件（含实测的配置告警 item 与 thread_id）。 */
+/** 首轮 codex 事件形态（脱敏 fixture，含配置告警 item 与 thread_id）。 */
 const CODEX_RUN = [
-  { type: 'thread.started', thread_id: '01a14357-1204-7031-b83d-68581050d0d7' },
+  { type: 'thread.started', thread_id: CODEX_THREAD_ID },
   {
     type: 'item.completed',
     item: {
@@ -273,9 +279,9 @@ const CODEX_RUN = [
   },
 ]
 
-test('codex parser: 真实事件序列的每个语义动作', () => {
+test('codex parser: 真实事件形态（脱敏 fixture）的每个语义动作', () => {
   const parser = createCodexParser()
-  assert.deepEqual(parser.push(CODEX_RUN[0]), { remoteId: '01a14357-1204-7031-b83d-68581050d0d7' })
+  assert.deepEqual(parser.push(CODEX_RUN[0]), { remoteId: CODEX_THREAD_ID })
   // 第二次回报同一个 thread 必须沉默，父只落一次 KV。
   assert.equal(parser.push(CODEX_RUN[0]), undefined)
 
@@ -295,7 +301,7 @@ test('codex parser: 真实事件序列的每个语义动作', () => {
 
   assert.deepEqual(parser.finish(), {
     text: 'APOLLO_CLI_PROTOCOL_OK',
-    remoteId: '01a14357-1204-7031-b83d-68581050d0d7',
+    remoteId: CODEX_THREAD_ID,
     usage: { inputTokens: 14476, outputTokens: 11, totalTokens: 18583, cacheReadTokens: 4096 },
   })
   // finish 幂等，不改变状态。
@@ -342,22 +348,22 @@ test('codex parser: 失败与缺完成标志都让 finish 抛错', () => {
   assert.throws(() => truncated.finish(), /turn\.completed/)
 })
 
-test('codex parser: 非事件输入被忽略，错误文本有界', () => {
+test('codex parser: 非事件输入被忽略，错误文本有界且去敏', () => {
   const parser = createCodexParser()
   for (const value of [undefined, null, 'string', 42, []]) assert.equal(parser.push(value), undefined)
-  const action = parser.push({ type: 'item.completed', item: { type: 'error', message: 'sk-abcdefghijklmnopqrstuv ' * 1 + 'y'.repeat(1200) } })
+  const action = parser.push({ type: 'item.completed', item: { type: 'error', message: 'sk-abcdefghijklmnopqrstuv ' + 'y'.repeat(1200) } })
   assert.ok(action.error.length <= MAX_ERROR_CHARS + 1)
+  assert.match(action.error, /\[redacted\]/)
   assert.ok(!action.error.includes('sk-abcdefghijklmnopqrstuv'))
 })
 
 // ─────────────────────────── claude：事件语义 ───────────────────────────
 
-/** 真实首轮 claude 事件（hook_* 早于 init，两者都带 session_id）。 */
-const CLAUDE_SESSION_ID = 'c6ffb5b4-60ea-4c80-bb76-23d6a1c04118'
+/** 首轮 claude 事件形态（脱敏 fixture；hook_* 早于 init，两者都带 session_id）。 */
 const CLAUDE_RUN = [
   { type: 'system', subtype: 'hook_started', hook_name: 'SessionStart:startup', session_id: CLAUDE_SESSION_ID },
   { type: 'system', subtype: 'hook_response', hook_name: 'SessionStart:startup', exit_code: 0, session_id: CLAUDE_SESSION_ID },
-  { type: 'system', subtype: 'init', cwd: '/private/tmp', model: 'claude-sonnet-5', permissionMode: 'plan', session_id: CLAUDE_SESSION_ID },
+  { type: 'system', subtype: 'init', cwd: '/tmp/test-workspace', model: 'claude-sonnet-5', permissionMode: 'plan', session_id: CLAUDE_SESSION_ID },
   {
     type: 'assistant',
     parent_tool_use_id: null,
@@ -381,7 +387,7 @@ const CLAUDE_RUN = [
   },
 ]
 
-test('claude parser: 真实事件序列的每个语义动作', () => {
+test('claude parser: 真实事件形态（脱敏 fixture）的每个语义动作', () => {
   const parser = createClaudeParser()
   // remoteId 在第一个带 session_id 的 system 事件（hook_started，早于 init）就回报。
   assert.deepEqual(parser.push(CLAUDE_RUN[0]), { remoteId: CLAUDE_SESSION_ID })

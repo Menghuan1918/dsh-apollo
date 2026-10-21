@@ -20,12 +20,6 @@ dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 dsh plugin --profile <profile> add link:/absolute/path/to/dsh-apollo
 ```
 
-如果新 RC 适配尚未合入默认分支，安装对应分支：
-
-```sh
-dsh plugin --profile <profile> add 'github:Menghuan1918/dsh-apollo#compat/dsh-0.2.1-rc.2'
-```
-
 重启对应 profile 的 DSH 进程后，可以看到：
 
 1. 技能目录中的 8 个流程技能。
@@ -55,7 +49,7 @@ dsh plugin --profile <profile> remove dsh-apollo
 | `/code-review` | 并行检查编码标准与需求符合性 |
 | `/handoff` | 把当前上下文整理为交接文档 |
 
-技能正文以中文为主。工作区已有文档约定时，Spec 优先写入 `.workspace-docs/specs/`，交接文档写入 `.workspace-docs/notes/`；否则使用目标仓库自己的文档目录。
+技能正文中英混合。工作区已有文档约定时，Spec 优先写入 `.workspace-docs/specs/`，交接文档写入 `.workspace-docs/notes/`；否则使用目标仓库自己的文档目录。
 
 ## 工程预设
 
@@ -160,7 +154,9 @@ dsh plugin --profile <profile> remove dsh-apollo
 - **可恢复、不自动重试**：原生 CLI 会话 ID 与投递记录存放在 DSH KV 中，不依赖对话正文，因此可跨压缩和宿主重启续接；CLI 回合失败后不自动重跑。
 - **仅文本**：不支持图片等非文本输入。
 
-Claude 的默认配置模式与显式 `CLAUDE_CONFIG_DIR` 分开保存，避免续接时改变全局配置或钥匙串定位。认证、CLI 版本、账户额度和模型可用性仍由对应 CLI 管理。
+Claude 的默认配置模式与显式 `CLAUDE_CONFIG_DIR` 分开保存，避免续接时改变全局配置或钥匙串定位。未设置该变量与显式设置为 `~/.claude` 的行为不同；使用默认登录态时应保持未设置。认证、CLI 版本、账户额度和模型可用性仍由对应 CLI 管理。
+
+续接同时依赖 DSH KV 和原生 CLI 的会话文件。运行环境必须允许 CLI 正常访问其配置、缓存和会话目录；CLI 自身的权限模式不会解除外层进程的文件沙箱限制。Claude 首轮可能在转录写入失败时仍返回成功，随后续接报 `No conversation found`；此时应检查转录写入是否出现 `EPERM` / `EACCES`，按宿主机制为该次调用申请必要权限，避免通过复制凭据或改配置目录绕过。
 
 ## 反向代理
 
@@ -194,12 +190,22 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh npm test
 
 ### 真实宿主与 CLI 冒烟
 
-[冒烟脚本](<scripts/runtime-smoke.mjs>)使用临时 home 和 profile，不启动 Web 服务，也不替换当前 GUI。以下示例仅验证 Codex：
+[冒烟脚本](<scripts/runtime-smoke.mjs>)使用临时 home 和 profile，不启动 Web 服务，也不替换当前 GUI。先清除复用和跳过阶段的变量，再选择一个后端运行完整验收：
 
 ```sh
+unset APOLLO_SMOKE_HOME APOLLO_SMOKE_HOST_ONLY APOLLO_SMOKE_PHASE
+
+# Codex
 DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh \
 APOLLO_SMOKE_CLI=codex \
-APOLLO_CODEX_MODEL=<model-id> \
+APOLLO_CODEX_MODEL='your-model-id' \
+APOLLO_SMOKE_LIFECYCLE=1 \
+node scripts/runtime-smoke.mjs
+
+# Claude Code
+DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh \
+APOLLO_SMOKE_CLI=claude \
+APOLLO_CLAUDE_MODEL='your-model-id' \
 APOLLO_SMOKE_LIFECYCLE=1 \
 node scripts/runtime-smoke.mjs
 ```
@@ -210,12 +216,14 @@ node scripts/runtime-smoke.mjs
 | `APOLLO_CODEX_MODEL` / `APOLLO_CLAUDE_MODEL` | 所选后端的实际可用模型 |
 | `APOLLO_CODEX_BIN` / `APOLLO_CLAUDE_BIN` | 可选可执行文件路径 |
 | `APOLLO_CODEX_PROFILE` | 可选 Codex profile |
-| `APOLLO_SMOKE_HOST_ONLY=1` | 仅验宿主、双预设、配置与原生委派，不启动 CLI；模型变量仅作配置占位 |
+| `APOLLO_SMOKE_HOST_ONLY=1` | 仅验宿主、双预设、配置与原生委派；仍需设置模型占位值，但不会调用 CLI |
 | `APOLLO_SMOKE_LIFECYCLE=1` | 追加中断续接、可写与只读权限切换 |
-| `APOLLO_SMOKE_HOME` | 复用脚本生成的临时 home，跳过首次两轮检查 |
+| `APOLLO_SMOKE_HOME` | 复用已通过首次两轮检查的临时 home，跳过首次两轮检查；仍需设置对应模型变量 |
 | `APOLLO_SMOKE_PHASE=read-only` | 生命周期检查只追加只读阶段 |
 
-默认检查两轮记忆、当前目录、结果通知及宿主重载续接。成功输出 `APOLLO_RUNTIME_SMOKE_PASSED`，明细保存在临时 home 的结果文件中；历史证据与本轮结果分别记录。
+默认检查两轮记忆、创建时的当前目录解析、父会话结果通知及宿主重载续接。完整生命周期还检查进行中回合中断后续接，以及可写模式切回只读模式。验收通过必须同时满足：输出 `APOLLO_RUNTIME_SMOKE_PASSED`、进程退出码为 0、临时 home 中 `results.json` 的对应阶段全部为 `passed: true`。完整验收应从 fresh home 开始；复用失败 home 或跳过阶段的结果不能代替它。
+
+在 DSH `0.2.1-rc.2` 上，Claude Code `2.1.305` 的 fresh 完整生命周期已实测通过，覆盖上述阶段，且重载、中断及权限切换后原生会话 ID 保持不变。中断检查证明回合取消与续接，不代表验证了长命令进程树终止；权限切换检查不代表额外验证了权限提问流程。新会话的宿主重载恢复也不等同于旧版本会话迁移。
 
 **真实 CLI 验证需要登录和可用额度，会产生实际调用费用。** 单元测试或宿主检查通过，不代表对应 CLI 的真机流程通过。
 

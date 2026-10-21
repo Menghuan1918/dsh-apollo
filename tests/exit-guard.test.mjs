@@ -146,9 +146,9 @@ test('jobs 服务缺失 → 仅按子代理判定，不崩溃', async () => {
 })
 
 test('遗留 exitGuardIgnore 键不再有任何豁免效果（机制已移除）', async () => {
-  await withConfig('{"exitGuard": true, "exitGuardIgnore": ["watch_glm53.sh", "--profile web --patch"]}', async () => {
+  await withConfig('{"exitGuard": true, "exitGuardIgnore": ["watch.sh", "--profile web --patch"]}', async () => {
     const jobs = {
-      list: () => [{ id: 'bash-7', kind: 'bash', label: 'bash: /tmp/watch_glm53.sh >> log', status: 'running' }],
+      list: () => [{ id: 'bash-7', kind: 'bash', label: 'bash: /tmp/watch.sh >> log', status: 'running' }],
     }
     const ctx = makeCtx({
       children: [{ id: 'child-1', label: '探索仓库结构' }],
