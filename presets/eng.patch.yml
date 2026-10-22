@@ -124,11 +124,10 @@
             config:
               maxConsecutiveWakes: 5000
 
-          # 0.2.1 standard adds the schedule tools (schedule_create/list/update/
-          # delete) over the host `schedule` service; they are per-session tools, so
-          # they need no realm.
-          - id: tool-schedule
-            name: '@deepseek-ai/dsh-tool-schedule'
+          # The automation-task tools (schedule_create/list/update/delete) are
+          # deliberately omitted from engineering mode: coding/infrastructure work
+          # does not need scheduled reminders. The host `schedule` service and the
+          # sidebar Automation page stay available to other presets.
 
           # ── skills ──────────────────────────────────────────────────────────────────
 

@@ -16,6 +16,11 @@ const ownRows = [
   ['eng-mode-instructions', 'dsh-apollo/presets/eng/plugins/mode-instructions/index.js'],
 ]
 const thresholds = { thresholdChars: [16384, 8192], headChars: [8192, 4096], tailChars: [2048, 1024] }
+// Deliberate removals from the upstream standard preset. The real-preset test
+// asserts each still exists upstream before filtering it out, so a renamed or
+// dropped upstream row cannot silently pass.
+const droppedRows = [['tool-schedule', '@deepseek-ai/dsh-tool-schedule']]
+const isDropped = (row) => droppedRows.some(([id, name]) => row.id === id && row.name === name)
 // Compare platform expressions as data. This test never evaluates !!js.
 const schema = yaml.DEFAULT_SCHEMA.extend(new yaml.Type('tag:yaml.org,2002:js', {
   kind: 'scalar', construct: (source) => ({ javascript: source }),
@@ -72,9 +77,9 @@ function dshLayout(t) {
   t.skip('未发现满足 engines.dsh 的本机 DSH 安装；显式设置 DSH_PACKAGE_ROOT 可启用验证')
 }
 
-/** Remove only the documented Apollo additions and exact tuning values. */
+/** Remove the documented Apollo additions, deliberate removals, and exact tuning values. */
 function normalizedEng(rows) {
-  const normalized = structuredClone(rows).filter((row) => !ownRows.some(([id, name]) => row.id === id && row.name === name))
+  const normalized = structuredClone(rows).filter((row) => !isDropped(row) && !ownRows.some(([id, name]) => row.id === id && row.name === name))
   for (const row of flatten(normalized)) {
     if (row.id === 'tool-jobs' && Object.hasOwn(row.config ?? {}, 'maxConsecutiveWakes')) {
       assert.equal(row.config.maxConsecutiveWakes, 5000)
@@ -92,7 +97,8 @@ function normalizedEng(rows) {
 }
 
 function assertStandard(eng, standard) {
-  assert.deepEqual(normalizedEng(eng), standard, '预设存在白名单外差异（含嵌套配置、scope、disabled 和行序）')
+  const upstream = structuredClone(standard).filter((row) => !isDropped(row))
+  assert.deepEqual(normalizedEng(eng), upstream, '预设存在白名单外差异（含嵌套配置、scope、disabled 和行序）')
 }
 
 test('两份预设 patch 结构合法：身份稳定、bundle 引用唯一、无第二份行清单', () => {
@@ -109,12 +115,16 @@ test('两份预设 patch 结构合法：身份稳定、bundle 引用唯一、无
   assert.deepEqual(manifest().dsh.bundle.patch, ['./cordis.patch.yml', './presets/eng.patch.yml', './presets/eng-noask.patch.yml'])
 })
 
-test('eng 预设与上游 standard 完整对齐，差异只有声明的加法与调参', (t) => {
+test('eng 预设与上游 standard 完整对齐，差异只有声明的加法、剔除与调参', (t) => {
   const layout = dshLayout(t)
   if (!layout) return
   const eng = rowsOf(ENG)
   const standard = rowsOf(layout.patch)
-  assert.deepEqual(identities(eng).filter(([id]) => !identities(standard).some(([reference]) => reference === id)), ownRows)
+  const upstream = identities(standard)
+  for (const [id, name] of droppedRows) {
+    assert.ok(upstream.some(([rowId, rowName]) => rowId === id && rowName === name), `剔除行必须仍存在于上游 standard：${id}`)
+  }
+  assert.deepEqual(identities(eng).filter(([id]) => !upstream.some(([reference]) => reference === id)), ownRows)
   assertStandard(eng, standard)
 })
 
