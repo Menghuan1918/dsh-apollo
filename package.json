@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "~3.18.4",
-    "dsh-better-goal": "github:Menghuan1918/dsh-better-goal#b9cfd32a7c5dd3a7afad1ec7583441a9b587e808"
+    "dsh-better-goal": "github:Menghuan1918/dsh-better-goal#dfc94f71579d7cf419d0ed2bac4db1f00f499067"
   },
   "peerDependencies": {
     "react": "^18.2.0"
