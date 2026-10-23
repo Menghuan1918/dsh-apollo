@@ -119,9 +119,20 @@ flowchart TB
 ### 启用步骤
 
 1. 在运行 DSH 的机器上安装并登录 Codex CLI 或 Claude Code，确认账户有可用额度。
-2. 打开 **Plugins → @menghuan1918/dsh-apollo → `apollo-skills` 行**，启用对应后端，填写可执行文件，并至少配置一个模型与匹配的 effort；Codex 可选 profile。
+2. 打开 **Plugins → @menghuan1918/dsh-apollo → `apollo-skills` 行**，启用对应后端，填写可执行文件，点「自动发现模型」或手填至少一个模型与匹配的 effort；Codex 可选 profile。
 3. 选择接入范围（默认只对工程预设生效；需要全局时再打开）和 CLI 权限，保存。
 4. 如果当前会话是在启用前开的，新建会话再派发。
+
+### 自动发现模型
+
+设置页的「自动发现模型」按后端读取一次模型清单，**只追加列表里还没有的 id**，不覆盖已有条目；默认模型为空时自动选第一个。
+
+| 后端 | 来源 | 说明 |
+|---|---|---|
+| Codex | `codex debug models`（失败退回 `--bundled`） | 清单跟随 `config.toml` 的 model_provider；id 取 `slug`，effort 取 `supported_reasoning_levels`，默认 effort 取 `default_reasoning_level`，只收 `visibility: "list"` 的模型。 |
+| Claude | `GET {ANTHROPIC_BASE_URL}/v1/models` | Claude CLI 没有模型清单命令；Apollo 读取与 CLI 相同的端点与凭据（进程 env，其次 `~/.claude/settings.json` 的 `env`）。凭据只在宿主进程内用于请求头，不会返回给页面。effort 固定为 `low` / `medium` / `high` / `xhigh` / `max`，默认 `high`。 |
+
+> Codex 的 `profile` 不参与发现（`codex debug models` 不接受 `-p`）；profile 若改了 model_provider，请手填该 profile 的模型。Claude 的 OAuth 订阅凭据存在系统钥匙串时不参与发现——请手填模型，或把 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY` 放进进程 env 或 `~/.claude/settings.json` 的 `env`。
 
 > **安全默认**
 >
@@ -169,9 +180,9 @@ flowchart TB
 | `subagents.global` | `false` | 在所有具备所需工具和服务的预设中接入 |
 | `codex.enabled` / `claude.enabled` | `false` | 启用对应 CLI 后端 |
 | `executable` | `codex` / `claude` | PATH 命令名、绝对路径或 `~/` 路径 |
-| `defaultModel` / `models` | 空 / `[]` | 启用前至少配置一个模型、默认模型和匹配的 effort |
+| `defaultModel` / `models` | 空 / `[]` | 启用前至少配置一个模型、默认模型和匹配的 effort；可用「自动发现模型」从本机 CLI 或 Anthropic 端点补齐 |
 
-权限档见下表；模型 ID、effort 和 profile 以 CLI 与账户实际支持为准。表单会阻止不完整组合，手写配置虽可装载，但调用时会失败。
+权限档见下表；模型 ID、effort 和 profile 以 CLI 与账户实际支持为准，自动发现读到的清单也受同一限制。表单会阻止不完整组合，手写配置虽可装载，但调用时会失败。
 
 ### CLI 权限对照
 

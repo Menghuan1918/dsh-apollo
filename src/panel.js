@@ -2,9 +2,13 @@
  * dsh-apollo (npm: @menghuan1918/dsh-apollo) —— 宿主半边只读面板（src/panel.js）。
  *
  * 注册仅限 loopback（或行配置 `trustedHosts` 列出的反向代理权威）+ 同源标志的
- * fenced HTTP 路由 `/apollo/api/capabilities`，供浏览器半边（`exports["./client"]`
- * 的 `plugins.row.config` 页面）读取**能力探针**：两个 CLI 后端配置的可执行文件
- * 在 PATH 上的解析结果与版本、以及 Codex 的 profile 名称。
+ * fenced HTTP 路由：
+ *   - `/apollo/api/capabilities`——**能力探针**：两个 CLI 后端配置的可执行文件
+ *     在 PATH 上的解析结果与版本、以及 Codex 的 profile 名称；
+ *   - `/apollo/api/models?cli=codex|claude`——**模型自动发现**：Codex 读
+ *     `codex debug models` 的 JSON catalog，Claude 读 Anthropic Messages 的
+ *     `GET /v1/models`（凭据来自进程 env 或 Claude 设置文件，只在内存里用）。
+ * 两者都供浏览器半边（`exports["./client"]` 的 `plugins.row.config` 页面）读取。
  *
  * 为什么是「能力」而不是「配置」：设置本身已经是正式 Config（volatile），读写
  * 走 DSH 自己的 configForms/行配置页面（`src/settings.js` 只做一次旧文件导入），
@@ -13,15 +17,17 @@
  * 哪些 profile 可选。
  *
  * 暴露面（写死在契约里，测试守护）：
- *   `{ executables: { codex: { executable, path, version }, claude: {...} },
+ *   capabilities：`{ executables: { codex: { executable, path, version }, claude: {...} },
  *      codexProfiles: string[] }`
- * **绝不返回配置正文，也绝不返回任何凭据**：只回可执行文件名/路径/版本行与
- * profile 名称（profile 文件内容只在本进程内用于抽名称）。只读：GET 之外的
- * 方法一律 405，且从不读取请求体。
+ *   models：`{ cli, models: [{ id, efforts, defaultEffort }], source, error }`
+ *     （`error` 只含 `code` 与可选 `status`）
+ * **绝不返回配置正文，也绝不返回任何凭据**：只回可执行文件名/路径/版本行、
+ * profile 名称、模型 id 与 effort；Claude 凭据只在本进程内拼进请求头。
+ * 只读：GET 之外的方法一律 405，且从不读取请求体。
  *
  * 安全模型仍是 DNS-rebinding / 跨站防御而非认证（默认只信 loopback；经反向
  * 代理域名访问 GUI 时把该权威加入行配置 `trustedHosts`，后果上限是泄露本机
- * 上某个可执行文件的路径与版本号）。边界判定与 dsh-better-sidebar 的
+ * 上某个可执行文件的路径与版本号、或模型清单）。边界判定与 dsh-better-sidebar 的
  * src/trust-fence.ts 同源（其源头为 BSD-3-Clause 的
  * @deepseek-ai/dsh-client-connection api-request-trust + loopback-hostname）。
  *
@@ -58,6 +64,33 @@ export const CAPABILITY_TTL_MS = 30_000
 const VERSION_MAX_CHARS = 120
 /** 合法的 profile 名（同时挡住路径分隔符，名称只会被当显示文本用）。 */
 const PROFILE_NAME = /^[A-Za-z0-9._-]+$/
+
+// ── 模型自动发现（/apollo/api/models）────────────────────────────────────────
+
+/** 自动发现的完整路径（GET，查询参数 `cli=codex|claude`）。 */
+export const MODELS_PATH = '/apollo/api/models'
+/** 自动发现接受的 CLI（同时是查询参数取值）。 */
+export const DISCOVERY_CLIS = Object.freeze(['codex', 'claude'])
+/** 单次自动发现的兜底超时（毫秒）。 */
+export const DISCOVERY_TIMEOUT_MS = 10_000
+/** Codex 在线目录失败后 `--bundled` 离线兜底的超时（毫秒）。 */
+export const DISCOVERY_FALLBACK_TIMEOUT_MS = 3_000
+/** Claude `--effort` 的实测取值（`claude --help`；与 src/cli/claude.js 同步）。 */
+export const CLAUDE_EFFORTS = Object.freeze(['low', 'medium', 'high', 'xhigh', 'max'])
+/** Claude 发现结果的默认 effort：五档中偏上的安全值。 */
+const CLAUDE_DEFAULT_EFFORT = 'high'
+/** Anthropic Messages 的模型清单协议版本。 */
+const ANTHROPIC_VERSION = '2023-06-01'
+/** Anthropic 模型清单单页上限（与 DSH pi-ai 的发现实现一致）。 */
+const ANTHROPIC_MODEL_LIMIT = 1000
+/** 发现结果的数量与长度上限：清单来自本机 CLI 或用户配置的端点，不能无限长。 */
+const MAX_MODELS = 200
+const MAX_MODEL_ID_CHARS = 120
+const MAX_EFFORT_CHARS = 32
+const MAX_LISTING_BYTES = 4 * 1024 * 1024
+/** 模型 id / effort 的安全字符集：argv 不经 shell，但仍拒绝空白、引号与控制字符。 */
+const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/@+\[\]-]*$/
+const EFFORT = /^[A-Za-z][A-Za-z0-9._-]*$/
 
 // ── 部署标志 tap ────────────────────────────────────────────────────────────
 
@@ -356,6 +389,294 @@ export function createCapabilitiesReader(deps = {}) {
   }
 }
 
+// ── 模型自动发现 ────────────────────────────────────────────────────────────
+
+/** 普通数据对象（数组、null、类实例都不算）。 */
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** 规整模型 id：去空白、限长、拒绝空白/引号/控制字符。 */
+function modelIdOf(value) {
+  if (typeof value !== 'string') return null
+  const id = value.trim()
+  if (id === '' || id.length > MAX_MODEL_ID_CHARS || !MODEL_ID.test(id)) return null
+  return id
+}
+
+/** 规整 effort 名：去空白、限长、拒绝空白/引号/控制字符。 */
+function effortOf(value) {
+  if (typeof value !== 'string') return null
+  const effort = value.trim()
+  if (effort === '' || effort.length > MAX_EFFORT_CHARS || !EFFORT.test(effort)) return null
+  return effort
+}
+
+/**
+ * 解析 `codex debug models` 的 JSON catalog。
+ *
+ * 只收 `visibility === 'list'` 的模型（隐藏条目是内部/评审模型）；id 取 `slug`；
+ * effort 来自 `supported_reasoning_levels[].effort`，默认 effort 取
+ * `default_reasoning_level`（不在列表里时退回第一个）。
+ * @param text - 命令 stdout。
+ * @returns 模型数组；JSON 不可解析时返回 null（调用方报 parse 错误）。
+ */
+export function parseCodexCatalog(text) {
+  let parsed
+  try {
+    parsed = JSON.parse(String(text))
+  } catch {
+    return null
+  }
+  const entries = isRecord(parsed) && Array.isArray(parsed.models) ? parsed.models : []
+  const models = []
+  for (const entry of entries) {
+    if (!isRecord(entry)) continue
+    if (typeof entry.visibility === 'string' && entry.visibility !== 'list') continue
+    const id = modelIdOf(entry.slug ?? entry.id)
+    if (id === null || models.some((model) => model.id === id)) continue
+    const efforts = []
+    const levels = Array.isArray(entry.supported_reasoning_levels) ? entry.supported_reasoning_levels : []
+    for (const level of levels) {
+      if (!isRecord(level)) continue
+      const effort = effortOf(level.effort)
+      if (effort !== null && !efforts.includes(effort)) efforts.push(effort)
+      if (efforts.length >= 16) break
+    }
+    const preferred = effortOf(entry.default_reasoning_level)
+    models.push({
+      id,
+      efforts,
+      defaultEffort: preferred !== null && efforts.includes(preferred) ? preferred : (efforts[0] ?? ''),
+    })
+    if (models.length >= MAX_MODELS) break
+  }
+  return models
+}
+
+/**
+ * 解析 Anthropic Messages `GET /v1/models` 的响应。
+ *
+ * Claude CLI 本身没有模型清单命令，端点只回 id/display_name；effort 取
+ * `claude --effort` 的固定五档，默认 high。
+ * @param text - 响应正文。
+ * @returns 模型数组；JSON 不可解析时返回 null。
+ */
+export function parseClaudeModelList(text) {
+  let parsed
+  try {
+    parsed = JSON.parse(String(text))
+  } catch {
+    return null
+  }
+  const entries = isRecord(parsed) && Array.isArray(parsed.data) ? parsed.data : []
+  const models = []
+  for (const entry of entries) {
+    if (!isRecord(entry)) continue
+    const id = modelIdOf(entry.id)
+    if (id === null || models.some((model) => model.id === id)) continue
+    models.push({ id, efforts: [...CLAUDE_EFFORTS], defaultEffort: CLAUDE_DEFAULT_EFFORT })
+    if (models.length >= MAX_MODELS) break
+  }
+  return models
+}
+
+/**
+ * Anthropic 模型清单 URL：根路径去掉末尾 `/` 与一个末尾 `/v1`，再接 `/v1/models`
+ * （兼容网关文档的两种写法；与 DSH pi-ai 的发现规则一致）。
+ * @param baseURL - `ANTHROPIC_BASE_URL`（已去空白）。
+ * @returns 清单 URL。
+ */
+export function anthropicListingUrl(baseURL) {
+  const base = String(baseURL).trim().replace(/\/+$/, '')
+  const root = base.endsWith('/v1') ? base.slice(0, -3) : base
+  return `${root}/v1/models?limit=${String(ANTHROPIC_MODEL_LIMIT)}`
+}
+
+/** 读取 Claude 设置文件（可注入 readFile；缺失/坏 JSON 都当空对象）。 */
+function readClaudeSettings(path, readFile) {
+  try {
+    const parsed = JSON.parse(String(readFile(path)))
+    return isRecord(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * 读取 Claude 的有效端点与凭据：`ANTHROPIC_BASE_URL` 逐键回退（进程 env →
+ * Claude 用户设置 `<CLAUDE_CONFIG_DIR 或 ~/.claude>/settings.json` 的 `env`），
+ * **凭据来源整体优先**——进程 env 里出现任一凭据时整套用 env 的凭据，否则整套
+ * 用 settings；不把两边的 token/key 各取一半。
+ *
+ * **凭据只在内存里用于请求头，绝不进入响应**；本函数导出仅为测试。
+ * @param options - `env`、`home`、`readFile` 注入点。
+ * @returns `{ baseURL, authToken, apiKey }`（后两者可能为 undefined）。
+ */
+export function claudeApiConfig(options = {}) {
+  const env = options.env ?? process.env
+  const home = options.home ?? homedir()
+  const readFile = options.readFile ?? ((file) => readFileSync(file, 'utf8'))
+  const configured = typeof env.CLAUDE_CONFIG_DIR === 'string' && env.CLAUDE_CONFIG_DIR.trim() !== ''
+    ? expandHome(env.CLAUDE_CONFIG_DIR.trim(), home)
+    : join(home, '.claude')
+  const settings = readClaudeSettings(join(configured, 'settings.json'), readFile)
+  const settingsEnv = isRecord(settings.env) ? settings.env : {}
+  const read = (source, key) => {
+    const value = source[key]
+    return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined
+  }
+  const baseURL = read(env, 'ANTHROPIC_BASE_URL')
+    ?? read(settingsEnv, 'ANTHROPIC_BASE_URL')
+    ?? 'https://api.anthropic.com'
+  const envToken = read(env, 'ANTHROPIC_AUTH_TOKEN')
+  const envKey = read(env, 'ANTHROPIC_API_KEY')
+  if (envToken !== undefined || envKey !== undefined) {
+    return { baseURL, authToken: envToken, apiKey: envToken === undefined ? envKey : undefined }
+  }
+  const settingsToken = read(settingsEnv, 'ANTHROPIC_AUTH_TOKEN')
+  return {
+    baseURL,
+    authToken: settingsToken,
+    apiKey: settingsToken === undefined ? read(settingsEnv, 'ANTHROPIC_API_KEY') : undefined,
+  }
+}
+
+/** Claude 请求头：AUTH_TOKEN 走 Bearer，API key 走 x-api-key；都没有返回 null。 */
+function claudeAuthHeaders(api) {
+  const headers = { accept: 'application/json', 'anthropic-version': ANTHROPIC_VERSION }
+  if (api.authToken !== undefined) headers.authorization = `Bearer ${api.authToken}`
+  else if (api.apiKey !== undefined) headers['x-api-key'] = api.apiKey
+  else return null
+  return headers
+}
+
+/** 统一成功结果。 */
+function discovered(cli, models, source) {
+  return { cli, models, source, error: null }
+}
+
+/** 统一失败结果（models 为空，error 只含 code/status）。 */
+function discoveryFailed(cli, code, status) {
+  return {
+    cli,
+    models: [],
+    source: null,
+    error: status === undefined ? { code } : { code, status },
+  }
+}
+
+/**
+ * 发现 Claude 模型：`GET {ANTHROPIC_BASE_URL}/v1/models`。
+ *
+ * 只读凭据来源与 CLI 相同（见 {@link claudeApiConfig}），但不 spawn CLI；
+ * 响应有字节上限，错误只回 code/status，不回凭据或 URL。
+ * @param deps - `env`、`home`、`readFile`、`fetch`、`timeoutMs` 注入点。
+ * @returns `{ cli, models, source, error }`。
+ */
+export async function discoverClaudeModels(deps = {}) {
+  const api = claudeApiConfig(deps)
+  const headers = claudeAuthHeaders(api)
+  if (headers === null) return discoveryFailed('claude', 'no-credentials')
+  const fetcher = deps.fetch ?? globalThis.fetch
+  if (typeof fetcher !== 'function') return discoveryFailed('claude', 'network')
+  const timeoutMs = deps.timeoutMs ?? DISCOVERY_TIMEOUT_MS
+  let response
+  try {
+    response = await fetcher(anthropicListingUrl(api.baseURL), {
+      method: 'GET',
+      headers,
+      // 不跟随重定向：跨域重定向时自定义鉴权头的剥离规则不一致，直接失败更安全。
+      redirect: 'error',
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+  } catch {
+    return discoveryFailed('claude', 'network')
+  }
+  if (response.status === 401 || response.status === 403) {
+    return discoveryFailed('claude', 'unauthorized', response.status)
+  }
+  if (response.ok !== true) return discoveryFailed('claude', 'http', response.status)
+  const declared = Number(response.headers?.get?.('content-length') ?? NaN)
+  if (Number.isFinite(declared) && declared > MAX_LISTING_BYTES) return discoveryFailed('claude', 'too-large')
+  let text
+  try {
+    text = String(await response.text())
+  } catch {
+    return discoveryFailed('claude', 'network')
+  }
+  if (Buffer.byteLength(text) > MAX_LISTING_BYTES) return discoveryFailed('claude', 'too-large')
+  const models = parseClaudeModelList(text)
+  if (models === null) return discoveryFailed('claude', 'parse')
+  if (models.length === 0) return discoveryFailed('claude', 'empty')
+  return discovered('claude', models, 'claude-models-api')
+}
+
+/** 运行 `codex debug models`：成功返回 stdout，失败/超时返回 undefined。 */
+function runCodexOutput(path, args, options = {}) {
+  const timeoutMs = options.timeoutMs ?? DISCOVERY_TIMEOUT_MS
+  return new Promise((resolve) => {
+    execFile(path, args, {
+      timeout: timeoutMs,
+      killSignal: 'SIGKILL',
+      maxBuffer: MAX_LISTING_BYTES,
+      windowsHide: true,
+    }, (error, stdout) => {
+      if (error !== null) {
+        resolve(undefined)
+        return
+      }
+      const text = String(stdout ?? '')
+      resolve(Buffer.byteLength(text) > MAX_LISTING_BYTES ? undefined : text)
+    })
+  })
+}
+
+/**
+ * 发现 Codex 模型：本机 `codex debug models`（在线目录）；失败时退回
+ * `--bundled`（离线内置目录）。
+ *
+ * 目录跟随 `~/.codex/config.toml` 的 model_provider，所以填进来的 id 与 CLI
+ * 实际可用模型一致；stdout 只含 JSON（告警走 stderr）。
+ * @param config - 行配置（取 codex 的 executable）。
+ * @param deps - `env`、`home`、`resolveExecutable`、`runCommand`、`timeoutMs`、
+ *   `fallbackTimeoutMs` 注入点。
+ * @returns `{ cli, models, source, error }`。
+ */
+export async function discoverCodexModels(config, deps = {}) {
+  const backend = normalizeConfig(config).subagents.codex
+  const env = deps.env ?? process.env
+  const home = deps.home ?? homedir()
+  const resolve = deps.resolveExecutable ?? resolveExecutable
+  const run = deps.runCommand ?? runCodexOutput
+  const path = attempt(() => resolve(backend.executable, { env, home }))
+  if (typeof path !== 'string' || path === '') return discoveryFailed('codex', 'missing')
+  let text = await run(path, ['debug', 'models'], { timeoutMs: deps.timeoutMs ?? DISCOVERY_TIMEOUT_MS })
+  if (text === undefined) {
+    text = await run(path, ['debug', 'models', '--bundled'], {
+      timeoutMs: deps.fallbackTimeoutMs ?? DISCOVERY_FALLBACK_TIMEOUT_MS,
+    })
+  }
+  if (text === undefined) return discoveryFailed('codex', 'failed')
+  const models = parseCodexCatalog(text)
+  if (models === null) return discoveryFailed('codex', 'parse')
+  if (models.length === 0) return discoveryFailed('codex', 'empty')
+  return discovered('codex', models, 'codex-catalog')
+}
+
+/**
+ * 按 CLI 分派模型发现。
+ * @param cli - `codex` 或 `claude`（调用方已校验）。
+ * @param config - 行配置。
+ * @param deps - 两个发现函数的注入点合集。
+ * @returns `{ cli, models, source, error }`。
+ */
+export async function discoverModels(cli, config, deps = {}) {
+  if (cli === 'codex') return discoverCodexModels(config, deps)
+  if (cli === 'claude') return discoverClaudeModels(deps)
+  throw new Error(`unknown discovery cli: ${String(cli)}`)
+}
+
 // ── 安检（loopback Host + 同源标志）─────────────────────────────────────────
 // 改编自 dsh-better-sidebar src/trust-fence.ts（其源头为 BSD-3-Clause 的
 // @deepseek-ai/dsh-client-connection api-request-trust + loopback-hostname）。
@@ -410,17 +731,20 @@ function writeJson(res, status, body) {
 }
 
 /**
- * 注册只读 `/apollo/api/capabilities` 路由（由 `src/settings.js` 调用）。
+ * 注册只读 `/apollo/api/capabilities` 与 `/apollo/api/models` 路由
+ * （由 `src/settings.js` 调用）。
  *
  * 信任边界按请求重读活配置的 `trustedHosts`（反代部署下改完即时生效），读不到
- * 活配置时退回 `configFor` 的规整值。
+ * 活配置时退回 `configFor` 的规整值。发现接口只回模型 id/efforts，绝不回
+ * Claude 的端点凭据。
  * @param ctx - 已注入 webServer 的插件上下文。
  * @param configFor - 返回当前配置的函数（或配置值本身）。
- * @param deps - 探针注入点；`read` 可直接替换整个读取器（测试用）。
+ * @param deps - 探针注入点；`read` / `discover` 可直接替换实现（测试用）。
  * @returns disposer 由 `ctx.effect` 持有。
  */
 export function registerCapabilitiesRoute(ctx, configFor, deps = {}) {
   const read = deps.read ?? createCapabilitiesReader(deps)
+  const discover = deps.discover ?? discoverModels
   const configOf = () => (typeof configFor === 'function' ? attempt(configFor) : configFor)
   ctx.effect(() => ctx.webServer.register({
     kind: 'prefix',
@@ -432,8 +756,24 @@ export function registerCapabilitiesRoute(ctx, configFor, deps = {}) {
           writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: 'forbidden' } })
           return
         }
-        const pathname = new URL(req.url ?? '/', 'http://dsh.internal').pathname
-        if (pathname !== CAPABILITIES_PATH) {
+        const url = new URL(req.url ?? '/', 'http://dsh.internal')
+        if (url.pathname === MODELS_PATH) {
+          if (req.method !== 'GET') {
+            writeJson(res, 405, { ok: false, error: { code: 'method-error', message: 'method not allowed' } })
+            return
+          }
+          const cli = url.searchParams.get('cli')
+          if (!DISCOVERY_CLIS.includes(cli)) {
+            writeJson(res, 400, { ok: false, error: { code: 'bad-request', message: 'unknown cli' } })
+            return
+          }
+          const value = await discover(cli, config)
+          // 发现是按需触发的探测，不能被浏览器缓存成旧清单。
+          res.setHeader?.('cache-control', 'no-store')
+          writeJson(res, 200, { ok: true, value })
+          return
+        }
+        if (url.pathname !== CAPABILITIES_PATH) {
           writeJson(res, 404, { ok: false, error: { code: 'not-found', message: 'unknown apollo API path' } })
           return
         }
@@ -444,7 +784,7 @@ export function registerCapabilitiesRoute(ctx, configFor, deps = {}) {
         writeJson(res, 200, { ok: true, value: await read(config) })
       } catch (error) {
         // 探针已经各自吞掉失败；这里只剩意外错误——日志留细节，响应只给通用文案。
-        ctx.logger?.warn?.(`apollo-panel: capabilities probe failed: ${error instanceof Error ? error.message : String(error)}`)
+        ctx.logger?.warn?.(`apollo-panel: probe failed: ${error instanceof Error ? error.message : String(error)}`)
         writeJson(res, 500, { ok: false, error: { code: 'probe-failed', message: 'capability probe failed' } })
       }
     },

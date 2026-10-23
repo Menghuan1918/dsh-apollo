@@ -397,8 +397,106 @@ test('capabilities 失败：降级提示但保存仍可用', async () => {
     assert.match(pageText(renderer), /capabilitiesError/)
 
     await page.run(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
-    await page.run(async () => { saveButton(renderer).props.onClick() })
+    await page.run(async () => { await saveButton(renderer).props.onClick() })
     assert.equal(page.controller.calls.length, 1)
+  } finally {
+    restore()
+  }
+})
+
+test('自动发现：按 cli 请求、保留已有模型、只追加新 id、空默认模型自动补上', async () => {
+  const requests = []
+  const discovery = {
+    codex: {
+      models: [
+        { id: 'gpt-5', efforts: ['low'], defaultEffort: 'low' },
+        { id: 'gpt-5.1', efforts: ['low', 'high'], defaultEffort: 'high' },
+      ],
+      source: 'codex-catalog',
+      error: null,
+    },
+    claude: {
+      models: [{ id: 'claude-opus-5-5', efforts: ['low', 'high'], defaultEffort: 'high' }],
+      source: 'claude-models-api',
+      error: null,
+    },
+  }
+  const restore = useFetch(async (url) => {
+    const target = String(url)
+    if (target.startsWith('/apollo/api/models')) {
+      requests.push(target)
+      const cli = new URL('http://dsh.internal' + target).searchParams.get('cli')
+      return { ok: true, status: 200, json: async () => ({ ok: true, value: discovery[cli] }) }
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true, value: CAPABILITIES }) }
+  })
+  try {
+    const page = await mountPage()
+    const renderer = page.renderer
+
+    await page.run(async () => { await byId(renderer, 'apollo-codex-discover').props.onClick() })
+    // 已存在的 gpt-5 保留宿主值（efforts 未被发现结果覆盖），新 id 追加。
+    assert.equal(byLabel(renderer, 'modelIdPlaceholder 1').props.value, 'gpt-5')
+    assert.equal(byLabel(renderer, 'modelIdPlaceholder 2').props.value, 'gpt-5.1')
+    assert.deepEqual(optionsOf(byId(renderer, 'apollo-codex-default-model')), ['', 'gpt-5', 'gpt-5.1'])
+    assert.equal(byId(renderer, 'apollo-codex-default-model').props.value, 'gpt-5')
+
+    await page.run(async () => { await byId(renderer, 'apollo-claude-discover').props.onClick() })
+    assert.equal(byLabel(renderer, 'modelIdPlaceholder 1').props.value, 'gpt-5')
+    assert.equal(byId(renderer, 'apollo-claude-default-model').props.value, 'claude-opus-5-5')
+    assert.match(pageText(renderer), /discoverDone/)
+    assert.deepEqual(requests, ['/apollo/api/models?cli=codex', '/apollo/api/models?cli=claude'])
+
+    await page.run(async () => { await saveButton(renderer).props.onClick() })
+    assert.deepEqual(page.controller.calls[0].ops, [
+      {
+        op: 'set',
+        path: ['subagents', 'codex', 'models'],
+        value: [
+          { id: 'gpt-5', efforts: ['low', 'high'], defaultEffort: 'high' },
+          { id: 'gpt-5.1', efforts: ['low', 'high'], defaultEffort: 'high' },
+        ],
+      },
+      {
+        op: 'set',
+        path: ['subagents', 'claude', 'defaultModel'],
+        value: 'claude-opus-5-5',
+      },
+      {
+        op: 'set',
+        path: ['subagents', 'claude', 'models'],
+        value: [{ id: 'claude-opus-5-5', efforts: ['low', 'high'], defaultEffort: 'high' }],
+      },
+    ])
+  } finally {
+    restore()
+  }
+})
+
+test('自动发现失败：显示宿主给的 code（含 HTTP 状态），不改草稿', async () => {
+  const restore = useFetch(async (url) => {
+    const target = String(url)
+    if (target.startsWith('/apollo/api/models')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ok: true,
+          value: { models: [], source: null, error: { code: 'unauthorized', status: 401 } },
+        }),
+      }
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true, value: CAPABILITIES }) }
+  })
+  try {
+    const page = await mountPage()
+    const renderer = page.renderer
+    await page.run(async () => { await byId(renderer, 'apollo-codex-discover').props.onClick() })
+    assert.match(pageText(renderer), /discoverFailed/)
+    assert.match(pageText(renderer), /discoverReasonUnauthorized/)
+    assert.match(pageText(renderer), /401/)
+    assert.equal(saveButton(renderer).props.disabled, true)
+    assert.deepEqual(page.controller.calls, [])
   } finally {
     restore()
   }

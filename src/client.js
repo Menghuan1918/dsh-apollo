@@ -20,6 +20,7 @@ window.__ModuleLoader__.load({
 		// 旧键并排注册，只为仍把依赖槽记成旧 unscoped 名的 profile 保留配置入口。
 		const ROW_KEYS = ['@menghuan1918/dsh-apollo#apollo-skills', 'dsh-apollo#apollo-skills'];
 		const CAPABILITIES_URL = '/apollo/api/capabilities';
+		const MODELS_URL = '/apollo/api/models';
 
 		/** Codex CLI 权限档（与 src/config.js 的 CODEX_PERMISSION_MODES 同步）。 */
 		const CODEX = {
@@ -71,6 +72,21 @@ window.__ModuleLoader__.load({
 			modelsLabel: '模型与 effort',
 			modelsHint: '每行一个模型：id + 允许的 effort（逗号分隔）+ 默认 effort。',
 			modelsEmpty: '还没有配置模型；启用后端前至少加一个模型。',
+			discover: '自动发现模型',
+			discovering: '正在发现…',
+			discoverHint: '从本机 CLI 或 Anthropic 端点读取模型，只追加列表里还没有的条目。',
+			discoverDone: '已发现 {count} 个模型，新增 {added} 个。',
+			discoverFailed: '自动发现失败：{reason}',
+			discoverUnknown: '未知原因',
+			discoverReasonMissing: '没找到可执行文件',
+			discoverReasonFailed: 'CLI 命令执行失败',
+			discoverReasonNoCredentials: '没找到 ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY',
+			discoverReasonUnauthorized: '模型端点拒绝了凭据（HTTP {status}）',
+			discoverReasonHttp: '模型端点返回 HTTP {status}',
+			discoverReasonNetwork: '无法连接模型端点',
+			discoverReasonParse: '返回内容不是可解析的模型清单',
+			discoverReasonEmpty: '模型清单为空',
+			discoverReasonTooLarge: '返回内容过大',
 			modelIdPlaceholder: '模型 id',
 			modelEffortsPlaceholder: 'low, medium, high',
 			modelDefaultEffort: '默认 effort',
@@ -129,6 +145,21 @@ window.__ModuleLoader__.load({
 			modelsLabel: 'Models and efforts',
 			modelsHint: 'One model per row: id + allowed efforts (comma separated) + default effort.',
 			modelsEmpty: 'No model yet; add at least one before enabling the backend.',
+			discover: 'Discover models',
+			discovering: 'Discovering…',
+			discoverHint: 'Reads models from the local CLI or the Anthropic endpoint; appends only entries not already listed.',
+			discoverDone: 'Found {count} models, added {added}.',
+			discoverFailed: 'Discovery failed: {reason}',
+			discoverUnknown: 'unknown reason',
+			discoverReasonMissing: 'executable not found',
+			discoverReasonFailed: 'the CLI command failed',
+			discoverReasonNoCredentials: 'no ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY',
+			discoverReasonUnauthorized: 'the model endpoint rejected the credential (HTTP {status})',
+			discoverReasonHttp: 'the model endpoint answered HTTP {status}',
+			discoverReasonNetwork: 'the model endpoint could not be reached',
+			discoverReasonParse: 'the reply is not a parseable model list',
+			discoverReasonEmpty: 'the model list is empty',
+			discoverReasonTooLarge: 'the reply is too large',
 			modelIdPlaceholder: 'model id',
 			modelEffortsPlaceholder: 'low, medium, high',
 			modelDefaultEffort: 'Default effort',
@@ -155,6 +186,19 @@ window.__ModuleLoader__.load({
 			unavailableNote: 'Not writable: this configuration is unavailable on the current connection.',
 		};
 
+		/** 宿主发现接口的 error.code → 文案键（未知 code 回退通用原因）。 */
+		const DISCOVERY_REASON_KEYS = {
+			missing: 'discoverReasonMissing',
+			failed: 'discoverReasonFailed',
+			'no-credentials': 'discoverReasonNoCredentials',
+			unauthorized: 'discoverReasonUnauthorized',
+			http: 'discoverReasonHttp',
+			network: 'discoverReasonNetwork',
+			parse: 'discoverReasonParse',
+			empty: 'discoverReasonEmpty',
+			'too-large': 'discoverReasonTooLarge',
+		};
+
 		// ── 文案（locale 服务缺失时保持中文默认）───────────────────────────────
 
 		function interpolate(text, params) {
@@ -178,6 +222,9 @@ window.__ModuleLoader__.load({
 			'@media (prefers-reduced-motion:reduce){.apollo-pulse{animation:none}}',
 			'.apollo-title{margin:0;font-size:14px;font-weight:500;line-height:22px}',
 			'.apollo-hint{margin:0;font-size:12px;line-height:16px;color:var(--dsw-alias-label-tertiary)}',
+			'.apollo-hint[data-tone=error]{color:var(--dsw-alias-state-error-primary)}',
+			'.apollo-hint[data-tone=ok]{color:var(--dsw-alias-state-success-primary)}',
+			'.apollo-actions{display:flex;flex-wrap:wrap;gap:6px}',
 			'.apollo-intro{margin:0;font-size:12.5px;line-height:18px;color:var(--dsw-alias-label-secondary)}',
 			'.apollo-section{display:flex;flex-direction:column;gap:2px;padding-top:12px;border-top:.5px solid var(--dsw-alias-border-l2)}',
 			'.apollo-sectionHead{display:flex;flex-direction:column;gap:2px;padding-bottom:4px}',
@@ -481,8 +528,9 @@ window.__ModuleLoader__.load({
 		}
 
 		/** 一个 CLI 后端的配置卡片。 */
-		function BackendCard({ spec, backend, disabled, capabilities, t: translate, onPatch, onModelPatch, onModelAdd, onModelRemove, generation }) {
+		function BackendCard({ spec, backend, disabled, capabilities, discovery, t: translate, onPatch, onModelPatch, onModelAdd, onModelRemove, onDiscover, generation }) {
 			const title = translate(spec.cli === 'codex' ? 'codexTitle' : 'claudeTitle');
+			const status = discovery === undefined ? undefined : discovery[spec.cli];
 			const profileNames = capabilities.status === 'ready' && Array.isArray(capabilities.value?.codexProfiles)
 				? capabilities.value.codexProfiles.filter((name) => typeof name === 'string')
 				: [];
@@ -575,14 +623,27 @@ window.__ModuleLoader__.load({
 						onPatch: (patch) => onModelPatch(index, patch),
 						onRemove: () => onModelRemove(index),
 					}))),
-			h('div', null,
+			h('div', { className: 'apollo-actions' },
+				h('button', {
+					type: 'button',
+					id: 'apollo-' + spec.cli + '-discover',
+					className: 'apollo-button',
+					'data-variant': 'outline',
+					disabled: disabled || status?.status === 'loading',
+					onClick: onDiscover,
+				}, status?.status === 'loading' ? translate('discovering') : translate('discover')),
 				h('button', {
 					type: 'button',
 					className: 'apollo-button',
 					'data-variant': 'outline',
 					disabled,
 					onClick: onModelAdd,
-				}, translate('modelAdd')))));
+				}, translate('modelAdd'))),
+			h('p', {
+				className: 'apollo-hint',
+				...(status?.status === 'error' ? { 'data-tone': 'error' }
+					: status?.status === 'ok' ? { 'data-tone': 'ok' } : {}),
+			}, status?.text ?? translate('discoverHint'))));
 			return h('div', { className: backend.enabled ? 'apollo-card' : 'apollo-card apollo-cardOff' },
 				h('div', { className: 'apollo-cardHead' },
 					h('span', { className: 'apollo-cardTitle' }, title)),
@@ -598,6 +659,8 @@ window.__ModuleLoader__.load({
 			const [generation, setGeneration] = useState(0);
 			const [busy, setBusy] = useState(false);
 			const [notice, setNotice] = useState(null);
+			/** 每个后端的发现状态：`{ status: 'loading' | 'ok' | 'error', text? }`。 */
+			const [discovery, setDiscovery] = useState({});
 
 			const host = state?.status === 'ready' ? shape(state.value) : null;
 			const live = draft !== null && draft.revision === revision ? draft.value : host;
@@ -662,6 +725,71 @@ window.__ModuleLoader__.load({
 					},
 				};
 			});
+			/** 发现失败原因：只认宿主给的 error.code，不回显可能含凭据的细节。 */
+			const discoveryReason = (error) => {
+				const key = DISCOVERY_REASON_KEYS[String(error?.code ?? '')];
+				if (key === undefined) return translate('discoverUnknown');
+				return translate(key, { status: String(error?.status ?? '') });
+			};
+			/** 拉取发现结果并并入草稿：保留已有条目，只追加新 id。 */
+			const discoverModels = async (spec) => {
+				if (discovery[spec.cli]?.status === 'loading' || !writable) return;
+				setDiscovery((previous) => ({ ...previous, [spec.cli]: { status: 'loading' } }));
+				try {
+					const response = await fetch(MODELS_URL + '?cli=' + encodeURIComponent(spec.cli));
+					const body = await response.json().catch(() => undefined);
+					if (!response.ok || body?.ok !== true) throw new Error('HTTP ' + String(response.status));
+					const value = isRecord(body.value) ? body.value : {};
+					const found = modelList(value.models).filter((model) => model.id.trim() !== '');
+					if (found.length === 0) {
+						setDiscovery((previous) => ({
+							...previous,
+							[spec.cli]: {
+								status: 'error',
+								text: translate('discoverFailed', { reason: discoveryReason(value.error) }),
+							},
+						}));
+						return;
+					}
+					const known = new Set(live.subagents[spec.cli].models
+						.map((model) => model.id.trim()).filter((id) => id !== ''));
+					const added = found.filter((model) => !known.has(model.id)).length;
+					edit((current) => {
+						const backend = current.subagents[spec.cli];
+						const existing = new Set(backend.models
+							.map((model) => model.id.trim()).filter((id) => id !== ''));
+						const models = [...backend.models];
+						for (const model of found) {
+							if (existing.has(model.id)) continue;
+							existing.add(model.id);
+							models.push(model);
+						}
+						const defaultModel = backend.defaultModel.trim() !== '' ? backend.defaultModel : (models[0]?.id ?? '');
+						return {
+							...current,
+							subagents: {
+								...current.subagents,
+								[spec.cli]: { ...backend, models, defaultModel },
+							},
+						};
+					});
+					setDiscovery((previous) => ({
+						...previous,
+						[spec.cli]: {
+							status: 'ok',
+							text: translate('discoverDone', { count: found.length, added }),
+						},
+					}));
+				} catch (error) {
+					setDiscovery((previous) => ({
+						...previous,
+						[spec.cli]: {
+							status: 'error',
+							text: translate('discoverFailed', { reason: String(error?.message ?? error) }),
+						},
+					}));
+				}
+			};
 			const save = async () => {
 				if (!dirty || invalid !== null || !writable) return;
 				const ops = diffOps(host, live);
@@ -742,12 +870,14 @@ window.__ModuleLoader__.load({
 					backend: live.subagents[spec.cli],
 					disabled: !writable || busy,
 					capabilities,
+					discovery,
 					t: translate,
 					generation,
 					onPatch: (patch) => patchBackend(spec, patch),
 					onModelPatch: (index, patch) => patchModel(spec, index, patch),
 					onModelAdd: () => addModel(spec),
 					onModelRemove: (index) => removeModel(spec, index),
+					onDiscover: () => discoverModels(spec),
 				})),
 				h('div', { className: 'apollo-footer' },
 					h('button', {

@@ -41,7 +41,7 @@
 
 1. 向技能注册表的全局层注册包内 `skills/*/SKILL.md`；
 2. 挂载正式行配置（`src/config.js` 的 Schemastery schema）和浏览器配置页；
-3. 注册只读能力探针 `/apollo/api/capabilities`；
+3. 注册只读能力探针 `/apollo/api/capabilities` 与模型自动发现 `/apollo/api/models`；
 4. 在已有 `subagent` 工具上安装 CLI 路由桥；
 5. 在行配置开启 `declareOwnsHost` 时注入宿主声明。
 
@@ -170,7 +170,7 @@ DSH `0.2.1-rc.2` 的已知限制：
 [src/settings.js](../src/settings.js) 还负责：
 
 - 用 `settings.configure({ auto: false }, ctx.fiber)` 登记本行自带配置页，避免宿主按 schema 自动生成第二页；
-- 延迟注入 `webServer`，注册只读能力路由；
+- 延迟注入 `webServer`，注册只读能力路由与模型发现路由；
 - 一次性只读导入旧配置文件。
 
 ### 旧配置导入
@@ -361,7 +361,9 @@ Claude 的默认登录态与显式 `CLAUDE_CONFIG_DIR` 语义不同：
 
 ### 只读接口
 
-[src/panel.js](../src/panel.js) 提供 `GET /apollo/api/capabilities`，返回：
+[src/panel.js](../src/panel.js) 提供两个只读接口。
+
+`GET /apollo/api/capabilities`：
 
 ```text
 {
@@ -373,13 +375,41 @@ Claude 的默认登录态与显式 `CLAUDE_CONFIG_DIR` 语义不同：
 }
 ```
 
+`GET /apollo/api/models?cli=codex|claude`（按需触发，不缓存）：
+
+```text
+{
+  cli,
+  models: [{ id, efforts: string[], defaultEffort }],
+  source: 'codex-catalog' | 'claude-models-api' | null,
+  error: null | { code, status? }
+}
+```
+
+发现来源：
+
+- **Codex**：本机 `<executable> debug models` 的 JSON catalog（失败退回
+  `debug models --bundled`）。只收 `visibility: "list"`，id 取 `slug`，effort 取
+  `supported_reasoning_levels[].effort`，默认 effort 取 `default_reasoning_level`。
+  `codex debug models` 不接受 `-p`，所以发现结果反映基础配置的 model_provider，
+  不反映 Apollo 的 profile 设置。
+- **Claude**：Claude CLI 没有模型清单命令，改读 Anthropic Messages 的
+  `GET {ANTHROPIC_BASE_URL}/v1/models`。端点取进程 env 的
+  `ANTHROPIC_BASE_URL`，其次 `<CLAUDE_CONFIG_DIR 或 ~/.claude>/settings.json` 的
+  `env`；凭据来源整体优先（进程 env 有任一凭据时整套用 env，不把两边的
+  token/key 各取一半）。effort 固定为 `--effort` 的实测五档，默认 `high`。
+  系统钥匙串里的 OAuth 订阅凭据不参与发现。
+
 约束：
 
-- 只返回可执行文件名、解析路径、版本行和 Codex profile 名称；
-- **绝不返回配置正文或凭据**；
-- 只接受 GET；其他方法 405，且从不读取请求体；
-- 结果缓存 30 秒，避免每次打开设置页都 fork 两个 CLI；
-- 探针失败按字段降级，不拖垮整个接口。
+- 只返回可执行文件名、解析路径、版本行、profile 名称、模型 id 与 effort；
+- **绝不返回配置正文或凭据**；Claude 的 token 只在内存里拼进请求头，错误只回
+  `code`/`status`，不回 URL 或响应正文；
+- 只接受 GET；其他方法 405，且从不读取请求体；`/apollo/api/models` 缺省/未知
+  `cli` 返回 400，并带 `cache-control: no-store`；
+- 能力探针结果缓存 30 秒，避免每次打开设置页都 fork 两个 CLI；发现按按钮触发，
+  不缓存；两者都有超时与结果长度上限（模型清单 200 条、响应 4 MiB）；
+- 探针/发现失败各自降级成 `error.code`，不拖垮接口。
 
 ### 信任边界
 
@@ -492,11 +522,11 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh npm test
 | [tests/cli-adapter.test.mjs](../tests/cli-adapter.test.mjs) | 适配器元数据、白名单、身份固定、env 快照、并发、错误与不自动重试、投递游标 |
 | [tests/cli-sessions.test.mjs](../tests/cli-sessions.test.mjs) | profile 范围 KV 命名空间、记录校验、原子写、重开、关闭与失败路径 |
 | [tests/cli.test.mjs](../tests/cli.test.mjs) | JSONL 读取、错误脱敏、Codex / Claude 命令构造、事件解析与失败语义 |
-| [tests/client.test.mjs](../tests/client.test.mjs) | 浏览器半边装载、表单渲染、只读态、编辑与冲突、模型 effort 校验、能力探针降级 |
+| [tests/client.test.mjs](../tests/client.test.mjs) | 浏览器半边装载、表单渲染、只读态、编辑与冲突、模型 effort 校验、能力探针降级、自动发现合并与失败 |
 | [tests/config.test.mjs](../tests/config.test.mjs) | 常量、schema 默认值与权限枚举、volatile 投影、normalize 规则、活配置读取 |
 | [tests/dsh-home.test.mjs](../tests/dsh-home.test.mjs) | `DSH_HOME` 的默认、绝对、`~`、相对与空白处理 |
 | [tests/exit-guard.test.mjs](../tests/exit-guard.test.mjs) | 运行中子代理 / 后台任务、终态过滤、fail-open、无豁免、用户中断 |
-| [tests/panel.test.mjs](../tests/panel.test.mjs) | `declareOwnsHost` tap、可执行文件与版本探测、profile 读取、能力接口、信任边界、只读方法 |
+| [tests/panel.test.mjs](../tests/panel.test.mjs) | `declareOwnsHost` tap、可执行文件与版本探测、profile 读取、能力接口、模型解析与来源、发现接口、信任边界、只读方法 |
 | [tests/settings.test.mjs](../tests/settings.test.mjs) | 旧配置读取与导入优先级、Loader 等待、行配置页策略、反代 tap、headless 降级 |
 | [tests/subagents.test.mjs](../tests/subagents.test.mjs) | CLI 路由开关与范围、guard、只后台、fork 拒绝、白名单、稳定 id、cwd 解析 |
 | [tests/tap.test.mjs](../tests/tap.test.mjs) | index HTML 的 `<head>` 注入位置与匹配 |
@@ -610,7 +640,7 @@ node scripts/runtime-smoke.mjs
 | [src/config.js](../src/config.js) | 正式配置 schema、默认值、规整与活配置读取 |
 | [src/settings.js](../src/settings.js) | 设置页策略、能力路由装配、旧配置导入 |
 | [src/client.js](../src/client.js) | Plugins 浏览器表单，无构建闭包工厂 |
-| [src/panel.js](../src/panel.js) | 能力探针、可执行文件 / 版本 / profile 探测、信任检查、反代 tap |
+| [src/panel.js](../src/panel.js) | 能力探针、模型自动发现、可执行文件 / 版本 / profile 探测、信任检查、反代 tap |
 | [src/subagents.js](../src/subagents.js) | 在现有子代理工具上安装 CLI 路由与 guard |
 | [src/cli-adapter.js](../src/cli-adapter.js) | CLI 会话适配、权限与身份校验、事件流接线 |
 | [src/cli-sessions.js](../src/cli-sessions.js) | profile 范围 KV 记录、原子写与恢复 |

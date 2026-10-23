@@ -15,14 +15,22 @@ import { join } from 'node:path'
 import {
   CAPABILITIES_PATH,
   CAPABILITIES_PREFIX,
+  CLAUDE_EFFORTS,
   CODEX_PROFILE_SUFFIX,
+  MODELS_PATH,
+  anthropicListingUrl,
+  claudeApiConfig,
   collectCapabilities,
   createCapabilitiesReader,
   declareOwnsHostTap,
+  discoverClaudeModels,
+  discoverCodexModels,
   installOwnsHostTap,
   listCodexProfiles,
   mountPanel,
   name,
+  parseClaudeModelList,
+  parseCodexCatalog,
   probeVersion,
   registerCapabilitiesRoute,
   resolveExecutable,
@@ -78,11 +86,13 @@ function makeReq({ url = CAPABILITIES_PATH, method = 'GET', host = '127.0.0.1:30
       return (async function* iterate() { yield* chunks })()
     },
   }
+  const extraHeaders = {}
   const res = {
     status: undefined,
     headers: undefined,
     body: '',
-    writeHead(status, responseHeaders) { this.status = status; this.headers = responseHeaders },
+    setHeader(name, value) { extraHeaders[name] = value },
+    writeHead(status, responseHeaders) { this.status = status; this.headers = { ...extraHeaders, ...responseHeaders } },
     end(payload) { this.body = payload ?? '' },
   }
   return { req, res, bodyIterated: () => iterated }
@@ -516,4 +526,243 @@ test('registerCapabilitiesRoute：无 read 注入时使用真实探针（形状�
   assert.deepEqual(value.executables.codex, { executable: 'codex', path: null, version: null })
   assert.deepEqual(value.executables.claude, { executable: 'claude', path: null, version: null })
   assert.deepEqual(value.codexProfiles, [])
+})
+
+// ── 模型自动发现 ────────────────────────────────────────────────────────────
+
+const CODEX_CATALOG = JSON.stringify({
+  models: [
+    {
+      slug: 'gpt-6-astra',
+      display_name: 'GPT-6-Astra',
+      default_reasoning_level: 'high',
+      supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }, { effort: 'high' }],
+      visibility: 'list',
+    },
+    {
+      slug: 'codex-auto-review',
+      default_reasoning_level: 'medium',
+      supported_reasoning_levels: [{ effort: 'medium' }],
+      visibility: 'hide',
+    },
+    { slug: 'gpt-6-astra', visibility: 'list' },
+    { slug: 'bad id', visibility: 'list' },
+  ],
+})
+
+test('parseCodexCatalog：只收 list 可见模型、去重、effort 与默认值来自 catalog', () => {
+  assert.deepEqual(parseCodexCatalog(CODEX_CATALOG), [
+    { id: 'gpt-6-astra', efforts: ['low', 'medium', 'high'], defaultEffort: 'high' },
+  ])
+
+  // 默认 effort 不在 supported 列表里 → 退回第一个。
+  const fallback = JSON.stringify({
+    models: [{ slug: 'm', default_reasoning_level: 'ultra', supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }] }],
+  })
+  assert.deepEqual(parseCodexCatalog(fallback), [{ id: 'm', efforts: ['low', 'high'], defaultEffort: 'low' }])
+  assert.equal(parseCodexCatalog('not json'), null)
+  assert.deepEqual(parseCodexCatalog('null'), [])
+  assert.deepEqual(parseCodexCatalog(JSON.stringify({ models: [] })), [])
+})
+
+test('parseClaudeModelList：data[].id 去重，effort 取固定五档、默认 high', () => {
+  const text = JSON.stringify({
+    data: [
+      { id: 'claude-opus-5-5', display_name: 'Opus' },
+      { id: 'claude-sonnet-5-5' },
+      { id: 'claude-opus-5-5' },
+      { id: 'bad id' },
+    ],
+  })
+  assert.deepEqual(parseClaudeModelList(text), [
+    { id: 'claude-opus-5-5', efforts: [...CLAUDE_EFFORTS], defaultEffort: 'high' },
+    { id: 'claude-sonnet-5-5', efforts: [...CLAUDE_EFFORTS], defaultEffort: 'high' },
+  ])
+  assert.equal(parseClaudeModelList('{'), null)
+})
+
+test('anthropicListingUrl：根路径兼容末尾 / 与 /v1', () => {
+  assert.equal(anthropicListingUrl('https://api.anthropic.com'), 'https://api.anthropic.com/v1/models?limit=1000')
+  assert.equal(anthropicListingUrl('https://gateway.example/v1/'), 'https://gateway.example/v1/models?limit=1000')
+  assert.equal(anthropicListingUrl('https://gateway.example/openai/v1'), 'https://gateway.example/openai/v1/models?limit=1000')
+})
+
+test('claudeApiConfig：进程 env 优先，其次 settings.json 的 env，CLAUDE_CONFIG_DIR 生效', async () => {
+  await withTemp((dir) => {
+    const configDir = join(dir, '.claude')
+    mkdirSync(configDir)
+    writeFileSync(join(configDir, 'settings.json'), JSON.stringify({
+      env: { ANTHROPIC_BASE_URL: 'https://gateway.example', ANTHROPIC_AUTH_TOKEN: 'sk-from-settings' },
+    }))
+    const fromSettings = claudeApiConfig({ env: {}, home: dir })
+    assert.equal(fromSettings.baseURL, 'https://gateway.example')
+    assert.equal(fromSettings.authToken, 'sk-from-settings')
+    assert.equal(fromSettings.apiKey, undefined)
+
+    const fromEnv = claudeApiConfig({
+      env: { ANTHROPIC_BASE_URL: 'https://env.example', ANTHROPIC_API_KEY: 'sk-env' },
+      home: dir,
+    })
+    assert.equal(fromEnv.baseURL, 'https://env.example')
+    assert.equal(fromEnv.apiKey, 'sk-env')
+    assert.equal(fromEnv.authToken, undefined)
+
+    const alt = join(dir, 'alt')
+    mkdirSync(alt)
+    writeFileSync(join(alt, 'settings.json'), JSON.stringify({ env: { ANTHROPIC_AUTH_TOKEN: 'sk-alt' } }))
+    assert.equal(claudeApiConfig({ env: { CLAUDE_CONFIG_DIR: alt }, home: dir }).authToken, 'sk-alt')
+
+    assert.deepEqual(claudeApiConfig({ env: {}, home: join(dir, 'no-home') }), {
+      baseURL: 'https://api.anthropic.com',
+      authToken: undefined,
+      apiKey: undefined,
+    })
+  })
+})
+
+test('discoverCodexModels：在线目录成功、失败回退 --bundled、缺可执行文件/解析失败', async () => {
+  const calls = []
+  const value = await discoverCodexModels({ subagents: { codex: { executable: 'codex' } } }, {
+    env: {},
+    home: '/fake-home',
+    resolveExecutable: () => '/fake/codex',
+    runCommand: async (path, args) => {
+      calls.push([path, ...args])
+      return CODEX_CATALOG
+    },
+  })
+  assert.deepEqual(value, {
+    cli: 'codex',
+    models: [{ id: 'gpt-6-astra', efforts: ['low', 'medium', 'high'], defaultEffort: 'high' }],
+    source: 'codex-catalog',
+    error: null,
+  })
+  assert.deepEqual(calls, [['/fake/codex', 'debug', 'models']])
+
+  const attempts = []
+  const fallback = await discoverCodexModels({}, {
+    env: {},
+    home: '/fake-home',
+    resolveExecutable: () => '/fake/codex',
+    runCommand: async (path, args) => {
+      attempts.push(args.join(' '))
+      return attempts.length === 1 ? undefined : CODEX_CATALOG
+    },
+  })
+  assert.equal(fallback.error, null)
+  assert.deepEqual(attempts, ['debug models', 'debug models --bundled'])
+
+  const missing = await discoverCodexModels({}, {
+    env: {},
+    home: '/fake-home',
+    resolveExecutable: () => null,
+    runCommand: async () => CODEX_CATALOG,
+  })
+  assert.deepEqual(missing, { cli: 'codex', models: [], source: null, error: { code: 'missing' } })
+
+  const parse = await discoverCodexModels({}, {
+    env: {},
+    home: '/fake-home',
+    resolveExecutable: () => '/fake/codex',
+    runCommand: async () => 'not json',
+  })
+  assert.deepEqual(parse.error, { code: 'parse' })
+})
+
+test('discoverClaudeModels：读 settings 凭据请求 /v1/models，只回模型不回凭据', async () => {
+  await withTemp(async (dir) => {
+    const configDir = join(dir, '.claude')
+    mkdirSync(configDir)
+    writeFileSync(join(configDir, 'settings.json'), JSON.stringify({
+      env: { ANTHROPIC_BASE_URL: 'https://gateway.example', ANTHROPIC_AUTH_TOKEN: 'sk-secret-token' },
+    }))
+    const requests = []
+    const value = await discoverClaudeModels({
+      env: {},
+      home: dir,
+      fetch: async (url, init) => {
+        requests.push({ url, init })
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          text: async () => JSON.stringify({ data: [{ id: 'claude-opus-5-5' }] }),
+        }
+      },
+    })
+    assert.deepEqual(value, {
+      cli: 'claude',
+      models: [{ id: 'claude-opus-5-5', efforts: [...CLAUDE_EFFORTS], defaultEffort: 'high' }],
+      source: 'claude-models-api',
+      error: null,
+    })
+    assert.equal(requests.length, 1)
+    assert.equal(requests[0].url, 'https://gateway.example/v1/models?limit=1000')
+    assert.equal(requests[0].init.headers.authorization, 'Bearer sk-secret-token')
+    assert.equal(JSON.stringify(value).includes('sk-secret-token'), false)
+  })
+})
+
+test('discoverClaudeModels：无凭据 / 401 / 网络失败只回 code 与 status', async () => {
+  const none = await discoverClaudeModels({
+    env: {},
+    home: '/fake-home',
+    fetch: async () => { throw new Error('must not fetch') },
+  })
+  assert.deepEqual(none.error, { code: 'no-credentials' })
+
+  const denied = await discoverClaudeModels({
+    env: { ANTHROPIC_AUTH_TOKEN: 'x' },
+    home: '/fake-home',
+    fetch: async () => ({ ok: false, status: 401, headers: { get: () => null } }),
+  })
+  assert.deepEqual(denied.error, { code: 'unauthorized', status: 401 })
+
+  const offline = await discoverClaudeModels({
+    env: { ANTHROPIC_AUTH_TOKEN: 'x' },
+    home: '/fake-home',
+    fetch: async () => { throw new Error('ECONNREFUSED') },
+  })
+  assert.deepEqual(offline.error, { code: 'network' })
+})
+
+test('GET /apollo/api/models：按 cli 发现、未知 cli 400、非 GET 405、跨站 403', async () => {
+  const { ctx, routes } = makeWebCtx()
+  const seen = []
+  registerCapabilitiesRoute(ctx, {}, {
+    read: async () => EMPTY_CAPABILITIES,
+    discover: async (cli) => {
+      seen.push(cli)
+      return { cli, models: [{ id: 'm', efforts: ['high'], defaultEffort: 'high' }], source: 'test', error: null }
+    },
+  })
+  const handler = handlerOf(routes)
+
+  const ok = makeReq({ url: MODELS_PATH + '?cli=codex' })
+  await handler(ok.req, ok.res)
+  assert.equal(ok.res.status, 200)
+  assert.equal(ok.res.headers['cache-control'], 'no-store')
+  assert.deepEqual(JSON.parse(ok.res.body), {
+    ok: true,
+    value: { cli: 'codex', models: [{ id: 'm', efforts: ['high'], defaultEffort: 'high' }], source: 'test', error: null },
+  })
+  assert.deepEqual(seen, ['codex'])
+
+  const bad = makeReq({ url: MODELS_PATH + '?cli=gemini' })
+  await handler(bad.req, bad.res)
+  assert.equal(bad.res.status, 400)
+  assert.equal(JSON.parse(bad.res.body).error.code, 'bad-request')
+
+  const post = makeReq({ url: MODELS_PATH + '?cli=codex', method: 'POST', body: '{}' })
+  await handler(post.req, post.res)
+  assert.equal(post.res.status, 405)
+  assert.equal(post.bodyIterated(), false)
+
+  const crossSite = makeReq({
+    url: MODELS_PATH + '?cli=codex',
+    headers: { 'sec-fetch-site': 'cross-site' },
+  })
+  await handler(crossSite.req, crossSite.res)
+  assert.equal(crossSite.res.status, 403)
+  assert.deepEqual(seen, ['codex'])
 })
