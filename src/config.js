@@ -1,5 +1,5 @@
 /**
- * dsh-apollo —— 正式插件配置（Config）与配置读取/规整。
+ * dsh-apollo (npm: @menghuan1918/dsh-apollo) —— 正式插件配置（Config）与配置读取/规整。
  *
  * 这里是本包「设置」的唯一事实源。宿主行 `apollo-skills` 由 `src/index.js`
  * 重新导出本文件的 `Config`（schemastery schema），DSH 据此校验并解析行配置：
@@ -33,10 +33,17 @@ import z from '@deepseek-ai/schemastery'
 
 /** 本包在 profile roster 里的行 id；也是 dsh-settings 的命名空间（= Loader entry id）。 */
 export const ENTRY_ID = 'apollo-skills'
-/** 包的 npm 名。 */
-export const PACKAGE_NAME = 'dsh-apollo'
+/** 包的 npm 名（scoped）。 */
+export const PACKAGE_NAME = '@menghuan1918/dsh-apollo'
+/**
+ * 旧 unscoped 包名。只用于旧 profile 的 config slot 兼容（浏览器半边并排注册
+ * 旧键）；新的 bundle 行、模块 specifier 与 client closure id 一律用 PACKAGE_NAME。
+ */
+export const LEGACY_PACKAGE_NAME = 'dsh-apollo'
 /** 浏览器半边注册 `plugins.row.config` 用的键：`<包名>#<行 id>`。 */
 export const ROW_CONFIG_KEY = `${PACKAGE_NAME}#${ENTRY_ID}`
+/** 旧包名对应的行配置键；仅与 {@link ROW_CONFIG_KEY} 并排注册以兼容旧 profile。 */
+export const LEGACY_ROW_CONFIG_KEY = `${LEGACY_PACKAGE_NAME}#${ENTRY_ID}`
 
 /** Codex CLI 沙箱/权限档（对应 `codex --sandbox <值>` 一族）。 */
 export const CODEX_PERMISSION_MODES = Object.freeze(['read-only', 'workspace-write', 'danger-full-access'])
@@ -260,7 +267,7 @@ function readService(ctx, name) {
 }
 
 /**
- * 经 configEditor 找到本行的活 entry（按行 id，其次按模块名）。
+ * 经 configEditor 找到本行的活 entry（按行 id，其次按新包名，最后按旧包名）。
  * @param ctx - 任意插件上下文。
  * @returns Loader entry，或 undefined。
  */
@@ -272,6 +279,7 @@ export function liveConfigEntry(ctx) {
     if (!Array.isArray(entries)) return undefined
     return entries.find((row) => row?.options?.id === ENTRY_ID)
       ?? entries.find((row) => row?.options?.name === PACKAGE_NAME)
+      ?? entries.find((row) => row?.options?.name === LEGACY_PACKAGE_NAME)
   } catch {
     return undefined
   }

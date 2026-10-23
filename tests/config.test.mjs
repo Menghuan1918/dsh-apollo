@@ -22,6 +22,8 @@ import {
   Config,
   DEFAULT_CONFIG,
   ENTRY_ID,
+  LEGACY_PACKAGE_NAME,
+  LEGACY_ROW_CONFIG_KEY,
   PACKAGE_NAME,
   ROW_CONFIG_KEY,
   currentConfig,
@@ -119,10 +121,21 @@ const liveSchema = new z(Config.toJSON())
 
 // ── 形状契约 ────────────────────────────────────────────────────────────────
 
-test('标识常量：行 id / 包名 / 行配置键', () => {
+test('标识常量：行 id / scoped 包名 / 行配置键（含旧键）', () => {
   assert.equal(ENTRY_ID, 'apollo-skills')
-  assert.equal(PACKAGE_NAME, 'dsh-apollo')
-  assert.equal(ROW_CONFIG_KEY, 'dsh-apollo#apollo-skills')
+  assert.equal(PACKAGE_NAME, '@menghuan1918/dsh-apollo')
+  assert.equal(LEGACY_PACKAGE_NAME, 'dsh-apollo')
+  assert.equal(ROW_CONFIG_KEY, '@menghuan1918/dsh-apollo#apollo-skills')
+  assert.equal(LEGACY_ROW_CONFIG_KEY, 'dsh-apollo#apollo-skills')
+})
+
+test('scoped 包名在 manifest、config 与 client closure id/row 键之间一致', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  const source = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
+  assert.equal(PACKAGE_NAME, pkg.name)
+  assert.equal(source.includes(`id: '${pkg.name}'`), true, 'client closure id 必须等于 npm 包名')
+  assert.equal(source.includes(`'${ROW_CONFIG_KEY}'`), true)
+  assert.equal(source.includes(`'${LEGACY_ROW_CONFIG_KEY}'`), true)
 })
 
 test('权限档常量：与两个 CLI 的实测取值一一对应', () => {
@@ -366,11 +379,15 @@ function fakeContext(entries, { throws = false } = {}) {
   }
 }
 
-test('liveConfigEntry：按行 id 命中，其次按模块名', () => {
-  const byId = { options: { id: ENTRY_ID, name: 'dsh-apollo' }, fiber: { config: {} } }
+test('liveConfigEntry：按行 id 命中，其次按 scoped 包名，最后按旧包名', () => {
+  const byId = { options: { id: ENTRY_ID, name: PACKAGE_NAME }, fiber: { config: {} } }
   assert.equal(liveConfigEntry(fakeContext([{ options: { id: 'other' } }, byId])), byId)
   const byName = { options: { id: 'renamed-row', name: PACKAGE_NAME }, fiber: { config: {} } }
   assert.equal(liveConfigEntry(fakeContext([byName])), byName)
+  const byLegacy = { options: { id: 'old-row', name: LEGACY_PACKAGE_NAME }, fiber: { config: {} } }
+  assert.equal(liveConfigEntry(fakeContext([byLegacy])), byLegacy)
+  // 行 id 优先于模块名：同名旧行与新行同时存在时仍取 id。
+  assert.equal(liveConfigEntry(fakeContext([byLegacy, byId])), byId)
   assert.equal(liveConfigEntry(fakeContext([])), undefined)
   assert.equal(liveConfigEntry(undefined), undefined)
 })

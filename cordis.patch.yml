@@ -34,11 +34,16 @@
 
 # ── Apollo host row ─────────────────────────────────────────────────────────
 # The apollo-skills row is one row on purpose. The row's module specifier must
-# be the bare package name because the browser half (`dsh.client` → exports
-# "./client") is discovered from the row's package manifest: `dsh-client-modules`
-# only accepts a bare or two-segment scoped specifier, and it rejects a second
-# active row resolving to the same package name ("resolves from multiple active
-# Loader sources"). So this one node half does every job:
+# be this package's npm name (`@menghuan1918/dsh-apollo`), not a short alias,
+# because the browser half (`dsh.client` → exports "./client") is discovered
+# from the row's package manifest: `dsh-client-modules` accepts a bare or
+# two-segment scoped specifier, resolves the row to its manifest, and requires
+# that manifest's `name` to match the row exactly. A row named `dsh-apollo`
+# would resolve host code only if an alias existed, then silently lose the
+# client half (the manifest name no longer matches). The page-side closure id
+# is the manifest package name too. It rejects a second active row resolving to
+# the same package name ("resolves from multiple active Loader sources"). So
+# this one node half does every job:
 #
 #   1. registers the packaged skills/ tree on the skill registry's global layer
 #      (every preset mounting tool-skill then exposes the catalog);
@@ -70,4 +75,4 @@
 # sync-into-<dshHome>/.agent-presets delivery no longer exists.
 - insert:
     - id: apollo-skills
-      name: dsh-apollo
+      name: '@menghuan1918/dsh-apollo'

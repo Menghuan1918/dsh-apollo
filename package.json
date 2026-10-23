@@ -1,8 +1,12 @@
 {
-  "name": "dsh-apollo",
+  "name": "@menghuan1918/dsh-apollo",
   "version": "0.3.0",
   "description": "DSH plugin: 流程技能、工程模式、Codex/Claude 可续接子代理与统一设置。纯 ESM，无构建步骤。",
   "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Menghuan1918/dsh-apollo.git"
+  },
   "type": "module",
   "main": "src/index.js",
   "exports": {
@@ -37,6 +41,10 @@
     "orchestration",
     "agent-preset"
   ],
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
   "devDependencies": {
     "js-yaml": "^4.2.0",
     "react": "18.3.1",
@@ -44,7 +52,7 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "~3.18.4",
-    "dsh-better-goal": "github:Menghuan1918/dsh-better-goal#dfc94f71579d7cf419d0ed2bac4db1f00f499067"
+    "dsh-better-goal": "0.1.0"
   },
   "peerDependencies": {
     "react": "^18.2.0"

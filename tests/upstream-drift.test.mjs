@@ -11,9 +11,9 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url))
 const ENG = join(ROOT, 'presets/eng.patch.yml')
 const NOASK = join(ROOT, 'presets/eng-noask.patch.yml')
 const ownRows = [
-  ['tool-wait-subagent', 'dsh-apollo/presets/eng/plugins/wait-subagent/index.js'],
-  ['eng-exit-guard', 'dsh-apollo/presets/eng/plugins/exit-guard/index.js'],
-  ['eng-mode-instructions', 'dsh-apollo/presets/eng/plugins/mode-instructions/index.js'],
+  ['tool-wait-subagent', '@menghuan1918/dsh-apollo/presets/eng/plugins/wait-subagent/index.js'],
+  ['eng-exit-guard', '@menghuan1918/dsh-apollo/presets/eng/plugins/exit-guard/index.js'],
+  ['eng-mode-instructions', '@menghuan1918/dsh-apollo/presets/eng/plugins/mode-instructions/index.js'],
 ]
 const thresholds = { thresholdChars: [16384, 8192], headChars: [8192, 4096], tailChars: [2048, 1024] }
 // Deliberate removals from the upstream standard preset. The real-preset test
@@ -165,7 +165,7 @@ test('原生 goal 行仍存在于基准安装的 host 组成中', (t) => {
 test('eng-noask 恰为 eng 删除 ask 工具并改写提问纪律', () => {
   const eng = rowsOf(ENG)
   const noask = structuredClone(rowsOf(NOASK))
-  const asEngPath = (value) => value.replace('dsh-apollo/presets/eng-noask/', 'dsh-apollo/presets/eng/')
+  const asEngPath = (value) => value.replace('@menghuan1918/dsh-apollo/presets/eng-noask/', '@menghuan1918/dsh-apollo/presets/eng/')
   for (const row of flatten(noask)) {
     if (row.name) row.name = asEngPath(row.name)
     if (row.id === 'plan-mode') {

@@ -1,15 +1,24 @@
 // Opt-in integration against an installed DSH. Uses a temporary profile, no Web server.
 import assert from 'node:assert/strict'
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, writeFile, symlink, access } from 'node:fs/promises'
+import { cp, mkdtemp, mkdir, readFile, realpath, writeFile, access } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const dsh = process.env.DSH_PACKAGE_ROOT
 if (!dsh) throw new Error('Set DSH_PACKAGE_ROOT to the installed @deepseek-ai/dsh package directory')
+// Read the real package names instead of assuming a scope/directory layout.
+const apolloManifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+const packageName = apolloManifest.name
+const goalSource = resolve(process.env.APOLLO_GOAL_SOURCE ?? join(root, '..', 'dsh-better-goal'))
+const goalManifest = JSON.parse(await readFile(join(goalSource, 'package.json'), 'utf8'))
+const goalName = goalManifest.name
+assert.equal(typeof packageName, 'string', 'Apollo package.json must name the package')
+assert.equal(typeof goalName, 'string', 'Goal package.json must name the package')
+assert.equal(apolloManifest.dependencies?.[goalName], goalManifest.version, `Goal fixture ${goalName}@${goalManifest.version} must match Apollo's dependency`)
 const selected = process.env.APOLLO_SMOKE_CLI ? [process.env.APOLLO_SMOKE_CLI] : ['codex', 'claude']
 assert.ok(selected.every((cli) => ['codex', 'claude'].includes(cli)), 'APOLLO_SMOKE_CLI must be codex or claude')
 const reuse = process.env.APOLLO_SMOKE_HOME
@@ -25,14 +34,32 @@ const { boot, initProfile, loadProfile, createRuntimeResolution, readProfilePatc
 const { normalizeConfig, currentConfig, liveConfigEntry } = await import('../src/config.js')
 const version = JSON.parse(await readFile(join(dsh, 'package.json'), 'utf8')).version
 const dir = resolveProfileDir('it', home)
-if (!reuse) initProfile(dir, [...PROFILE_TEMPLATES.headless.bundles, 'dsh-apollo'])
+const installedApollo = join(dir, 'node_modules', packageName)
+const installedGoal = join(dir, 'node_modules', goalName)
+
+/** Copy a package without dependency trees, matching what a published tarball installs. */
+async function copyPackage(source, target) {
+  await mkdir(dirname(target), { recursive: true })
+  await cp(source, target, {
+    recursive: true,
+    filter: (candidate) => {
+      const rel = relative(source, candidate)
+      return rel === '' || !rel.split(sep).some((part) => part === 'node_modules' || part === '.git')
+    },
+  })
+}
+
+if (!reuse) initProfile(dir, [...PROFILE_TEMPLATES.headless.bundles, packageName])
 const manifestFile = join(dir, 'package.json')
 const manifest = JSON.parse(await readFile(manifestFile, 'utf8'))
 if (!reuse) {
-  manifest.dependencies['dsh-apollo'] = `link:${root}`
+  // Simulate the installed layout: both packages are plain copies without
+  // node_modules, so Goal's peers and dependencies resolve from the host.
+  await copyPackage(root, installedApollo)
+  await copyPackage(goalSource, installedGoal)
+  await assert.rejects(access(join(installedGoal, 'node_modules')), { code: 'ENOENT' }, 'Goal fixture must not carry a nested dependency tree')
+  manifest.dependencies[packageName] = `link:${installedApollo}`
   await writeFile(manifestFile, JSON.stringify(manifest, null, 2))
-  await mkdir(join(dir, 'node_modules'), { recursive: true })
-  await symlink(root, join(dir, 'node_modules/dsh-apollo'))
 }
 const rootConfig = join(dir, 'cordis.yml')
 if (!reuse) await writeFile(rootConfig, '[]\n')
@@ -94,6 +121,8 @@ function noopAdapter() {
 async function launch(resume = false) {
   const installAnchor = join(dsh, 'package.json')
   const profile = loadProfile('apollo-it', 'it', installAnchor, home)
+  assert.deepEqual(profile.skippedBundles, [], 'the scoped Apollo bundle must load')
+  assert.ok(profile.layers.some((layer) => layer.packageName === packageName), 'the profile must select the scoped Apollo bundle')
   // The standard preset's schedule tools need these official host services.
   // Connection registers handlers without opening a server in this headless host.
   const overlays = [{ id: 'credentials', disabled: false, config: { watch: false } }, { insert: [
@@ -106,6 +135,12 @@ async function launch(resume = false) {
   ] }]
   const profileContext = { name: 'it', dir, patchPath: profile.patchPath, installAnchor, cwd, home, startedBundles: manifest.dsh.profile.bundles, overlays, telemetryDisabledEnv: '1' }
   const resolution = await createRuntimeResolution({ installAnchor, profile })
+  const goalEntry = resolution.entries.find((entry) => entry.name === goalName)
+  assert.ok(goalEntry, 'Goal must resolve through the runtime package table')
+  assert.equal(goalEntry.scope, 'profile', 'Goal must resolve as a profile-scope package')
+  assert.equal(await realpath(goalEntry.packageDir), await realpath(installedGoal), 'Goal must come from the copied profile layout, not Apollo node_modules')
+  assert.ok(resolution.localPackageNames.includes(packageName), 'Apollo must be a direct profile package')
+  console.log('SCOPED_PACKAGE_LAYOUT_OK', packageName, goalName)
   ctx = await boot('apollo-it', rootConfig, readProfilePatches('apollo-it', profileContext, profile), async (host) => {
     host.provide('profileContext', profileContext)
     await host.plugin(PluginPackages, { resolution })
@@ -202,9 +237,12 @@ try {
   assert.equal(liveConfigEntry(ctx).fiber, fiber, 'Volatile settings must not remount Apollo')
   console.log('LIVE_CONFIG_OK')
   assert.ok(ctx.schedule && ctx.sessionController, 'The official schedule host services must activate')
-  await call('schedule_list', {})
+  const scheduleTools = ['schedule_create', 'schedule_list', 'schedule_update', 'schedule_delete']
+  for (const name of scheduleTools) assert.equal(ctx.tools.get(name, parent.agent), undefined, `eng intentionally omits ${name}`)
   const noask = await ctx.agents.create({ sessionId: randomUUID(), meta: { cwd, agentPreset: 'eng-noask' }, agentOptions: { provider: 'it-noop', model: 'noop' }, setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'eng-noask') } })
-  try { await call('schedule_list', {}, noask.agent) } finally { await noask.dispose() }
+  try {
+    for (const name of scheduleTools) assert.equal(ctx.tools.get(name, noask.agent), undefined, `eng-noask intentionally omits ${name}`)
+  } finally { await noask.dispose() }
   console.log('HOST_PRESETS_OK', 'eng', 'eng-noask')
   const native = await startChild({ description: 'Verify native delegation', provider: 'it-noop', model: 'noop', prompt: 'Reply Received.' })
   assert.equal(native.end.reason.kind, 'completed', JSON.stringify(native.end))

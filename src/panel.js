@@ -1,5 +1,5 @@
 /**
- * dsh-apollo —— 宿主半边只读面板（src/panel.js）。
+ * dsh-apollo (npm: @menghuan1918/dsh-apollo) —— 宿主半边只读面板（src/panel.js）。
  *
  * 注册仅限 loopback（或行配置 `trustedHosts` 列出的反向代理权威）+ 同源标志的
  * fenced HTTP 路由 `/apollo/api/capabilities`，供浏览器半边（`exports["./client"]`

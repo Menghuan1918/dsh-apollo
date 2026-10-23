@@ -12,7 +12,7 @@
 # preset mechanism; the `<dshHome>/.agent-presets` scan root is gone).
 # `config.id` MUST stay `eng-noask`: it is the preset identity historical
 # sessions resume by. Preset-local plugin modules are referenced by bare
-# package subpaths (`dsh-apollo/presets/eng-noask/plugins/...`) resolved
+# package subpaths (`@menghuan1918/dsh-apollo/presets/eng-noask/plugins/...`) resolved
 # from the profile directory's node_modules, not the preset directory.
 
 - insert:
@@ -307,12 +307,12 @@
           # Preset-local plugin: explicit wait for one continuable child to settle, so
           # the agent can block on a specific subagent (pi-style await_task semantics)
           # without giving up send_message continuations. The module specifier is a
-          # bare subpath of this package (dsh-apollo/presets/eng-noask/plugins/...):
+          # bare subpath of this package (@menghuan1918/dsh-apollo/presets/eng-noask/plugins/...):
           # config.plugins names resolve from the profile directory's node_modules,
           # where this package is installed or linked; it has zero bare imports on
           # purpose.
           - id: tool-wait-subagent
-            name: dsh-apollo/presets/eng-noask/plugins/wait-subagent/index.js
+            name: '@menghuan1918/dsh-apollo/presets/eng-noask/plugins/wait-subagent/index.js'
 
           # ── exit guard ───────────────────────────────────────────────────────────────
           #
@@ -323,7 +323,7 @@
           # 每次事件读取当前值，设置保存后即时生效。监听器注册型
           # 插件，无服务发布，无需 realm。
           - id: eng-exit-guard
-            name: dsh-apollo/presets/eng-noask/plugins/exit-guard/index.js
+            name: '@menghuan1918/dsh-apollo/presets/eng-noask/plugins/exit-guard/index.js'
 
           # ── mode instructions ────────────────────────────────────────────────────────
 
@@ -338,4 +338,4 @@
           # the 0.2.1 bundle-patch mechanism loads it straight from this file, with no
           # boot-time copy in between.
           - id: eng-mode-instructions
-            name: dsh-apollo/presets/eng-noask/plugins/mode-instructions/index.js
+            name: '@menghuan1918/dsh-apollo/presets/eng-noask/plugins/mode-instructions/index.js'

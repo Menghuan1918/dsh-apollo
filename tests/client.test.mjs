@@ -153,7 +153,7 @@ function install() {
     loaded,
     declare() {
       const disposers = slots.declare('plugins.row.config')
-      assert.equal(slots.registrations.length, 1)
+      assert.equal(slots.registrations.length, 2)
       return { disposers, component: slots.registrations[0].component }
     },
   }
@@ -212,22 +212,27 @@ function useFetch(handler) {
 
 useFetch(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, value: CAPABILITIES }) }))
 
-test('装载与 slot 注册：声明才注册、塌缩回收、summary 只回一行', async () => {
+test('装载与 slot 注册：声明才注册、新键与旧键并排、塌缩回收、summary 只回一行', async () => {
   const { slots, effects, dicts, loaded, declare } = install()
-  assert.equal(loaded.entry.id, 'dsh-apollo')
+  assert.equal(loaded.entry.id, '@menghuan1918/dsh-apollo')
   assert.deepEqual(loaded.exports.inject, ['slots', 'locale'])
   assert.equal(SOURCE.includes('document.'), false)
 
   // 页面未打开（槽未声明）：只挂等待，不注册。
   assert.deepEqual(slots.injected, ['plugins.row.config'])
   assert.equal(slots.registrations.length, 0)
-  assert.deepEqual(effects.map((effect) => effect.label), ['dsh-apollo: dictionaries', 'dsh-apollo: row config page'])
+  assert.deepEqual(effects.map((effect) => effect.label), ['@menghuan1918/dsh-apollo: dictionaries', '@menghuan1918/dsh-apollo: row config page'])
   assert.deepEqual(dicts.map((entry) => entry.ns), [NS])
   assert.deepEqual(Object.keys(dicts[0].dictionaries.zh).sort(), Object.keys(dicts[0].dictionaries.en).sort())
 
   const declared = declare()
-  assert.deepEqual(slots.registrations[0].options, { name: 'plugins.row.config', key: 'dsh-apollo#apollo-skills', locale: NS })
+  assert.deepEqual(slots.registrations.map((entry) => entry.options), [
+    { name: 'plugins.row.config', key: '@menghuan1918/dsh-apollo#apollo-skills', locale: NS },
+    { name: 'plugins.row.config', key: 'dsh-apollo#apollo-skills', locale: NS },
+  ])
   assert.equal(declared.disposers.length, 1)
+  // 两个键注册同一个页面组件。
+  assert.equal(new Set(slots.registrations.map((entry) => entry.component)).size, 1)
 
   // summary：一行文案，不挂样式表。
   let renderer

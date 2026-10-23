@@ -1,22 +1,24 @@
 /**
- * dsh-apollo — 浏览器半边：官方 Plugins 页的行配置表单。
+ * dsh-apollo (npm: @menghuan1918/dsh-apollo) — 浏览器半边：官方 Plugins 页的行配置表单。
  *
  * 宿主行导出正式 volatile Config，dsh-settings 把它投影成行配置表单；本文件注册
- * `plugins.row.config`（键 `dsh-apollo#apollo-skills`，与 src/config.js 的
- * ROW_CONFIG_KEY 同步），自画紧凑表单并只在保存时一次提交全部改动。零构建：
+ * `plugins.row.config`（键 `<npm 包名>#apollo-skills`，与 src/config.js 的
+ * ROW_CONFIG_KEY/LEGACY_ROW_CONFIG_KEY 同步），自画紧凑表单并只在保存时一次提交全部改动。零构建：
  * closure factory，只 require('react')，不 import 任何 DSH client 包；样式随组件
- * 树内一个 <style> 渲染（不写 DOM）。注册 id 必须等于包名。
+ * 树内一个 <style> 渲染（不写 DOM）。注册 id 必须等于 npm 包名（client closure id）。
  */
 
 window.__ModuleLoader__.load({
-	id: 'dsh-apollo',
+	id: '@menghuan1918/dsh-apollo',
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
 		const { createElement: h, useEffect, useState } = require('react');
 
 		const NS = 'apollo';
-		const ROW_KEY = 'dsh-apollo#apollo-skills';
+		// 新键是 Plugins 页按“bundle 依赖名 + 行 id”算出的（= npm 包名 + #apollo-skills）；
+		// 旧键并排注册，只为仍把依赖槽记成旧 unscoped 名的 profile 保留配置入口。
+		const ROW_KEYS = ['@menghuan1918/dsh-apollo#apollo-skills', 'dsh-apollo#apollo-skills'];
 		const CAPABILITIES_URL = '/apollo/api/capabilities';
 
 		/** Codex CLI 权限档（与 src/config.js 的 CODEX_PERMISSION_MODES 同步）。 */
@@ -164,7 +166,7 @@ window.__ModuleLoader__.load({
 
 		// ── 样式（组件树内的 <style>；复用 DSH 设计令牌，与官方设置页同观感）──────────
 
-		const STYLE_ID = 'dsh-apollo/settings.css';
+		const STYLE_ID = '@menghuan1918/dsh-apollo/settings.css';
 		const CSS = [
 			'.apollo-cfg{display:flex;flex-direction:column;gap:12px;max-width:760px;font-size:13px;line-height:20px;color:var(--dsw-alias-label-primary)}',
 			'.apollo-note{margin:0;padding:8px 10px;border-radius:var(--dsw-radius-md);font-size:12.5px;line-height:18px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary)}',
@@ -782,21 +784,28 @@ window.__ModuleLoader__.load({
 			try {
 				const dispose = ctx.locale.register(NS, { zh, en });
 				t = ctx.locale.bind(NS);
-				ctx.effect(() => dispose, 'dsh-apollo: dictionaries');
+				ctx.effect(() => dispose, '@menghuan1918/dsh-apollo: dictionaries');
 			} catch {
 				// locale 服务缺失时保持中文默认。
 			}
 			ctx.effect(() => ctx.slots.inject('plugins.row.config', () => {
-				try {
-					return ctx.slots.register({
-						name: 'plugins.row.config',
-						key: ROW_KEY,
-						locale: NS,
-					}, ApolloPanel);
-				} catch {
-					return () => {};
+				const disposers = [];
+				for (const key of ROW_KEYS) {
+					try {
+						const dispose = ctx.slots.register({
+							name: 'plugins.row.config',
+							key,
+							locale: NS,
+						}, ApolloPanel);
+						if (typeof dispose === 'function') disposers.push(dispose);
+					} catch {
+						// 一个键被槽账本拒绝时，另一个键仍应注册。
+					}
 				}
-			}), 'dsh-apollo: row config page');
+				return () => {
+					for (const dispose of disposers) dispose();
+				};
+			}), '@menghuan1918/dsh-apollo: row config page');
 		}
 
 		exports.inject = inject;
