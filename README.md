@@ -1,9 +1,10 @@
 # dsh-apollo
 
-为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供流程技能、工程模式，以及 **Codex / Claude CLI 可续接后台子代理**。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供流程技能、工程模式、独立长期目标，以及 **Codex / Claude CLI 可续接后台子代理**。
 
 - **规划与执行**：把大型需求拆为可验证的 Spec，按依赖分波并行执行，再由子代理审查。
 - **工程预设**：提供「工程模式」与「工程模式（无提问）」，包含等待子代理工具和可选退出守卫。
+- **长期目标**：依赖独立的 `dsh-better-goal` 插件，一个持久目标配单个 `goal` 工具与 `/goal` 命令；回合上限和提问超时在它自己的 Plugins 行配置，Apollo 不保留 goal 域代码。
 - **CLI 子代理**：复用 DSH 的委派、消息和中断工具；模型、effort、Codex profile 与 CLI 权限集中配置。
 - **统一设置**：Apollo 表单接入 DSH Plugins 页的行配置槽位，使用正式 Config 存储，保存后即时生效。
 
@@ -16,25 +17,39 @@
 ```sh
 dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 
-# 本地开发安装
+# 本地开发安装：先在 Apollo 根目录安装依赖
+cd /absolute/path/to/dsh-apollo && npm install
 dsh plugin --profile <profile> add link:/absolute/path/to/dsh-apollo
 ```
+
+本地 link 开发必须先在 Apollo 根目录执行 `npm install`：开发时可将 `dsh-better-goal` 临时改为 `file:../dsh-better-goal`，发布版固定到独立仓库的 commit；`dsh plugin add link:` 只链接 Apollo 本身，不会代装其依赖。
 
 重启对应 profile 的 DSH 进程后，可以看到：
 
 1. 技能目录中的 8 个流程技能。
 2. 预设选择器中的「工程模式」和「工程模式（无提问）」。
 3. **Plugins → dsh-apollo → `apollo-skills` 行**的运行时配置表单。
+4. **Plugins → dsh-apollo → dsh-better-goal 行** 的目标设置行（回合上限模式、固定上限、提问超时）。
 
 技能需要所选预设挂载 DSH 的技能工具。CLI 后端默认关闭，安装插件不会自动安装、登录或启用 Codex / Claude。
 
 ```sh
-# 检查装配结果：应包含 apollo-skills 和两个工程预设
+# 检查装配结果：应包含 apollo-skills、dsh-better-goal 行和两个工程预设
 dsh --profile <profile> --dump-config
 
 # 卸载
 dsh plugin --profile <profile> remove dsh-apollo
 ```
+
+### goal 依赖与稳定行去重
+
+Apollo 把独立的 `dsh-better-goal` 声明为运行时依赖，依赖只安装一份；它的 bundle patch **不会**作为传递依赖自动应用——DSH 只把直接安装的 bundle 加入 `dsh.profile.bundles`，所以 Apollo 的顶层 patch 自己携带了原生 goal 行的禁用与替换行。
+
+- 两个 bundle 各自插入的顶层行 id/name 都是 `dsh-better-goal`；同时选中时 Loader 按行 id 去重，插件只激活一次，浏览器模块也只有一个 active source。不要手写第三行。
+- **禁用/移除 `dsh-better-goal` bundle 不等于禁用 Apollo 插入的 `dsh-better-goal` 行**：只要 Apollo 仍在，goal 插件仍会加载。要彻底移除 goal 能力，需要同时移除 Apollo 或显式禁用该行。
+- 未单独选中 `dsh-better-goal` bundle 时无需任何额外操作：Apollo 安装依赖后，顶层 patch 已提供该行。
+- 卸载 Apollo 后，profile 不再有 Apollo 插入的 goal 行；若之前单独添加过 `dsh-better-goal` bundle，需自行决定是否一并移除。
+- DSH `0.2.1-rc.2` 对同时显式选中两个 bundle 的同 ID 组合行，会把行开关标成只读（`unaddressable`），目标设置保存也可能被拒绝。无需重复 add：保留 Apollo 入口即可，子插件依赖和能力仍然保留；脱离 Apollo 使用时再独立安装。此限制不影响单实例运行，不为它改动 DSH 核心。若只需开关有效行，可在 profile 覆盖中写 `id: dsh-better-goal`、`disabled: true/false`，不要重新启用原生 `goal` 行。
 
 ## 流程技能
 
@@ -58,18 +73,31 @@ dsh plugin --profile <profile> remove dsh-apollo
 | 工程模式 | `eng` | 工程纪律、`wait_subagent`、可选退出守卫 |
 | 工程模式（无提问） | `eng-noask` | 不提供 `ask_user_question`；自主决策，并在报告中列明假设 |
 
-两份预设跟随 DSH 标准预设，保留工程模式的委派纪律、工具结果保留阈值与任务唤醒配置。新版标准预设的时间上下文已同步；**自动化任务工具（`schedule_create/list/update/delete`）有意从两个工程预设剔除**（host 的 `schedule` 服务与侧栏「自动化任务」页面不受影响，其他预设照常可用）；插件市场工具保持上游默认禁用状态。
+两份预设在 DSH 标准预设基础上保留工程模式的委派纪律、工具结果保留阈值与任务唤醒配置。新版标准预设的时间上下文已同步；**自动化任务工具（`schedule_create/list/update/delete`）有意从两个工程预设剔除**（host 的 `schedule` 服务与侧栏「自动化任务」页面不受影响，其他预设照常可用）；插件市场工具保持上游默认禁用状态。
 
 - 两个工程预设不挂 `tool-schedule`：页面「自动化任务」仍可查看/管理已有任务，但工程模式会话里模型无法创建或修改任务；需要在会话里创建任务时使用其它预设。
+- 两个工程预设也不挂原生 `command-goal` / `tool-goal`：目标控制由独立的 `dsh-better-goal` 插件统一提供，工程模式和其他预设都使用同一个 `goal` 工具与 `/goal` 命令。
 
 - `wait_subagent` 仅随这两个预设提供；其他预设仍可使用 DSH 原生的 `list_agents`、`send_message` 和 `interrupt_agent`。
 - 退出守卫默认关闭。启用后，若回合结束时仍有运行中的直接子代理或 DSH 后台任务，会提醒 Agent 继续处理；用户中断始终放行。
 - 守卫不管理 pm2、systemd、nohup 等外部常驻进程。
 - 技能与预设内容更新需要重启 profile；运行时设置不需要。
 
+## 长期目标（goal）
+
+目标域由独立的 `dsh-better-goal` 插件拥有，Apollo 只负责装配：顶层 patch 禁用原生 goal 服务、round driver、`/goal` 命令、模型工具和 GoalBar UI，再插入该插件的稳定行。goal 的配置与功能不在 Apollo 表单里。
+
+- 每个会话一个持久目标。模型侧只有单个 `goal` 工具，动作覆盖 `get` / `create` / `edit` / `pause` / `resume` / `complete` / `fail` / `clear`；人侧使用 `/goal` 命令。旧 `get_goal` / `create_goal` / `update_goal` 三个原生工具会被隐藏并替换为单 `goal` 工具，`todo_write` 仍只管理步骤。
+- 目标按 DSH 原生 goal/change v1 日志持久化。会话重开、恢复或 fork 后状态恢复为 disarmed，需显式 `/goal resume`（或 UI 操作）才开始自动续跑；用户中断会停止自动续跑。
+- 失败可立即以具体原因标记（持久化为 native blocked），完成需要对着当前证据逐条核验；不再有 blocked 三回合门槛。
+- `roundLimitMode`（`agent` / `unlimited` / `fixed`）、`roundLimit` 和 `questionTimeoutSeconds` 都在 **Plugins → dsh-apollo → dsh-better-goal 行** 行配置，均为 volatile。提问超时只影响之后新建的等待，`-1` 表示永不超时，超时不会被当作同意。
+- `unlimited` 在 UI 中显示为「无限」，内部沿用 `Number.MAX_SAFE_INTEGER` 兼容哨兵。
+
+目标设置的完整语义以独立插件自身的 README 为准。
+
 ## 配置
 
-打开 **Plugins → dsh-apollo → `apollo-skills` 行**。配置持久化到活动 profile 的覆盖文件，保存后即时生效，不会重挂插件。
+打开 **Plugins → dsh-apollo → `apollo-skills` 行**。配置持久化到活动 profile 的覆盖文件，保存后即时生效，不会重挂插件。goal 的回合上限与提问超时在 **Plugins → dsh-apollo → dsh-better-goal 行** 行，见上一节。
 
 ### 启用 CLI 子代理
 
@@ -178,7 +206,7 @@ Apollo 的只读能力探针默认仅接受 loopback Host 与同源请求。使�
 
 ## 开发与验证
 
-从源码仓库运行；生产依赖为 Schemastery，浏览器端使用宿主 React。测试额外使用 `js-yaml` 与 React TestRenderer，无需构建或启动 Web 服务。
+从源码仓库运行；生产依赖为 Schemastery 和独立的 `dsh-better-goal` 插件，浏览器端使用宿主 React。测试额外使用 `js-yaml` 与 React TestRenderer，无需构建或启动 Web 服务。
 
 ```sh
 npm install
@@ -188,7 +216,7 @@ npm test
 DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh npm test
 ```
 
-[预设漂移测试](<tests/upstream-drift.test.mjs>)比较完整 YAML 配置树，覆盖行序、嵌套配置、隔离域和禁用状态，仅放行声明的本地插件及调参。测试仅从 Node 安装路径和模块解析路径查找 DSH，未找到兼容安装时会跳过外部基准检查。使用 Desktop 自带运行时等其他安装布局时，请显式设置 `DSH_PACKAGE_ROOT`；指定后，无效路径、不兼容版本或缺失导出均直接失败。
+[预设漂移测试](<tests/upstream-drift.test.mjs>)比较完整 YAML 配置树，覆盖行序、嵌套配置、隔离域和禁用状态，仅放行声明的本地插件、有意剔除的原生行及调参；被剔除的原生行仍会先断言存在于上游。 [装配测试](<tests/assembly.test.mjs>)解析顶层 patch：原生 goal 禁用行、`dsh-better-goal` 稳定行和运行时依赖声明；安装依赖后还会与独立 bundle 的 patch 逐行比对。测试仅从 Node 安装路径和模块解析路径查找 DSH，未找到兼容安装时会跳过外部基准检查。使用 Desktop 自带运行时等其他安装布局时，请显式设置 `DSH_PACKAGE_ROOT`；指定后，无效路径、不兼容版本或缺失导出均直接失败。
 
 ### 真实宿主与 CLI 冒烟
 
@@ -232,11 +260,12 @@ node scripts/runtime-smoke.mjs
 ## 实现入口
 
 - [宿主插件](<src/index.js>)：注册技能、配置和 CLI 桥。
+- [顶层装配](<cordis.patch.yml>)：禁用原生 goal 行，插入 `apollo-skills` 与独立的 `dsh-better-goal` 稳定行。
 - [配置 schema](<src/config.js>)、[设置服务](<src/settings.js>)、[浏览器表单](<src/client.js>)。
 - [子代理路由](<src/subagents.js>)、[CLI 适配器](<src/cli-adapter.js>)、[会话存储](<src/cli-sessions.js>)。
 - [eng 预设](<presets/eng.patch.yml>)、[eng-noask 预设](<presets/eng-noask.patch.yml>)：各自行清单的唯一来源。保持 `eng` / `eng-noask` ID 不变，以支持历史会话恢复。
 
-宿主只声明一行 `apollo-skills`；两个预设由独立 bundle patch 提供。不要为同一个包重复添加宿主插件行。
+宿主声明 `apollo-skills` 和 `dsh-better-goal` 两行；两个预设由独立 bundle patch 提供。`dsh-better-goal` 的 goal 服务、单工具、命令、UI 与配置行都在独立包内，Apollo 不保留 goal 域实现。不要为同一个包重复添加宿主插件行；与独立 bundle 同时选中时相同 id/name 会去重。
 
 ## 许可与致谢
 

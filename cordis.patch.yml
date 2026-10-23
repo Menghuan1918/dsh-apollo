@@ -1,15 +1,44 @@
-# dsh-apollo bundle patch: inserts the single host-plane row for this package
+# dsh-apollo bundle patch: inserts the two host-plane rows this package needs
 # into the profile roster. Applied as a profile bundle layer (the first entry
 # of the `dsh.bundle.patch` array in package.json — the eng/eng-noask preset
 # patches in presets/ load after it); activate with
 # `dsh plugin --profile <name> add link:<path-to>/dsh-apollo`.
 #
-# One row on purpose. The row's module specifier must be the bare package name
-# because the browser half (`dsh.client` → exports "./client") is discovered
-# from the row's package manifest: `dsh-client-modules` only accepts a bare or
-# two-segment scoped specifier, and it rejects a second active row resolving to
-# the same package name ("resolves from multiple active Loader sources"). So
-# this one node half does every job:
+# ── goal domain: independent dsh-better-goal row ────────────────────────────
+# The native goal service, round driver, /goal command, model-facing tool and
+# GoalBar UI are disabled below and replaced by the independent dsh-better-goal
+# plugin. Its own bundle patch declares exactly these native disables plus the
+# same top-level row (id and name `dsh-better-goal`), so selecting both bundles
+# still loads one row: the Loader keys entries by row id.
+#
+# Apollo carries the lines itself because DSH does not auto-apply a transitive
+# dependency's bundle patch — `dsh plugin add` only selects the directly
+# installed bundle. Consequently, disabling or removing the standalone
+# dsh-better-goal bundle does NOT disable this row; goal remains available
+# through Apollo. Conversely, a profile that already selected the standalone
+# bundle must not hand-write a third row.
+- id: goal
+  disabled: true
+- id: goal-round-driver
+  disabled: true
+- id: command-goal
+  disabled: true
+- id: tool-goal
+  disabled: true
+- id: ui-goal
+  disabled: true
+
+- insert:
+    - id: dsh-better-goal
+      name: dsh-better-goal
+
+# ── Apollo host row ─────────────────────────────────────────────────────────
+# The apollo-skills row is one row on purpose. The row's module specifier must
+# be the bare package name because the browser half (`dsh.client` → exports
+# "./client") is discovered from the row's package manifest: `dsh-client-modules`
+# only accepts a bare or two-segment scoped specifier, and it rejects a second
+# active row resolving to the same package name ("resolves from multiple active
+# Loader sources"). So this one node half does every job:
 #
 #   1. registers the packaged skills/ tree on the skill registry's global layer
 #      (every preset mounting tool-skill then exposes the catalog);

@@ -144,14 +144,13 @@
 
           # ── goals ───────────────────────────────────────────────────────────────────
 
-          # The goal service and session driver stay on the host plane, where the Gateway
-          # can resolve them. The human `/goal` command and model-facing tool register
-          # into this preset's scoped layers.
-          - id: command-goal
-            name: '@deepseek-ai/dsh-command-goal'
-
-          - id: tool-goal
-            name: '@deepseek-ai/dsh-tool-goal'
+          # Native command-goal/tool-goal rows are deliberately omitted. The goal
+          # domain is owned by the independent dsh-better-goal plugin row in the
+          # top-level patch: it registers one `goal` tool and one `/goal` command
+          # per Agent, hides any legacy goal tools a preset still carries, and has
+          # its own Plugins row for round limits and question timeouts. The two
+          # removed rows remain deliberate removals in tests/upstream-drift.test.mjs,
+          # which asserts they still exist upstream before filtering them out.
 
           # ── plan mode ───────────────────────────────────────────────────────────────
 

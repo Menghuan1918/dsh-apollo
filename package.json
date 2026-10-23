@@ -42,7 +42,8 @@
     "react-test-renderer": "18.3.1"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "~3.18.4"
+    "@deepseek-ai/schemastery": "~3.18.4",
+    "dsh-better-goal": "github:Menghuan1918/dsh-better-goal#fe3979e1247f1cfeb6a1b6d9426729761a405b54"
   },
   "peerDependencies": {
     "react": "^18.2.0"

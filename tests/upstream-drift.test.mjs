@@ -18,8 +18,13 @@ const ownRows = [
 const thresholds = { thresholdChars: [16384, 8192], headChars: [8192, 4096], tailChars: [2048, 1024] }
 // Deliberate removals from the upstream standard preset. The real-preset test
 // asserts each still exists upstream before filtering it out, so a renamed or
-// dropped upstream row cannot silently pass.
-const droppedRows = [['tool-schedule', '@deepseek-ai/dsh-tool-schedule']]
+// dropped upstream row cannot silently pass. command-goal/tool-goal are now
+// owned by the independent dsh-better-goal plugin, not by these presets.
+const droppedRows = [
+  ['tool-schedule', '@deepseek-ai/dsh-tool-schedule'],
+  ['command-goal', '@deepseek-ai/dsh-command-goal'],
+  ['tool-goal', '@deepseek-ai/dsh-tool-goal'],
+]
 const isDropped = (row) => droppedRows.some(([id, name]) => row.id === id && row.name === name)
 // Compare platform expressions as data. This test never evaluates !!js.
 const schema = yaml.DEFAULT_SCHEMA.extend(new yaml.Type('tag:yaml.org,2002:js', {
@@ -135,6 +140,26 @@ test('配置比较拒绝额外嵌套键和伪装成 pruner 调参的其他行', 
   assert.throws(() => assertStandard([{ ...eng[0], config: { ...eng[0].config, unexpected: true } }], standard), /白名单外差异/)
   assert.throws(() => assertStandard([{ id: 'other', config: { thresholdChars: 16384 } }], [{ id: 'other', config: { thresholdChars: 8192 } }]), /白名单外差异/)
   assert.throws(() => assertStandard([{ ...standard[0], disabled: true }], standard), /白名单外差异/)
+})
+
+test('原生 goal 行仍存在于基准安装的 host 组成中', (t) => {
+  const layout = dshLayout(t)
+  if (!layout) return
+  const hostRows = (packageName) => {
+    const dir = dirname(layout.require.resolve(`${packageName}/package.json`))
+    return identities(document(join(dir, 'cordis.patch.yml')).flatMap((patch) => patch.insert ?? []))
+  }
+  const base = hostRows('@deepseek-ai/dsh-base')
+  const web = hostRows('@deepseek-ai/dsh-web-app')
+  for (const [id, name] of [
+    ['goal', '@deepseek-ai/dsh-goal'],
+    ['goal-round-driver', '@deepseek-ai/dsh-goal-round-driver'],
+    ['command-goal', '@deepseek-ai/dsh-command-goal'],
+    ['tool-goal', '@deepseek-ai/dsh-tool-goal'],
+  ]) {
+    assert.ok(base.some(([rowId, rowName]) => rowId === id && rowName === name), `基准安装的 dsh-base 必须仍有原生行：${id}`)
+  }
+  assert.ok(web.some(([rowId, rowName]) => rowId === 'ui-goal' && rowName === '@deepseek-ai/dsh-client-ui-goal'), '基准安装的 dsh-web-app 必须仍有原生行：ui-goal')
 })
 
 test('eng-noask 恰为 eng 删除 ask 工具并改写提问纪律', () => {
