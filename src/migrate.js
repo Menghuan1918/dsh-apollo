@@ -424,11 +424,19 @@ export async function migrateSubagent({ settings, configEditor, descriptors, sou
     targetBase: target.base,
   })
   const entry = targetEntryOf(configEditor, SUBAGENT_NS)
-  const trustedHosts = entry === undefined
+  const wantedHosts = normalizeConfig(source).trustedHosts
+  const targetDeclaresHosts = hasOwn(entry?.options?.config, 'trustedHosts')
+  // A target row that cannot be addressed cannot receive the non-volatile
+  // deployment field; report it instead of silently dropping the old value.
+  const trustedHostsBlocked = wantedHosts.length > 0 && !targetDeclaresHosts
+    && (entry === undefined || configEditor === undefined || typeof configEditor.edit !== 'function')
+  const trustedHosts = entry === undefined || targetDeclaresHosts
     ? undefined
     : planTrustedHostsMigration({ source, targetRaw: entry.options?.config })
   if (fields.length === 0 && trustedHosts === undefined) {
-    return { status: 'no-change', fields }
+    return trustedHostsBlocked
+      ? { status: 'pending', fields, error: 'old trustedHosts could not be migrated: the target row is not addressable' }
+      : { status: 'no-change', fields }
   }
   if (!settings || typeof settings.update !== 'function') {
     return { status: 'pending', fields, error: 'settings service is unavailable' }
@@ -457,6 +465,9 @@ export async function migrateSubagent({ settings, configEditor, descriptors, sou
     log?.warn?.(`apollo-migration: ${SUBAGENT_NS} write could not be verified: ${mismatched.join(', ')}`)
     return { status: 'error', fields, error: `unverified: ${mismatched.join(', ')}` }
   }
+  if (trustedHostsBlocked) {
+    return { status: 'pending', fields, error: 'old trustedHosts could not be migrated: the target row is not addressable' }
+  }
   return { status: 'complete', fields }
 }
 
@@ -480,6 +491,9 @@ export async function migrateCompact({ settings, configEditor, descriptors, agen
     return selected
   }
   const plan = planCompactMigration({ source: selected.config, targetUser: target.user, targetBase: target.base })
+  if (plan.status === 'invalid') {
+    log?.warn?.(`apollo-migration: native compaction config from "${selected.rowId}" cannot be migrated: ${plan.reason}`)
+  }
   if (plan.status !== 'planned') return { ...plan, sourcePreset: selected.rowId }
   try {
     await settings.update(COMPACT_NS, plan.patch, target.revision)

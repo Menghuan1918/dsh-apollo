@@ -442,6 +442,20 @@ test('migrateSubagent/migrateCompact：可直接用描述符调用（真实宿�
   assert.deepEqual(compact.fields, ['maxOverflowRetries'])
 })
 
+test('migrateSubagent：旧 trustedHosts 存在但目标行不可寻址 → pending，不静默丢弃', async () => {
+  const host = fakeHost({ source: { trustedHosts: ['proxy.local'] } })
+  const descriptors = await host.settings.describe()
+  const result = await migrateSubagent({
+    settings: host.settings,
+    configEditor: undefined,
+    descriptors,
+    source: { trustedHosts: ['proxy.local'] },
+    log: host.log,
+  })
+  assert.equal(result.status, 'pending')
+  assert.match(result.error, /trustedHosts.*not addressable/)
+})
+
 test('waitForDescriptors：目标出现后立即返回；超时返回 undefined', async () => {
   const settings = { describe: async () => [{ ns: SUBAGENT_NS }, { ns: COMPACT_NS }] }
   const rows = await waitForDescriptors(settings, [SUBAGENT_NS, COMPACT_NS], { timeoutMs: 10, intervalMs: 1 })
