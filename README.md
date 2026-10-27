@@ -86,7 +86,7 @@ flowchart TB
 
 ```sh
 # npm 安装（推荐）
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.4.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.4.1
 
 # 或从 GitHub main 源码安装（备选）
 dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
@@ -94,13 +94,13 @@ dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 
 npm 包页面：[`@menghuan1918/dsh-apollo`](https://www.npmjs.com/package/@menghuan1918/dsh-apollo)。安装、升级或换包都会改变运行的代码，必须重启对应 profile 的 DSH 进程；只刷新网页不够。重启后选择「工程模式」；需要 CLI 时，打开 **Plugins → @menghuan1918/dsh-apollo → `apollo-skills` 行** 按需启用。
 
-> npm 和 GitHub 安装都会自动带入精确依赖 `dsh-better-goal@0.1.0`，**不需要再单独安装**。安装 Apollo 不会安装、登录或启用 Codex / Claude。
+> npm 和 GitHub 安装都会自动带入精确依赖 `dsh-better-goal@0.2.0`，**不需要再单独安装**。安装 Apollo 不会安装、登录或启用 Codex / Claude。
 
 如果之前通过 GitHub 或 `link:` 安装了旧名 `dsh-apollo`，迁移到 scoped npm 包时请按下面两条命令手动处理，不要依赖自动迁移。会话记录会保留，但换包后仍须重启对应 profile（刷新网页不够）：
 
 ```sh
 dsh plugin --profile <profile> remove dsh-apollo
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.4.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.4.1
 ```
 
 > `dsh-apollo` 只是旧入口名；unscoped 的 `dsh-apollo` 已被其他项目占用，不要从 npm 安装它。
@@ -153,9 +153,9 @@ flowchart TB
 
 ## 长期目标
 
-目标域由独立插件 **[`dsh-better-goal`](https://www.npmjs.com/package/dsh-better-goal)**（npm `0.1.0`）提供，Apollo 负责把它装进同一个 profile。每个会话一个持久目标；执行步骤单独记录，不与目标混在一起。模型侧只看到一个 `goal` 工具，人侧用 `/goal` 管理同一个目标。
+目标域由独立插件 **[`dsh-better-goal`](https://www.npmjs.com/package/dsh-better-goal)**（npm `0.2.0`）提供，Apollo 负责把它装进同一个 profile。每个会话一个持久目标；执行步骤单独记录，不与目标混在一起。模型侧只看到一个 `goal` 工具，人侧用 `/goal` 管理同一个目标。
 
-> **相较原生 goal，重点不只是继续跑，而是该停时能停。** 缺少必需密钥、权限或外部条件时，Agent 可以立即记录失败原因并停止续跑，不用先凑目标轮数；提问默认等 120 秒，超时后仍可回答，也可以先推进不依赖答案的工作。原生的受阻门槛、恢复限制、默认阻塞提问与本插件的[完整对照](https://github.com/Menghuan1918/dsh-better-goal/blob/main/README.md#与-dsh-原生-goal-对比)见独立插件文档。
+> **相较原生 goal，重点不只是继续跑，而是该停时能停。** 缺少必需密钥、权限或需要你做决定时，Agent 会立即暂停目标并说明缺什么，不会为了“完成”而伪造、跳过检查或缩小范围，也不用先凑目标轮数；提问默认等 120 秒，超时后仍可回答，也可以先推进不依赖答案的工作。原生的受阻门槛、恢复限制、默认阻塞提问与本插件的[完整对照](https://github.com/Menghuan1918/dsh-better-goal/blob/main/README.md#与-dsh-原生-goal-对比)见独立插件文档。
 
 - **默认轮数策略是 `agent`**：由 Agent 按任务决定是否设置上限；切到 `fixed` 才使用配置值，`unlimited` 不施加策略性轮数上限。
 - **固定值默认 `256`**，只在 `fixed` 模式生效。
@@ -213,7 +213,7 @@ flowchart TB
 
 <details><summary>需要单独安装 dsh-better-goal 吗？</summary>
 
-不需要。通过 npm 或 GitHub 安装 Apollo 时，Apollo 会把 `dsh-better-goal@0.1.0` 作为固定依赖装配进来，goal 行和 `/goal` 一起可用。只有在准备脱离 Apollo 单独使用目标插件时，才按[独立包页面](https://www.npmjs.com/package/dsh-better-goal)或独立仓库说明安装；不要在同一个 profile 里重复添加两个 goal bundle。
+不需要。通过 npm 或 GitHub 安装 Apollo 时，Apollo 会把 `dsh-better-goal@0.2.0` 作为固定依赖装配进来，goal 行和 `/goal` 一起可用。只有在准备脱离 Apollo 单独使用目标插件时，才按[独立包页面](https://www.npmjs.com/package/dsh-better-goal)或独立仓库说明安装；不要在同一个 profile 里重复添加两个 goal bundle。
 
 </details>
 

@@ -66,7 +66,7 @@ test('顶层 patch 禁用原生 goal 域并插入稳定的 dsh-better-goal 行',
 test('npm manifest：scoped 名、版本、repository、publishConfig 与 license', () => {
   const m = manifest()
   assert.equal(m.name, PACKAGE_NAME)
-  assert.equal(m.version, '0.4.0')
+  assert.equal(m.version, '0.4.1')
   assert.equal(m.license, 'GPL-3.0-or-later')
   assert.deepEqual(m.repository, {
     type: 'git',
@@ -80,7 +80,7 @@ test('npm manifest：scoped 名、版本、repository、publishConfig 与 licens
 
 test('package.json 将独立 goal 插件声明为精确 npm 版本', () => {
   const spec = manifest().dependencies?.['dsh-better-goal']
-  assert.equal(spec, '0.1.0', 'goal 依赖必须是精确 npm 版本，不能用 Git/file/link/range')
+  assert.equal(spec, '0.2.0', 'goal 依赖必须是精确 npm 版本，不能用 Git/file/link/range')
   assert.doesNotMatch(spec, /^(?:github:|git\+|git:|file:|link:|workspace:|npm:|https?:)/)
 })
 

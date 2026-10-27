@@ -1,6 +1,6 @@
 {
   "name": "@menghuan1918/dsh-apollo",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "DSH plugin: 流程技能、工程模式、Codex/Claude 可续接子代理与统一设置。纯 ESM，无构建步骤。",
   "license": "GPL-3.0-or-later",
   "repository": {
@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "~3.18.4",
-    "dsh-better-goal": "0.1.0"
+    "dsh-better-goal": "0.2.0"
   },
   "peerDependencies": {
     "react": "^18.2.0"

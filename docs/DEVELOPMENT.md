@@ -2,7 +2,7 @@
 
 面向维护者、集成者和需要排查装配问题的用户。用户安装与配置请看 [README](../README.md)；本文保留 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）插件的实现细节、历史兼容与验证方法。
 
-当前实现版本：`0.4.0`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂，不需要打包。
+当前实现版本：`0.4.1`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂，不需要打包。
 
 ## 目录
 
@@ -32,7 +32,7 @@
 运行时依赖：
 
 - `@deepseek-ai/schemastery`：行配置 schema；
-- `dsh-better-goal`：独立的 goal 插件，依赖精确的 npm 版本 `0.1.0`（见 `dependencies`），不是 Git commit、分支、范围或 `file:` 说明符；
+- `dsh-better-goal`：独立的 goal 插件，依赖精确的 npm 版本 `0.2.0`（见 `dependencies`），不是 Git commit、分支、范围或 `file:` 说明符；
 - `react` 是 peer dependency，由宿主提供。
 
 ### 为什么宿主只有一行 `apollo-skills`
@@ -460,10 +460,10 @@ Claude 的默认登录态与显式 `CLAUDE_CONFIG_DIR` 语义不同：
 ### npm 安装
 
 ```sh
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.4.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.4.1
 ```
 
-包发布到 npm 官方 registry 后即可用此命令安装，并带入精确依赖 `dsh-better-goal@0.1.0`，同时应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。README 中的 npm 命令是发布后的安装路径；首发完成前不要宣称 registry 已有该版本。
+包发布到 npm 官方 registry 后即可用此命令安装，并带入精确依赖 `dsh-better-goal@0.2.0`，同时应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。README 中的 npm 命令是发布后的安装路径；首发完成前不要宣称 registry 已有该版本。
 
 ### GitHub 源码安装
 
@@ -471,7 +471,7 @@ dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.4.0
 dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 ```
 
-GitHub main 仍是源码安装选项。它同样按 `package.json` 解析精确依赖 `dsh-better-goal@0.1.0`，因此不能早于 Goal 的 npm 发布推进 main：Goal 尚未在 registry 可取得时，源码安装会因依赖 404 失败。安装后重启 profile。
+GitHub main 仍是源码安装选项。它同样按 `package.json` 解析精确依赖 `dsh-better-goal@0.2.0`，因此不能早于 Goal 的 npm 发布推进 main：Goal 尚未在 registry 可取得时，源码安装会因依赖 404 失败。安装后重启 profile。
 
 ### 本地 link 安装
 
@@ -484,7 +484,7 @@ dsh plugin --profile <profile> add link:/absolute/path/to/dsh-apollo
 注意：
 
 - `dsh plugin add link:` 只链接 Apollo 本身，不会代装它的依赖；所以必须先 `npm install`；
-- 开发时可将 `dsh-better-goal` 临时改为 `file:../dsh-better-goal`，但不要提交该改动；发布版必须保持精确 npm 版本 `0.1.0`，不要写成 Git SHA、分支或范围；
+- 开发时可将 `dsh-better-goal` 临时改为 `file:../dsh-better-goal`，但不要提交该改动；发布版必须保持精确 npm 版本（当前 `0.2.0`），不要写成 Git SHA、分支或范围；
 - 不需要启动额外服务或构建 Web 资源；宿主提供 React。
 
 ### 核对
@@ -510,15 +510,14 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 
 旧 unscoped 安装使用 `remove dsh-apollo`。卸载 Apollo 后，Apollo 插入的 `dsh-better-goal` 行也会消失。如果之前单独安装过独立 bundle，需要按独立插件的说明处理；不要留下两个 goal 状态服务或续跑驱动同时工作。
 
-### npm 首发顺序
+### npm 发布顺序
 
-首发只做人工发布，不把登录、2FA 或 publish 放进脚本：
+两个仓库都由 GitHub Release 触发 `.github/workflows/release.yml`，通过 npm trusted publishing（OIDC）发布，仓库里不存 npm token。tag 必须是 `v<package.json 的 version>`，CI 会先校验再跑测试和 `npm publish --provenance`。
 
-1. 在 Goal 仓库人工发布 `dsh-better-goal@0.1.0` tarball；发布目标必须是 `https://registry.npmjs.org/`，`access` 为 `public`。
-2. 在官方 registry 验证 `0.1.0` 已可取得（查询版本并下载 tarball），排除镜像或本地缓存造成的假象。
-3. 再人工发布 `@menghuan1918/dsh-apollo@0.4.0` tarball，同样指向 `https://registry.npmjs.org/` 且 `access` 为 `public`。
-4. 登录、2FA 和 publish 都由维护者在真实终端完成；OTP、token 和恢复码不得写入脚本、环境文件或仓库。
-5. 在 Goal 发布并验证通过前，不要把 Apollo 的 `package.json` 精确依赖 `0.1.0` 合并或推送到 main，否则 GitHub 源码安装会解析到尚不存在的 Goal 版本并 404。
+1. 先发布 Goal：在 `dsh-better-goal` 仓库推 main 并发布 Release（如 `v0.2.0`）。
+2. 在官方 registry（`https://registry.npmjs.org/`）确认该版本已可取得，排除镜像或缓存造成的假象。
+3. 再把 Apollo 的精确依赖改到该版本，推 main 并发布 Apollo Release（如 `v0.4.1`）。
+4. Goal 版本可取得前，不要把指向它的精确依赖推到 Apollo main，否则 GitHub 源码安装会 404。
 
 ## 测试与冒烟
 
