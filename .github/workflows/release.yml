@@ -1,0 +1,45 @@
+# Publish to npm through npm trusted publishing (OIDC): no npm token is
+# stored in this repository. The package's trusted publisher on npmjs.com must
+# name this repository and this workflow file (`release.yml`); if it also names
+# an environment, add the same `environment:` here.
+#
+# Creating a GitHub Release publishes the tag it points at, so tag `v<version>`
+# with exactly the version in package.json.
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24 ships npm >= 11.5.1, the floor for trusted publishing.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Check the tag matches package.json
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::release tag ${GITHUB_REF_NAME} does not match package.json version ${version}"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Test
+        run: npm test
+
+      - name: Publish
+        run: npm publish --provenance --access public
