@@ -501,3 +501,144 @@ test('自动发现失败：显示宿主给的 code（含 HTTP 状态），不改
     restore()
   }
 })
+
+// ── 子代理模型分档 ───────────────────────────────────────────────────────
+
+const ROUTES = {
+  enabled: true,
+  routes: [
+    { provider: 'deepseek-official', model: 'deepseek-flash', efforts: ['low', 'max'], defaultEffort: 'max' },
+    { provider: 'poke2api', model: 'gpt-6.1-sol', efforts: [], defaultEffort: '' },
+  ],
+}
+
+/** 假 fetch：/apollo/api/routes 走 routes 处理器，其余回探针数据。 */
+function useRoutes(routes) {
+  const requests = []
+  const restore = useFetch(async (url) => {
+    const target = String(url)
+    if (target.startsWith('/apollo/api/routes')) {
+      requests.push(target)
+      if (routes instanceof Error) throw routes
+      return { ok: true, status: 200, json: async () => ({ ok: true, value: routes }) }
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true, value: CAPABILITIES }) }
+  })
+  return { requests, restore }
+}
+
+const labelsOf = (node) => node.findAllByType('option').map((option) => textOf(option.props.children))
+
+test('模型分档：候选来自白名单，effort 有列表时下拉、否则文本，保存整档写入', async () => {
+  const { requests, restore } = useRoutes(ROUTES)
+  try {
+    const page = await mountPage()
+    const renderer = page.renderer
+    await page.run(async () => {})
+    assert.deepEqual(requests, ['/apollo/api/routes'])
+    assert.match(pageText(renderer), /tiersTitle/)
+    assert.doesNotMatch(pageText(renderer), /tiersInactive|routesError/)
+
+    const fast = byId(renderer, 'apollo-tier-fast-route')
+    assert.deepEqual(optionsOf(fast), ['', 'deepseek-official/deepseek-flash', 'poke2api/gpt-6.1-sol'])
+    assert.deepEqual(labelsOf(fast), ['tierInherit', 'deepseek-official / deepseek-flash', 'poke2api / gpt-6.1-sol'])
+    assert.equal(fast.props.value, '')
+    // 沿用父会话路由时 effort 无意义：禁用。
+    assert.equal(byId(renderer, 'apollo-tier-fast-effort').props.disabled, true)
+
+    await page.run(async () => { byId(renderer, 'apollo-tier-fast-route').props.onChange({ target: { value: 'deepseek-official/deepseek-flash' } }) })
+    const effort = byId(renderer, 'apollo-tier-fast-effort')
+    assert.equal(effort.type, 'select')
+    assert.deepEqual(optionsOf(effort), ['', 'low', 'max'])
+    assert.deepEqual(labelsOf(effort), ['tierEffortDefault', 'low', 'max'])
+    await page.run(async () => { byId(renderer, 'apollo-tier-fast-effort').props.onChange({ target: { value: 'max' } }) })
+
+    // 路由没有 effort 列表：文本输入。
+    await page.run(async () => { byId(renderer, 'apollo-tier-quality-route').props.onChange({ target: { value: 'poke2api/gpt-6.1-sol' } }) })
+    assert.equal(byId(renderer, 'apollo-tier-quality-effort').type, 'input')
+    await page.run(async () => { byId(renderer, 'apollo-tier-quality-effort').props.onChange({ target: { value: ' high ' } }) })
+
+    assert.equal(saveButton(renderer).props.disabled, false)
+    await page.run(async () => { await saveButton(renderer).props.onClick() })
+    assert.deepEqual(page.controller.calls[0].ops, [
+      { op: 'set', path: ['tiers', 'fast'], value: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'max' } },
+      { op: 'set', path: ['tiers', 'quality'], value: { provider: 'poke2api', model: 'gpt-6.1-sol', reasoningEffort: 'high' } },
+    ])
+
+    // 换路由清空 effort；改回沿用父会话路由整档清空。
+    await page.update()
+    await page.run(async () => { byId(renderer, 'apollo-tier-fast-route').props.onChange({ target: { value: 'poke2api/gpt-6.1-sol' } }) })
+    assert.equal(byId(renderer, 'apollo-tier-fast-effort').props.value, '')
+    await page.run(async () => { byId(renderer, 'apollo-tier-fast-route').props.onChange({ target: { value: '' } }) })
+    await page.run(async () => { await saveButton(renderer).props.onClick() })
+    assert.deepEqual(page.controller.calls[1].ops, [
+      { op: 'set', path: ['tiers', 'fast'], value: { provider: '', model: '', reasoningEffort: '' } },
+    ])
+  } finally {
+    restore()
+  }
+})
+
+test('模型分档：已存路由不在白名单 → 标注并阻止保存；改回沿用后可保存', async () => {
+  const { restore } = useRoutes(ROUTES)
+  try {
+    const value = { ...READY, tiers: { fast: { provider: 'old', model: 'gone', reasoningEffort: 'high' } } }
+    const page = await mountPage({ form: { value } })
+    const renderer = page.renderer
+    await page.run(async () => {})
+
+    const fast = byId(renderer, 'apollo-tier-fast-route')
+    assert.equal(fast.props.value, 'old/gone')
+    assert.deepEqual(optionsOf(fast), ['', 'deepseek-official/deepseek-flash', 'poke2api/gpt-6.1-sol', 'old/gone'])
+    assert.match(labelsOf(fast)[3], /tierOffList.*old \/ gone/)
+    // 未知路由没有 effort 列表：文本输入保留旧值。
+    assert.equal(byId(renderer, 'apollo-tier-fast-effort').props.value, 'high')
+
+    await page.run(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
+    assert.equal(saveButton(renderer).props.disabled, true)
+    assert.match(pageText(renderer), /invalidTierRoute.*tierFast/)
+    await page.run(async () => { await saveButton(renderer).props.onClick() })
+    assert.deepEqual(page.controller.calls, [])
+
+    await page.run(async () => { byId(renderer, 'apollo-tier-fast-route').props.onChange({ target: { value: '' } }) })
+    assert.equal(saveButton(renderer).props.disabled, false)
+    await page.run(async () => { await saveButton(renderer).props.onClick() })
+    assert.deepEqual(page.controller.calls[0].ops, [
+      { op: 'set', path: ['exitGuard'], value: true },
+      { op: 'set', path: ['tiers', 'fast'], value: { provider: '', model: '', reasoningEffort: '' } },
+    ])
+  } finally {
+    restore()
+  }
+})
+
+test('模型分档：白名单关闭/为空给出提醒；读取失败降级但不阻止保存', async () => {
+  for (const routes of [{ enabled: false, routes: ROUTES.routes }, { enabled: true, routes: [] }]) {
+    const { restore } = useRoutes(routes)
+    try {
+      const page = await mountPage()
+      await page.run(async () => {})
+      assert.match(pageText(page.renderer), /tiersInactive/)
+    } finally {
+      restore()
+    }
+  }
+
+  const { restore } = useRoutes(new Error('offline'))
+  try {
+    const value = { ...READY, tiers: { fast: { provider: 'old', model: 'gone', reasoningEffort: '' } } }
+    const page = await mountPage({ form: { value } })
+    const renderer = page.renderer
+    await page.run(async () => {})
+    assert.match(pageText(renderer), /routesError/)
+    // 白名单未读到：已存路由原样保留为选项，不标注、不阻止保存。
+    const fast = byId(renderer, 'apollo-tier-fast-route')
+    assert.deepEqual(optionsOf(fast), ['', 'old/gone'])
+    assert.deepEqual(labelsOf(fast), ['tierInherit', 'old / gone'])
+    await page.run(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
+    await page.run(async () => { await saveButton(renderer).props.onClick() })
+    assert.deepEqual(page.controller.calls[0].ops, [{ op: 'set', path: ['exitGuard'], value: true }])
+  } finally {
+    restore()
+  }
+})

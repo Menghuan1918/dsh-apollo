@@ -247,7 +247,7 @@ test('开关：global=false 且 eng=false → 不短路，且 CLI provider 请�
   installCliRouting(ctx, makeConfig({ global: false, eng: false }), makeSessions())
   const delegated = { isError: false, value: 'native', content: [] }
   const [handler, next] = executeHandler(ctx, delegated)
-  for (const preset of ['eng', 'eng-noask', 'standard']) {
+  for (const preset of ['eng', 'eng-ptc', 'standard']) {
     next.calls = 0
     const out = await handler({ ...makeExec(makeAgent({ preset })), name: 'subagent', arguments: { provider: 'codex', description: 'd', prompt: 'p' } }, next)
     assert.equal(out, delegated, `${preset}：开关全关时必须保持原生行为`)
@@ -265,7 +265,7 @@ test('开关：global=true 覆盖包括 standard 在内的所有预设', async (
     'child-1': { version: 1, id: 'child-1', parentId: 'parent-1', cli: 'codex', cwd: '/tmp/x', executable: 'codex', profile: '', model: 'gpt-5-codex', effort: 'low', delivered: [] },
   }))
   const [handler, next] = executeHandler(ctx)
-  for (const preset of ['eng', 'eng-noask', 'standard']) {
+  for (const preset of ['eng', 'eng-ptc', 'standard']) {
     next.calls = 0
     const out = await handler({ ...makeExec(makeAgent({ preset })), name: 'subagent', arguments: { provider: 'codex', description: 'd', prompt: 'p' } }, next)
     assert.equal(next.calls, 0, `${preset}：global 开启时不得委托原生路径`)
@@ -273,13 +273,13 @@ test('开关：global=true 覆盖包括 standard 在内的所有预设', async (
   }
 })
 
-test('开关：eng=true 只覆盖 eng / eng-noask 两个预设', async () => {
+test('开关：eng=true 只覆盖 eng / eng-ptc 两个预设', async () => {
   const ctx = makeCtx()
   installCliRouting(ctx, makeConfig({ global: false, eng: true }), makeSessions({
     'child-1': { version: 1, id: 'child-1', parentId: 'parent-1', cli: 'codex', cwd: '/tmp/x', executable: 'codex', profile: '', model: 'gpt-5-codex', effort: 'low', delivered: [] },
   }))
   const [handler, next] = executeHandler(ctx)
-  for (const preset of ['eng', 'eng-noask']) {
+  for (const preset of ['eng', 'eng-ptc']) {
     next.calls = 0
     const out = await handler({ ...makeExec(makeAgent({ preset })), name: 'subagent', arguments: { provider: 'codex', description: 'd', prompt: 'p' } }, next)
     assert.equal(next.calls, 0, `${preset} 预设应被接管`)

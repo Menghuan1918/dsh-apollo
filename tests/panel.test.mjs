@@ -34,6 +34,8 @@ import {
   probeVersion,
   registerCapabilitiesRoute,
   resolveExecutable,
+  ROUTES_PATH,
+  collectTierRoutes,
 } from '../src/panel.js'
 
 /** 造一个临时目录，结束后删除（支持异步回调）。 */
@@ -765,4 +767,48 @@ test('GET /apollo/api/models：按 cli 发现、未知 cli 400、非 GET 405、�
   await handler(crossSite.req, crossSite.res)
   assert.equal(crossSite.res.status, 403)
   assert.deepEqual(seen, ['codex'])
+})
+
+test('collectTierRoutes：白名单 + effort；单条解析失败降级；服务缺失或非法返回空', async () => {
+  const services = {
+    subagentModelSelection: { current: () => ({ enabled: true, allowedModels: [{ provider: 'a', model: 'm1' }, { provider: 'b', model: 'm2' }] }) },
+    llm: {
+      resolveModelInfo: async (provider) => {
+        if (provider === 'b') throw new Error('offline')
+        return { reasoning: { efforts: [{ id: 'low' }, { id: 'max' }, {}], defaultEffort: 'max' } }
+      },
+    },
+  }
+  assert.deepEqual(await collectTierRoutes({ get: (name) => services[name] }), {
+    enabled: true,
+    routes: [
+      { provider: 'a', model: 'm1', efforts: ['low', 'max'], defaultEffort: 'max' },
+      { provider: 'b', model: 'm2', efforts: [], defaultEffort: '' },
+    ],
+  })
+  assert.deepEqual(await collectTierRoutes({ get: () => undefined }), { enabled: false, routes: [] })
+  const broken = { subagentModelSelection: { current: () => { throw new Error('enabled requires one route') } } }
+  assert.deepEqual(await collectTierRoutes({ get: (name) => broken[name] }), { enabled: false, routes: [] })
+})
+
+test('GET /apollo/api/routes：返回分档路由、no-store、非 GET 405、跨站 403', async () => {
+  const { ctx, routes } = makeWebCtx()
+  const value = { enabled: true, routes: [{ provider: 'a', model: 'm', efforts: ['low'], defaultEffort: 'low' }] }
+  registerCapabilitiesRoute(ctx, {}, { read: async () => EMPTY_CAPABILITIES, routes: async () => value })
+  const handler = handlerOf(routes)
+  assert.equal(ROUTES_PATH, '/apollo/api/routes')
+
+  const ok = makeReq({ url: ROUTES_PATH })
+  await handler(ok.req, ok.res)
+  assert.equal(ok.res.status, 200)
+  assert.equal(ok.res.headers['cache-control'], 'no-store')
+  assert.deepEqual(JSON.parse(ok.res.body), { ok: true, value })
+
+  const post = makeReq({ url: ROUTES_PATH, method: 'POST', body: '{}' })
+  await handler(post.req, post.res)
+  assert.equal(post.res.status, 405)
+
+  const crossSite = makeReq({ url: ROUTES_PATH, host: 'evil.example.com' })
+  await handler(crossSite.req, crossSite.res)
+  assert.equal(crossSite.res.status, 403)
 })

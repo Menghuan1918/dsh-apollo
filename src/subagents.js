@@ -166,10 +166,9 @@ export function installCliRouting(ctx, config, sessions) {
       const catalog = cliCatalog(config)
       if (!catalog) return ''
       return [
-        'Apollo CLI subagents: existing subagent also accepts provider="codex" or provider="claude".',
-        'Call list_subagent_models with that provider to inspect allowed models and reasoning efforts. Model and reasoning_effort may be omitted to use configured defaults.',
-        'CLI children always run in the background; run_in_background was removed. Pass cwd to choose their initial directory. subagent_fork and agent_preset are unsupported.',
-        'Use send_message, list_agents, interrupt_agent and wait_subagent when available to control their stable child ids. Their CLI permissions come from Apollo settings.',
+        'Apollo CLI subagents: subagent also accepts provider="codex" or provider="claude"; model and reasoning_effort default to Apollo settings (list_subagent_models with that provider shows allowed values).',
+        'They always run in the background, start in cwd (default: current directory) with permissions from Apollo settings; subagent_fork and agent_preset are unsupported.',
+        'Control them by child id with send_message, wait_subagent, list_agents and interrupt_agent.',
         catalog,
       ].join('\n')
     },

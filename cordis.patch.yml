@@ -1,6 +1,6 @@
 # dsh-apollo bundle patch: inserts the two host-plane rows this package needs
 # into the profile roster. Applied as a profile bundle layer (the first entry
-# of the `dsh.bundle.patch` array in package.json — the eng/eng-noask preset
+# of the `dsh.bundle.patch` array in package.json — the eng/eng-ptc preset
 # patches in presets/ load after it); activate with
 # `dsh plugin --profile <name> add link:<path-to>/dsh-apollo`.
 #
@@ -58,7 +58,7 @@
 #      the official client treats a proxied page as loopback.
 #
 # Row config — two classes of fields (details in README, section 配置):
-#   - volatile, editable from the Web form: `exitGuard`,
+#   - volatile, editable from the Web form: `exitGuard`, `tiers.{fast,quality}`,
 #     `subagents.{eng,global}`, `subagents.{codex,claude}.*`
 #     (enabled / executable / profile / permissionMode / defaultModel / models[]).
 #     Changes do NOT reload this row.
@@ -70,7 +70,7 @@
 #     enable only behind a trusted proxy.
 #
 # Presets are separate bundle-patch rows (presets/eng.patch.yml,
-# presets/eng-noask.patch.yml): a preset is an `insert` of a
+# presets/eng-ptc.patch.yml): a preset is an `insert` of a
 # `@deepseek-ai/dsh-agent-preset` row read straight from that file — the old
 # sync-into-<dshHome>/.agent-presets delivery no longer exists.
 - insert:

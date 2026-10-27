@@ -2,7 +2,7 @@
 
 面向维护者、集成者和需要排查装配问题的用户。用户安装与配置请看 [README](../README.md)；本文保留 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）插件的实现细节、历史兼容与验证方法。
 
-当前实现版本：`0.3.0`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂，不需要打包。
+当前实现版本：`0.4.0`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂，不需要打包。
 
 ## 目录
 
@@ -25,7 +25,7 @@
 
 1. [cordis.patch.yml](../cordis.patch.yml)：顶层宿主行；
 2. [presets/eng.patch.yml](../presets/eng.patch.yml)：`eng` 预设；
-3. [presets/eng-noask.patch.yml](../presets/eng-noask.patch.yml)：`eng-noask` 预设。
+3. [presets/eng-ptc.patch.yml](../presets/eng-ptc.patch.yml)：`eng-ptc` 预设。
 
 浏览器半边由 `dsh.client` 的注入列表发现；`exports["./client"]` 指向 [src/client.js](../src/client.js)。`exports["./presets/*"]` 让预设里的本地插件通过裸子路径引用本包内的模块。
 
@@ -62,7 +62,7 @@ goal 行由独立插件提供，并注册三个键，都指向同一份配置和
 - `@menghuan1918/dsh-apollo#dsh-better-goal`：Apollo 以 scoped 包装配；
 - `dsh-apollo#dsh-better-goal`：历史 Apollo 装配。
 
-npm 包名和浏览器 closure id 已随发行名改为 scoped，但**行 id/name、预设 ID 和 CLI 路由名不随之改名**：`apollo-skills`、`dsh-better-goal`、`eng` / `eng-noask`、外部 provider `codex` / `claude` 和内部路由 `apollo-cli-codex` / `apollo-cli-claude` 都是兼容契约。只改发行名时，不迁移行 id、不重命名预设，也不改 CLI 路由。
+npm 包名和浏览器 closure id 已随发行名改为 scoped，但**行 id/name、预设 ID 和 CLI 路由名不随之改名**：`apollo-skills`、`dsh-better-goal`、`eng` / `eng-ptc`、外部 provider `codex` / `claude` 和内部路由 `apollo-cli-codex` / `apollo-cli-claude` 都是兼容契约。只改发行名时，不迁移行 id、不重命名预设，也不改 CLI 路由。
 
 ### 顶层 patch 与 goal 行去重
 
@@ -102,9 +102,9 @@ DSH `0.2.1-rc.2` 的已知限制：
 
 ### 预设 ID 与历史会话
 
-`presets/eng.patch.yml` 和 `presets/eng-noask.patch.yml` 是预设行清单的唯一事实源。`config.id` 必须保持 `eng` / `eng-noask`，因为历史会话按预设 ID 恢复。`config.order` 分别是 10 和 11。
+`presets/eng.patch.yml` 和 `presets/eng-ptc.patch.yml` 是预设行清单的唯一事实源。`config.id` 必须保持 `eng` / `eng-ptc`，因为历史会话按预设 ID 恢复。`config.order` 分别是 10 和 11。`eng-noask` 已在 0.4.0 删除，用它开的历史会话不再能按原预设恢复。
 
-`presets/eng/` 和 `presets/eng-noask/` 目录只承载预设本地插件模块（exit-guard、wait-subagent、mode-instructions），不承载第二份行清单。旧机制中的 `agent.cordis.yml` / `preset.yml` 已删除，结构测试会拒绝它们复活；旧的 `<dshHome>/.agent-presets` 同步副本机制也已移除。
+`presets/eng/` 目录只承载两套预设共用的本地插件模块（exit-guard、wait-subagent、mode-instructions），不承载第二份行清单。旧机制中的 `agent.cordis.yml` / `preset.yml` 已删除，结构测试会拒绝它们复活；旧的 `<dshHome>/.agent-presets` 同步副本机制也已移除。
 
 ## 配置与投影
 
@@ -141,7 +141,7 @@ DSH `0.2.1-rc.2` 的已知限制：
 
 字段分为两类：
 
-- **volatile 运行时字段**：`exitGuard`、`subagents.eng`、`subagents.global`、`subagents.codex.*`、`subagents.claude.*`。保存后不重挂插件，消费方每次读取都拿到最新值。
+- **volatile 运行时字段**：`exitGuard`、`tiers.fast`、`tiers.quality`、`subagents.eng`、`subagents.global`、`subagents.codex.*`、`subagents.claude.*`。保存后不重挂插件，消费方每次读取都拿到最新值。
 - **部署标志**：`trustedHosts`、`declareOwnsHost`。只在行配置里声明，改动会让 Loader 正常重挂本行。
 
 浏览器表单只允许写入 volatile 路径；`dsh-settings` 会拒绝其他路径。部署标志不能从网页改写。
@@ -222,7 +222,7 @@ goal 行由独立插件拥有，三个字段都是 volatile：
 
 - 本地插件 [wait-subagent](../presets/eng/plugins/wait-subagent/index.js)：`wait_subagent` 工具；
 - 本地插件 [exit-guard](../presets/eng/plugins/exit-guard/index.js)：可选退出守卫；
-- 本地插件 [mode-instructions](../presets/eng/plugins/mode-instructions/index.js)：工程模式专属提示词段。
+- 本地插件 [mode-instructions](../presets/eng/plugins/mode-instructions/index.js)：工程模式提示词段。
 
 有意的差异：
 
@@ -233,7 +233,38 @@ goal 行由独立插件拥有，三个字段都是 volatile：
 - `tool-plugin-manager` / `tool-plugin-market` 保持上游默认禁用；
 - 宿主行使用 `persona`、`agent-instructions`、`time-context` 等与 0.2.1 标准预设对齐的配置。
 
-[presets/eng-noask.patch.yml](../presets/eng-noask.patch.yml) 是 eng 的拷贝变体，只移除 `tool-ask-user` 行，并改写 plan-mode 的提问措辞；其余行清单保持一致。维护时先改 eng，再重做 noask 的差异；[tests/upstream-drift.test.mjs](../tests/upstream-drift.test.mjs) 会拦住超出这一处差异的分叉。
+### eng-ptc 的构成
+
+[presets/eng-ptc.patch.yml](../presets/eng-ptc.patch.yml) 是 eng 的拷贝，差异恰好是上游 `ptc` 相对 `standard` 的差异，外加一个提示词开关：
+
+- 在 `present` 前加 `tool-presentation { mode: ptc }`，所有工具经 `run_code` 的 TypeScript SDK 调用（依赖宿主 `ptc-runtime` 行）；
+- `workflow-ptc` / `tool-workflow` 设为 `disabled: true`，与上游一致；
+- `eng-mode-instructions` 行带 `config: { ptc: true }`，追加「在一个 run_code 里派发多个子代理」的扇出规则（工程模式段不写 workflow 用法，eng 下以内置 workflow 说明为准）；run_code 本身的用法由内置的 `tools:sdk` / `tools:ptc-only` 段说明，不重复。
+
+本地插件直接复用 `presets/eng/plugins/*`。维护时先改 eng，再重做这几处差异；[tests/upstream-drift.test.mjs](../tests/upstream-drift.test.mjs) 同时把 eng 对齐上游 `standard`、把 eng-ptc 对齐上游 `ptc`，并断言 eng-ptc 与 eng 的差异恰为上述几处。
+
+### 工程模式提示词
+
+`eng:mode-instructions`（order 1）是两套预设共用的提示词段，`text` 是函数，每次组装时读取活配置渲染：
+
+- 通用纪律：KISS / YAGNI、检查先行、修复根因、一个连贯变更、尊重既有约定、思考不预演代码与防循环、防过度设计与过度防御（借鉴 opencode AGENTS.md 的 General Principles）、验证与汇报、权限 / Git 身份 / 依赖边界、禁止全盘搜索、命令与进程纪律。这部分原在用户级 `~/.dsh/AGENTS.md`，0.4.0 起归插件所有；AGENTS.md 只留本机约定（ws-search、find-docs、rexec）。
+- 委派与编排，以及按 `tiers.fast` / `tiers.quality` 渲染的模型分档；未配置的档位提示「省略 provider / model / reasoning_effort，沿用父会话路由」。
+- `exitGuard` 开启时追加退出守卫说明；`ptc: true` 时切换扇出规则。
+- 写法是弱约束：开头声明用户的明确指示优先。改设置会让下一次请求的提示词变化并失去一次前缀缓存。
+
+### 组装后的提示词快照
+
+[prompts/eng.md](../prompts/eng.md) 和 [prompts/eng-ptc.md](../prompts/eng-ptc.md) 是真实宿主为两套预设组装出的完整系统提示词，供人审查；不要手改，改了提示词后用下面的命令重新生成：
+
+```sh
+DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh npm run prompts
+```
+
+[scripts/render-prompts.mjs](../scripts/render-prompts.mjs) 用临时 home 启动 headless 宿主（与冒烟相同，不启动 Web 服务），设置为退出守卫关闭、分档用 `<fast-provider>` 等占位路由，渲染时去掉每次请求的运行时上下文（时间、工作目录），也不展开工具 schema；Web GUI 宿主独有的段落不在其中。[tests/prompts.test.mjs](../tests/prompts.test.mjs) 校验快照里的工程模式段与当前代码一致，忘了重新生成时普通 `npm test` 就会失败；内置段落随 DSH 版本变化，只在重新生成时更新。
+
+### 模型分档
+
+设置页的分档下拉框读取 `GET /apollo/api/routes`（[src/panel.js](../src/panel.js) 的 `collectTierRoutes`）：路由来自宿主 `subagentModelSelection.current()` 的 `allowedModels`，effort 来自 `llm.resolveModelInfo(...).reasoning`；单条解析失败只让该条 efforts 为空。白名单外的已存路由会阻止保存。分档只影响提示词，真正的路由校验仍由 `tool-subagent` 的模型选择策略执行。
 
 ### wait_subagent
 
@@ -242,7 +273,7 @@ goal 行由独立插件拥有，三个字段都是 volatile：
 行为细节：
 
 - 只接受当前 Agent 的直接子代理（depth 1）；出现未知 id 时整批快速失败，不等待任何子代理；
-- 多个 id 共享一个 `timeout_ms` 窗口；
+- 多个 id 共享一个 `timeout_ms` 窗口；传入值低于 15 分钟时自动提升到 15 分钟（子代理结束本就会通知父会话，短超时只会白白消耗回合）；
 - 刚派发、尚未启动的子代理有 30 秒启动宽限，避免误报 “not running”；
 - 用户中断会中止等待；
 - 不操作 `agent.inbox`，不吞掉中途消息或结算通知。
@@ -268,15 +299,6 @@ goal 行由独立插件拥有，三个字段都是 volatile：
 
 测试在 [tests/exit-guard.test.mjs](../tests/exit-guard.test.mjs)。
 
-### eng-noask 的实际行为
-
-`eng-noask` 与 eng 的差异是能力面的，不是提示词口号：
-
-- 不挂 `tool-ask-user`，所以会话没有 `ask_user_question` 工具；
-- mode-instructions 增加无提问纪律：不向用户提问、不以纯文本反问后停下等待；需要用户拍板时自主决策，把关键假设和被否掉的替代方案写进最终报告；
-- plan-mode 段改写为无 ask 工具版本，但仍保留 `exit_plan_mode` 的计划批准流程；
-- 用户中断和退出守卫行为与 eng 一致。
-
 ## CLI 子代理桥
 
 ### 路由与开关
@@ -288,7 +310,7 @@ CLI 桥不注册新工具；它在宿主已有的 `subagent` / `subagent_fork` /
 - `subagent_fork` 不能创建 CLI 子代理；
 - `agent_preset` 对 CLI 子代理不支持；
 - `run_in_background` 参数已移除，CLI 子代理由桥固定为后台运行；
-- `enabledIn` 判断：`subagents.global || (subagents.eng && 当前预设是 eng/eng-noask)`。当前预设优先从 `sessionProjections.stateOf(..., 'agentPreset')` 读取，取不到时退回 session header。
+- `enabledIn` 判断：`subagents.global || (subagents.eng && 当前预设是 eng/eng-ptc)`。当前预设优先从 `sessionProjections.stateOf(..., 'agentPreset')` 读取，取不到时退回 session header。
 - 工程预设的 `tool-subagent` 行声明 `modelSelectionSettings: true`；该策略在会话创建时固定，旧会话缺少 `provider` / `model` 参数时需要新建会话。
 
 ### 模型、effort 与身份
@@ -438,7 +460,7 @@ Claude 的默认登录态与显式 `CLAUDE_CONFIG_DIR` 语义不同：
 ### npm 安装
 
 ```sh
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.3.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.4.0
 ```
 
 包发布到 npm 官方 registry 后即可用此命令安装，并带入精确依赖 `dsh-better-goal@0.1.0`，同时应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。README 中的 npm 命令是发布后的安装路径；首发完成前不要宣称 registry 已有该版本。
@@ -494,7 +516,7 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 
 1. 在 Goal 仓库人工发布 `dsh-better-goal@0.1.0` tarball；发布目标必须是 `https://registry.npmjs.org/`，`access` 为 `public`。
 2. 在官方 registry 验证 `0.1.0` 已可取得（查询版本并下载 tarball），排除镜像或本地缓存造成的假象。
-3. 再人工发布 `@menghuan1918/dsh-apollo@0.3.0` tarball，同样指向 `https://registry.npmjs.org/` 且 `access` 为 `public`。
+3. 再人工发布 `@menghuan1918/dsh-apollo@0.4.0` tarball，同样指向 `https://registry.npmjs.org/` 且 `access` 为 `public`。
 4. 登录、2FA 和 publish 都由维护者在真实终端完成；OTP、token 和恢复码不得写入脚本、环境文件或仓库。
 5. 在 Goal 发布并验证通过前，不要把 Apollo 的 `package.json` 精确依赖 `0.1.0` 合并或推送到 main，否则 GitHub 源码安装会解析到尚不存在的 Goal 版本并 404。
 
@@ -632,21 +654,22 @@ node scripts/runtime-smoke.mjs
 |---|---|
 | [package.json](../package.json) | 包元数据、bundle patch 顺序、浏览器注入、运行时依赖 |
 | [cordis.patch.yml](../cordis.patch.yml) | 原生 goal 行禁用、goal 与 `apollo-skills` 顶层行 |
-| [presets/eng.patch.yml](../presets/eng.patch.yml) / [presets/eng-noask.patch.yml](../presets/eng-noask.patch.yml) | 两套预设的行清单唯一事实源 |
+| [presets/eng.patch.yml](../presets/eng.patch.yml) / [presets/eng-ptc.patch.yml](../presets/eng-ptc.patch.yml) | 两套预设的行清单唯一事实源 |
 | [presets/eng/plugins/wait-subagent/index.js](../presets/eng/plugins/wait-subagent/index.js) | `wait_subagent` 工具 |
 | [presets/eng/plugins/exit-guard/index.js](../presets/eng/plugins/exit-guard/index.js) | 退出守卫 |
-| [presets/eng/plugins/mode-instructions/index.js](../presets/eng/plugins/mode-instructions/index.js) | 工程模式提示词段 |
+| [presets/eng/plugins/mode-instructions/index.js](../presets/eng/plugins/mode-instructions/index.js) | 工程模式提示词段（纪律、委派、分档、退出守卫、PTC 变体） |
 | [src/index.js](../src/index.js) | 宿主行入口；注册技能 provider、设置与 CLI 桥 |
 | [src/config.js](../src/config.js) | 正式配置 schema、默认值、规整与活配置读取 |
 | [src/settings.js](../src/settings.js) | 设置页策略、能力路由装配、旧配置导入 |
 | [src/client.js](../src/client.js) | Plugins 浏览器表单，无构建闭包工厂 |
-| [src/panel.js](../src/panel.js) | 能力探针、模型自动发现、可执行文件 / 版本 / profile 探测、信任检查、反代 tap |
+| [src/panel.js](../src/panel.js) | 能力探针、模型自动发现、分档路由、可执行文件 / 版本 / profile 探测、信任检查、反代 tap |
 | [src/subagents.js](../src/subagents.js) | 在现有子代理工具上安装 CLI 路由与 guard |
 | [src/cli-adapter.js](../src/cli-adapter.js) | CLI 会话适配、权限与身份校验、事件流接线 |
 | [src/cli-sessions.js](../src/cli-sessions.js) | profile 范围 KV 记录、原子写与恢复 |
 | [src/cli/codex.js](../src/cli/codex.js) / [src/cli/claude.js](../src/cli/claude.js) | 命令构造与事件解析 |
 | [src/cli/jsonl.js](../src/cli/jsonl.js) | JSONL 读取、参数校验、错误脱敏 |
 | [scripts/runtime-smoke.mjs](../scripts/runtime-smoke.mjs) | 真实宿主 / CLI 冒烟脚本 |
+| [scripts/render-prompts.mjs](../scripts/render-prompts.mjs) / [prompts/](../prompts/) | 组装后的系统提示词快照及其生成脚本 |
 
 ## 许可与致谢
 
@@ -654,6 +677,6 @@ node scripts/runtime-smoke.mjs
 
 | 内容 | 来源 | 许可 |
 |---|---|---|
-| `presets/eng.patch.yml` 的 `config.plugins` 块（改编自 DSH 标准预设） | DeepSeek Harness | MIT，见 [presets/eng/NOTICE](../presets/eng/NOTICE) 与 [third-party/LICENSE-MIT-dsh-standard-preset](../third-party/LICENSE-MIT-dsh-standard-preset) |
+| `presets/eng.patch.yml` / `presets/eng-ptc.patch.yml` 的 `config.plugins` 块（改编自 DSH 标准 / PTC 预设） | DeepSeek Harness | MIT，见 [presets/eng/NOTICE](../presets/eng/NOTICE) 与 [third-party/LICENSE-MIT-dsh-standard-preset](../third-party/LICENSE-MIT-dsh-standard-preset) |
 | `skills/tdd/`、`skills/diagnosing-bugs/` | [mattpocock/skills](https://github.com/mattpocock/skills) | MIT，Copyright © 2026 Matt Pocock，见 [third-party/NOTICE-mattpocock-skills](../third-party/NOTICE-mattpocock-skills) |
 | 能力探针的请求信任边界 | dsh-better-sidebar，源自 DSH client connection | BSD-3-Clause |

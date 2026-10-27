@@ -46,10 +46,9 @@
           # ── identity ────────────────────────────────────────────────────────────────
 
           # The preset's own persona, shadowing the deployment default for this agent.
-          # One row on purpose: the rich engineering rules live in the user-global
-          # instructions (~/.dsh/AGENTS.md) and the preset's `eng:mode-instructions`
-          # section, not in the persona. `eng:mode-instructions` owns the delegation
-          # policy; the tiers stay global because they track local route config.
+          # One row on purpose: the engineering rules, delegation policy and model
+          # tiers live in the preset's `eng:mode-instructions` section, not in the
+          # persona; ~/.dsh/AGENTS.md only keeps machine-local conventions.
           # 0.2.1's upstream `standard` preset carries `prefix` only: the working-
           # directory `suffix` line it used to set is gone, and eng follows suit.
           - id: persona
@@ -116,9 +115,9 @@
           # idle owner and is restored ONLY by a user-authored message, so a long
           # unattended chain of background jobs parks after its third wake — from the
           # fourth completion on, the notice degrades to injection and waits for the
-          # user's next input. Keep this value identical in the eng-noask patch (the
-          # upstream-drift test compares same-id row configs); upstream `standard`
-          # ships no such key, and the drift test whitelists exactly this delta.
+          # user's next input. Keep this value identical in the eng-ptc patch (the
+          # upstream-drift test compares both presets against upstream with the
+          # same whitelist); upstream ships no such key.
           - id: tool-jobs
             name: '@deepseek-ai/dsh-tool-jobs'
             config:
@@ -327,15 +326,13 @@
 
           # ── mode instructions ────────────────────────────────────────────────────────
 
-          # Preset-local prompt section carrying the two eng-only rules: the exit guard
-          # contract and the delegation/orchestration policy (the latter moved out of the
-          # user-global ~/.dsh/AGENTS.md on 2026-09-11 — the model tiers stay there
-          # because they mirror this host's `subagent-model-selection` route list).
-          # Registered as a system-prompt section (order 1, right after the persona slot)
-          # so it is scoped to sessions mounted on this preset and nothing else; injected
-          # from the first request alongside the other sections.
-          # This plugins block (presets/eng.patch.yml) is the single source of truth;
-          # the 0.2.1 bundle-patch mechanism loads it straight from this file, with no
-          # boot-time copy in between.
+          # Preset-local prompt section carrying the engineering discipline (moved out
+          # of the user-global ~/.dsh/AGENTS.md), the delegation policy, the model
+          # tiers rendered from Apollo settings (`tiers.*`), and the exit guard
+          # contract when that switch is on. Registered as a system-prompt section
+          # (order 1, right after the persona slot) so it is scoped to sessions
+          # mounted on this preset; its text is re-rendered per request from the live
+          # Apollo config. `ptc: true` (set by eng-ptc) adds the rule for fanning
+          # out subagents inside one run_code program.
           - id: eng-mode-instructions
             name: '@menghuan1918/dsh-apollo/presets/eng/plugins/mode-instructions/index.js'

@@ -1,6 +1,6 @@
 {
   "name": "@menghuan1918/dsh-apollo",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "DSH plugin: 流程技能、工程模式、Codex/Claude 可续接子代理与统一设置。纯 ESM，无构建步骤。",
   "license": "GPL-3.0-or-later",
   "repository": {
@@ -20,7 +20,8 @@
     "dsh": ">=0.2.1-rc.2 <0.3.0"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "prompts": "node scripts/render-prompts.mjs"
   },
   "files": [
     "src",
@@ -62,7 +63,7 @@
       "patch": [
         "./cordis.patch.yml",
         "./presets/eng.patch.yml",
-        "./presets/eng-noask.patch.yml"
+        "./presets/eng-ptc.patch.yml"
       ]
     },
     "client": {

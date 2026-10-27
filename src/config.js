@@ -12,8 +12,8 @@
  *     声明，改动会让 Loader 正常重挂本行（重挂才需要重新读）。
  *
  * 可编辑范围（volatile，即 dsh-settings 投影出的行配置表单字段）：
- * `exitGuard`、`subagents.eng`、`subagents.global`、`subagents.codex.*`、
- * `subagents.claude.*`。表单写入只能落在 volatile 路径上（dsh-settings 会拒绝
+ * `exitGuard`、`tiers.fast`、`tiers.quality`、`subagents.eng`、`subagents.global`、
+ * `subagents.codex.*`、`subagents.claude.*`。表单写入只能落在 volatile 路径上（dsh-settings 会拒绝
  * 其他路径），所以部署标志不会从网页上被改写。
  *
  * 持久化：DSH 的 configEditor 把表单写入落到活动 profile 的 cordis.patch.yml
@@ -94,6 +94,16 @@ function backendSchema(spec) {
   return z.object(dict).volatile()
 }
 
+/** 子代理模型分档的一档：provider/model 为空表示沿用父会话路由。 */
+const TierSchema = z.object({
+  provider: z.string().default(''),
+  model: z.string().default(''),
+  reasoningEffort: z.string().default(''),
+}).volatile()
+
+/** 分档名（提示词按此顺序渲染）。 */
+export const TIER_NAMES = Object.freeze(['fast', 'quality'])
+
 /**
  * 本插件行的正式配置 schema。
  *
@@ -104,9 +114,14 @@ function backendSchema(spec) {
 export const Config = z.object({
   /** 退出守卫总开关（默认关闭，显式开启才拦回合结束）。 */
   exitGuard: z.boolean().default(false).volatile(),
+  /** 子代理模型分档（工程模式提示词按此渲染；路由须在 allowedModels 白名单内）。 */
+  tiers: z.object({
+    fast: TierSchema,
+    quality: TierSchema,
+  }),
   /** 子代理 CLI 后端的接入范围与每后端配置。 */
   subagents: z.object({
-    /** 工程模式预设（`eng`/`eng-noask`）可见这些后端。 */
+    /** 工程模式预设（`eng`/`eng-ptc`）可见这些后端。 */
     eng: z.boolean().default(true).volatile(),
     /** 所有预设可见这些后端。 */
     global: z.boolean().default(false).volatile(),
@@ -212,20 +227,31 @@ function backendOf(value, spec) {
   return backend
 }
 
+/** 一档读取：provider 或 model 任一为空则整档清空（= 沿用父会话路由）。 */
+function tierOf(value) {
+  const source = isRecord(value) ? value : {}
+  const provider = stringOf(source.provider, '')
+  const model = stringOf(source.model, '')
+  if (provider === '' || model === '') return { provider: '', model: '', reasoningEffort: '' }
+  return { provider, model, reasoningEffort: stringOf(source.reasoningEffort, '') }
+}
+
 /**
  * 把任意配置来源规整成普通 JSON（形状 EXACT，非法值回退默认）。
  *
  * 输入可以是 `entry.fiber.config`（volatile 字段是引用对象）、旧 JSON 文档、
  * 残缺对象或 `undefined`；返回值总是全新的、可安全改写的普通对象。
  * @param config - 任意配置值。
- * @returns `{ exitGuard, subagents: { eng, global, codex, claude }, trustedHosts, declareOwnsHost }`。
+ * @returns `{ exitGuard, tiers: { fast, quality }, subagents: { eng, global, codex, claude }, trustedHosts, declareOwnsHost }`。
  */
 export function normalizeConfig(config) {
   const projected = plain(config)
   const source = isRecord(projected) ? projected : {}
   const subagents = isRecord(source.subagents) ? source.subagents : {}
+  const tiers = isRecord(source.tiers) ? source.tiers : {}
   return {
     exitGuard: booleanOf(source.exitGuard, false),
+    tiers: { fast: tierOf(tiers.fast), quality: tierOf(tiers.quality) },
     subagents: {
       eng: booleanOf(subagents.eng, true),
       global: booleanOf(subagents.global, false),

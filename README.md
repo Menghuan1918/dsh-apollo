@@ -32,7 +32,7 @@ Apollo 是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)�
 flowchart TB
     A["dsh-apollo<br/>插件集合入口"]
     A --> S["流程技能<br/>拆 Spec · 并行 · 审查"]
-    A --> E["工程模式<br/>eng / eng-noask"]
+    A --> E["工程模式<br/>eng / eng-ptc"]
     A --> C["CLI 后台任务<br/>Codex / Claude"]
     A -. 自动包含 .-> G["dsh-better-goal<br/>独立长期目标插件"]
 ```
@@ -42,7 +42,7 @@ flowchart TB
 | 模块 | 入口 | 提供什么 |
 |---|---|---|
 | 流程技能 | 会话内用 `/技能名` 或按描述自动选用 | 把大任务拆成可验证的 Spec，按波次实现、审查、验证后合入 |
-| 工程预设 | 预设选择器：`eng` / `eng-noask` | 工程纪律、后台工作约定、可选退出守卫，以及同一个长期目标 |
+| 工程预设 | 预设选择器：`eng` / `eng-ptc` | 工程纪律、委派约定、子代理模型分档、可选退出守卫，以及同一个长期目标 |
 | CLI 后台任务 | **Plugins → @menghuan1918/dsh-apollo**；在会话里直接派发 | 让本机 Codex / Claude 在后台执行子任务，结果回到父会话 |
 | 长期目标（独立 `dsh-better-goal`） | **Plugins → @menghuan1918/dsh-apollo → `dsh-better-goal` 行** + `/goal` | 每个会话一个持久目标；执行步骤单独跟踪 |
 
@@ -51,7 +51,7 @@ flowchart TB
 | 技能 | 用途 |
 |---|---|
 | `/brainstorming` | 把大型需求设计为获批的主 Spec 与子 Spec |
-| `/exec` | 按依赖分波：worktree → 并行实现 → 审查 → 验证与合并 |
+| `/exec` | 按依赖分波：worktree → 并行子代理实现 → 审查 → 验证与合并 |
 | `/dev` | 实现与审查节点的 prompt、报告结构与失败契约 |
 | `/main-agent-driven-development` | 实现一个边界明确的单个任务 |
 | `/tdd` | 测试先行、红绿循环、测试边界与反模式 |
@@ -65,8 +65,10 @@ flowchart TB
 
 | 预设（ID） | 适合 | 关键差异 |
 |---|---|---|
-| 工程模式 — `eng` | 需要偶尔向用户确认的编码 / 基础设施任务 | 可以向你提问；带可选退出守卫 |
-| 工程模式(无提问) — `eng-noask` | 无人值守、希望一次跑完的任务 | 与 eng 相同，但没有提问渠道；自主决策并写明关键假设 |
+| 工程模式 — `eng` | 编码 / 基础设施任务 | 原生工具调用；保留 workflow 工具，用法以内置说明为准 |
+| 工程(PTC)模式 — `eng-ptc` | 多步、循环、需要过滤汇总的任务 | 工具经 `run_code` 的 TypeScript SDK 调用，一个程序组合多步；与官方 PTC 模式一致不提供 workflow，扇出改为在一个 `run_code` 里派发多个子代理 |
+
+两套预设共用同一段工程模式提示词（KISS、证据先行、修复根因、防过度设计与过度防御、权限与依赖边界、命令与进程纪律、委派与编排），并按设置渲染子代理模型分档。提示词是弱约束：用户的明确指示优先。最终组装出的完整提示词见 [prompts/eng.md](prompts/eng.md) 与 [prompts/eng-ptc.md](prompts/eng-ptc.md)。
 
 两套预设都不提供自动化任务工具：工程模式会话内不能创建或修改自动化任务，侧栏「自动化任务」页和其他预设不受影响。退出守卫默认关闭，只检查本会话仍运行的后台工作，不管理 pm2、systemd、nohup 等外部进程。
 
@@ -84,7 +86,7 @@ flowchart TB
 
 ```sh
 # npm 安装（推荐）
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.3.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.4.0
 
 # 或从 GitHub main 源码安装（备选）
 dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
@@ -98,10 +100,12 @@ npm 包页面：[`@menghuan1918/dsh-apollo`](https://www.npmjs.com/package/@meng
 
 ```sh
 dsh plugin --profile <profile> remove dsh-apollo
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.3.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.4.0
 ```
 
 > `dsh-apollo` 只是旧入口名；unscoped 的 `dsh-apollo` 已被其他项目占用，不要从 npm 安装它。
+
+> **0.4.0 破坏性变更**：删除了 `eng-noask`（工程模式(无提问)）预设，之前用它开的会话不能再按原预设恢复，请改用 `eng` 或 `eng-ptc` 新建会话。
 
 ## CLI 后台任务
 
@@ -171,16 +175,19 @@ flowchart TB
 
 ## 设置与权限
 
-打开 **Plugins → @menghuan1918/dsh-apollo → `apollo-skills` 行** 修改技能、CLI 和退出守卫设置；目标设置在同页的 `dsh-better-goal` 行。保存后即时生效。
+打开 **Plugins → @menghuan1918/dsh-apollo → `apollo-skills` 行** 修改模型分档、CLI 和退出守卫设置；目标设置在同页的 `dsh-better-goal` 行。保存后即时生效。
 
 | 设置 | 默认 | 说明 |
 |---|---|---|
 | `exitGuard` | `false` | 退出守卫；开启后在回合结束时拦下仍在运行的后台工作，用户中断始终放行 |
-| `subagents.eng` | `true` | 在 `eng` / `eng-noask` 中接入 CLI 后台任务 |
+| `tiers.fast` / `tiers.quality` | 空（沿用父会话路由） | 子代理快速档（探索、侦察、批量排查）与质量档（复杂实现、调试、审查、设计）的 provider / model / effort；从「子代理 → 模型选择」白名单下拉选择，写进工程模式提示词 |
+| `subagents.eng` | `true` | 在 `eng` / `eng-ptc` 中接入 CLI 后台任务 |
 | `subagents.global` | `false` | 在所有具备所需工具和服务的预设中接入 |
 | `codex.enabled` / `claude.enabled` | `false` | 启用对应 CLI 后端 |
 | `executable` | `codex` / `claude` | PATH 命令名、绝对路径或 `~/` 路径 |
 | `defaultModel` / `models` | 空 / `[]` | 启用前至少配置一个模型、默认模型和匹配的 effort；可用「自动发现模型」从本机 CLI 或 Anthropic 端点补齐 |
+
+模型分档要生效，需先在 **Plugins → 子代理 → 模型选择** 开启模型选择并把路由加入白名单；设置页只能选白名单内的路由，未开启时会提示。模型选择策略在会话创建时记录，改白名单只影响新会话；分档本身改完下一次请求即生效。
 
 权限档见下表；模型 ID、effort 和 profile 以 CLI 与账户实际支持为准，自动发现读到的清单也受同一限制。表单会阻止不完整组合，手写配置虽可装载，但调用时会失败。
 
@@ -222,9 +229,9 @@ flowchart TB
 
 </details>
 
-<details><summary>无提问模式会停下来等我吗？</summary>
+<details><summary>eng 和 eng-ptc 怎么选？</summary>
 
-常规执行不会。`eng-noask` 没有提问渠道，也不能用纯文本反问后停下等待；需要拍板时它自主决策，并把关键假设和被否掉的替代方案写进最终报告。计划模式仍需要你批准计划，用户中断也始终有效；退出守卫开启时，运行中的后台工作仍会让回合继续。
+默认用 `eng`。任务里有大量「读多个文件 → 过滤 → 汇总」或循环式操作时用 `eng-ptc`：模型写一个 `run_code` 程序一次完成，中间结果不进上下文。`eng-ptc` 没有 workflow 工具；`/exec` 用 `subagent` + `wait_subagent` 编排，两种模式都能用。两者的纪律、分档、CLI 后台任务和退出守卫一致。
 
 </details>
 
@@ -244,4 +251,4 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 
 ## 许可与致谢
 
-本包采用 **GPL-3.0-or-later**，见 [LICENSE](LICENSE)。工程预设改编自 DeepSeek Harness 的 MIT 标准预设（[eng 声明](presets/eng/NOTICE)、[eng-noask 声明](presets/eng-noask/NOTICE)、[MIT 许可](third-party/LICENSE-MIT-dsh-standard-preset)）；`tdd` / `diagnosing-bugs` 改编自 [mattpocock/skills](https://github.com/mattpocock/skills)（[第三方声明](third-party/NOTICE-mattpocock-skills)）；能力探针的请求信任边界改编自 dsh-better-sidebar，源自 BSD-3-Clause 的 DSH client connection 实现。
+本包采用 **GPL-3.0-or-later**，见 [LICENSE](LICENSE)。工程预设改编自 DeepSeek Harness 的 MIT 标准预设与 PTC 预设（[预设声明](presets/eng/NOTICE)、[MIT 许可](third-party/LICENSE-MIT-dsh-standard-preset)）；`tdd` / `diagnosing-bugs` 改编自 [mattpocock/skills](https://github.com/mattpocock/skills)（[第三方声明](third-party/NOTICE-mattpocock-skills)）；能力探针的请求信任边界改编自 dsh-better-sidebar，源自 BSD-3-Clause 的 DSH client connection 实现。

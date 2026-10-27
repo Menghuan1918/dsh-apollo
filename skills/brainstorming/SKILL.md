@@ -1,90 +1,90 @@
 ---
 name: brainstorming
-description: "把大型需求设计为多个协同 Spec。仅当用户显式调用 /brainstorming，或要求把大型任务拆分为可执行 Spec 时使用。"
+description: "Design large requirements as multiple cooperating Specs. Use only when the user explicitly invokes /brainstorming, or asks to split a large task into executable Specs."
 ---
 
-# 大型任务头脑风暴
+# Brainstorming Large Tasks
 
-把大型需求整理为一个获批的主 Spec 和至少两个可执行子 Spec。保持 KISS：只沿真实的职责、依赖或验证边界拆分。
+Turn a large requirement into one approved master Spec and at least two executable sub-Specs. Stay KISS: split only along real responsibility, dependency, or verification boundaries.
 
-**终态是交接给 `/exec`。** 不得实现功能、创建 worktree 或调用开发技能。用户批准书面 Spec 后停止。
+**The end state is a handoff to `/exec`.** Do not implement features, create worktrees, or invoke development skills. Stop once the user approves the written Specs.
 
-## 流程
+## Process
 
-1. **探索项目上下文** — 检查文件、文档和当前项目状态。事实自己查，不问用户。
-2. **逐一提问** — 每条消息只问一个决策问题，系统遍历设计树，每个问题以推荐答案开头。区分事实（自行查明）与决策（用户定夺）。详见下文提问规则。
-3. **给出 2-3 个方案** — 含权衡和推荐，以推荐方案开头。
-4. **分段展示设计** — 按复杂度决定每段长度，每段取得用户确认。需拆分时展示拆分方案（主 Spec + 子 Spec、依赖顺序、共享契约、集成验收）。
-5. **写入全部 Spec** — 写盘后自审（占位符、矛盾、歧义、过度细节），内联修复。详见下文自审。
-6. **派 spec-reviewer 审查** — 按 [`spec-document-reviewer-prompt.md`](spec-document-reviewer-prompt.md) 派一个全新只读 `subagent`（质量档 = 本会话最强模型）审查主 Spec 与全部子 Spec；修复阻塞项，必要时复派。
-7. **请用户审阅** — 按反馈修改直至批准。
-8. **交接给 `/exec`** — 告知用户用主 Spec 路径调用 `/exec`。
+1. **Explore project context** — inspect files, docs, and current project state. Look up facts yourself; do not ask the user.
+2. **Ask one question at a time** — one decision question per message, walking the design tree systematically, each question led by a recommended answer. Separate facts (look up yourself) from decisions (the user's call). See the question rules below.
+3. **Offer 2-3 options** — with tradeoffs and a recommendation, leading with the recommended option.
+4. **Present the design in sections** — scale each section's length to its complexity, and get the user's confirmation on each. When a split is needed, present it (master Spec + sub-Specs, dependency order, shared contracts, integration acceptance).
+5. **Write all Specs** — self-review after writing (placeholders, contradictions, ambiguity, over-detail) and fix inline. See self-review below.
+6. **Dispatch a spec-reviewer** — per [`spec-document-reviewer-prompt.md`](spec-document-reviewer-prompt.md), dispatch a fresh read-only `subagent` (quality tier) to review the master Spec and all sub-Specs; fix blockers and re-dispatch if needed.
+7. **Ask the user to review** — revise per feedback until approved.
+8. **Hand off to `/exec`** — tell the user to invoke `/exec` with the master Spec path.
 
-完成标准：主 Spec + 全部子 Spec 已写入磁盘，用户已批准，已给出 `/exec` 调用方式。
+Done when: the master Spec and all sub-Specs are on disk, the user has approved them, and the `/exec` invocation has been given.
 
-## 提问规则
+## Question rules
 
-- **每条消息只问一个问题。** 等用户反馈再继续。一次问多个会导致混乱。
-- **给出推荐答案。** 附推理，用户可接受、拒绝或修改。
-- **事实 vs 决策。** 事实查代码库或文档获得，不问用户；决策展示给用户等待回答。
-- **优先多选题**，开放式问题也可以。
-- **聚焦理解：** 目标、约束、成功标准、架构、错误处理、测试。
+- **One question per message.** Wait for the answer before continuing. Asking several at once causes confusion.
+- **Lead with a recommended answer.** Include the reasoning; the user can accept, reject, or amend it.
+- **Facts vs decisions.** Get facts from the codebase or docs; never ask the user. Present decisions to the user and wait for an answer.
+- **Prefer multiple choice**, though open-ended questions are fine too.
+- **Focus on understanding:** goals, constraints, success criteria, architecture, error handling, testing.
 
-共识达成前不写 Spec。后续答案改变前提时，回头修正既有决定。
+Do not write Specs before consensus. When a later answer changes a premise, go back and fix earlier decisions.
 
-## 设计粒度
+## Design granularity
 
-子 Spec 定义**做什么和为什么**，以及独立实现和验证所需的边界。不是实现食谱。（主 Spec 不在此列——它只是目标 + 索引，见拆分准则。）
+A sub-Spec defines **what and why**, plus the boundaries needed to implement and verify it independently. It is not an implementation recipe. (The master Spec is exempt — it is just goal + index; see the split guidance.)
 
-- 包含目标、范围、关键决策、组件职责、交互、外部可观察行为、错误语义、验收标准、测试范围。
-- 把局部编码选择留给实现。不含代码、伪代码、私有类型设计、逐文件修改清单、分步指令。
-- 精确的公共契约（API 路由、共享 schema、配置键）仅在兼容性或迁移依赖时写入。
+- Include goals, scope, key decisions, component responsibilities, interactions, externally observable behavior, error semantics, acceptance criteria, and test scope.
+- Leave local coding choices to implementation. No code, pseudocode, private type design, per-file change lists, or step-by-step instructions.
+- Write exact public contracts (API routes, shared schemas, config keys) only when compatibility or migration depends on them.
 
-## 拆分准则
+## Split guidance
 
-主 Spec 只承载总目标 + 索引（见下文多 Spec 结构），不承载任何具体执行内容。**鼓励多写子 Spec**——任务有几个独立单元就拆几个，下限两个，但更细的拆分只要每个子 Spec 仍能独立实现、独立验证就值得。每个子 Spec 必须能独立实现、独立测试，适合独立的 Spec → 实现周期。
+The master Spec carries only the overall goal + index (see Multi-Spec structure below), never any concrete execution content. **Lean toward more sub-Specs** — split as many as the task has independent units, with two as the floor; finer splits are worth it as long as each sub-Spec can still be implemented and verified independently. Every sub-Spec must be independently implementable and testable, suited to its own Spec → implementation cycle.
 
-**拆分有价值时：** 任务确实复杂，有多个独立子系统或可并行轨道；每个子 Spec 接口清晰；拆分提升清晰度而非仅为并行。
+**Splitting pays off when:** the task is genuinely complex, with multiple independent subsystems or parallel tracks; each sub-Spec has a clear interface; and the split improves clarity rather than just enabling parallelism.
 
-**过度拆分信号：** 子 Spec 间循环依赖；无法独立验证；共享契约多处不一致；拆出无独立职责的子 Spec。
+**Signals of over-splitting:** circular dependencies between sub-Specs; nothing can be verified independently; shared contracts diverge in several places; sub-Specs carved out with no independent responsibility.
 
-质量优先于并行——为清晰而拆分，不仅为了并行执行。
+Quality over parallelism — split for clarity, not just for parallel execution.
 
-## 多 Spec 结构
+## Multi-Spec structure
 
-### 主 Spec
+### Master Spec
 
-**只做总目标 + 索引，不承载执行。** 内容限于：总目标、范围与非目标、子 Spec 索引（每个子 Spec 一行：职责 + 路径）、依赖 DAG 与并行分组、整体验收的指向。关键决策、共享契约、组件职责、交互、错误语义等具体内容一律下沉到子 Spec；主 Spec 只指明每个契约由哪个子 Spec 定义/拥有。不得在主 Spec 里实现任何东西。
+**Only the overall goal + index, no execution content.** Confined to: overall goal, scope and non-goals, sub-Spec index (one line per sub-Spec: responsibility + path), dependency DAG and parallel groups, and a pointer to overall acceptance. Push all concrete content — key decisions, shared contracts, component responsibilities, interactions, error semantics — down to the sub-Specs; the master Spec only names which sub-Spec defines/owns each contract. Never implement anything in the master Spec.
 
-### 子 Spec
+### Sub-Spec
 
-独立实现、审查、测试和提交所需：边界明确的目标、范围内/外行为、依赖、输入输出和共享契约、错误语义、验收标准、聚焦验证范围、指向主 Spec 的链接。不复制主 Spec，只带入执行所需契约。
+What independent implementation, review, testing, and commit need: a boundary-clear goal, in-scope/out-of-scope behavior, dependencies, inputs/outputs and shared contracts, error semantics, acceptance criteria, a focused verification scope, and a link back to the master Spec. Do not copy the master Spec; carry over only the contracts execution needs.
 
-## 文件布局
+## File layout
 
-落盘位置按工作区实际情况择一，不要两处都写：
+Pick one landing location based on the actual workspace; do not write to both:
 
 ```text
-<工作区>/.workspace-docs/specs/MM-DD-<主题>-主设计/   # 工作区有 .workspace-docs/ 时用它
-<目标仓库>/docs/specs/MM-DD-<主题>-主设计/             # 否则用目标仓库自己的 specs 目录
-├── MM-DD-<主题>-主设计.md
-├── MM-DD-<主题>-<子任务A>-设计.md
-└── MM-DD-<主题>-<子任务B>-设计.md
+<workspace>/.workspace-docs/specs/MM-DD-<topic>-master-design/    # when the workspace has .workspace-docs/
+<target-repo>/docs/specs/MM-DD-<topic>-master-design/             # otherwise the target repo's own specs directory
+├── MM-DD-<topic>-master-design.md
+├── MM-DD-<topic>-<subtask-A>-design.md
+└── MM-DD-<topic>-<subtask-B>-design.md
 ```
 
-- 主 Spec 与子 Spec 双向链接。
-- 目录内已有其它 Spec 时，沿用其文件名与头格式，不引入第二套约定。
-- 写入 `.workspace-docs/` 时每篇带 OKF 头部（`type: Design Spec`、`title`、`description`、`tags`、`status`、`repos`）；提交推送遵循该仓库自己的 `AGENTS.md`。目标仓库无此约定时用仓库现有文档格式，不新造 OKF。
+- Link master Spec and sub-Specs to each other in both directions.
+- When the directory already holds other Specs, follow their file naming and header format; do not introduce a second convention.
+- When writing under `.workspace-docs/`, give every file an OKF header (`type: Design Spec`, `title`, `description`, `tags`, `status`, `repos`); committing and pushing follow that repo's own `AGENTS.md`. Where the target repo has no such convention, use its existing doc format and do not invent OKF.
 
-## 自审
+## Self-review
 
-写入后用新鲜眼光检查：占位符（`TODO`/`TBD`）、内部一致性、范围聚焦、歧义、过度细节。内联修复全部问题。这是自己先过一遍；随后派 spec-reviewer 子代理做独立审查（流程第 6 步）。
+After writing, check with fresh eyes: placeholders (`TODO`/`TBD`), internal consistency, scope focus, ambiguity, over-detail. Fix everything inline. This is your own first pass; a spec-reviewer subagent then does the independent review (process step 6).
 
-## 可视化辅助
+## Visual aids
 
-当展示优于讲述（mockup、布局、架构图、方案对比）时，写一个自包含 HTML 到系统临时目录（`$TMPDIR`，未设置时 `/tmp`），文件名 `brainstorm-<主题>-<序号>.html`：
+When showing beats telling (mockups, layouts, architecture diagrams, option comparisons), write a self-contained HTML file to the system temp directory (`$TMPDIR`, or `/tmp` when unset), named `brainstorm-<topic>-<n>.html`:
 
-- 用 write 工具写完整文档：内联 CSS、无外部依赖、无脚本、无服务；每页 2-4 个选项或变体。
-- 文件名不复用；迭代就写新文件（`-2`、`-3`）。
-- 告知用户文件路径（DSH 界面可直接打开预览），并用一两句话概括页面内容；用户看后回到对话作答，不采集点击。
-- 每个问题独立判断是否需要可视化；概念性选择（A/B/C 方案、取舍清单）留在对话里。
+- Write the complete document with the write tool: inline CSS, no external dependencies, no scripts, no server; 2-4 options or variants per page.
+- Never reuse a file name; for iterations write a new file (`-2`, `-3`).
+- Tell the user the file path (the DSH UI can open it for preview directly) and summarize the page in one or two sentences; the user looks, then answers back in the conversation — clicks are not collected.
+- Decide per question whether a visual helps; keep conceptual choices (A/B/C options, tradeoff lists) in the conversation.

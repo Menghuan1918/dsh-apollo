@@ -25,6 +25,8 @@
  *
  * `timeout_ms` is ONE shared window over the whole batch (all timers start at
  * the same instant), matching the semantics same-message parallel calls had.
+ * Values below MIN_TIMEOUT_MS (15 minutes) are raised to it: short polling
+ * waits only burned turns, since a finishing child notifies the parent anyway.
  * An id that is not a direct child fails the whole call fast — nobody is
  * waited for — keeping the contract the single-id version had. A child
  * dispatched moments ago may not have started its first turn yet: its status
@@ -48,6 +50,9 @@ export const inject = ['tools', 'subagents', 'agents']
 /** Grace window for a just-dispatched child that has not started running yet. */
 const START_GRACE_MS = 30_000
 
+/** Floor for a caller-supplied timeout_ms (15 minutes). */
+const MIN_TIMEOUT_MS = 15 * 60_000
+
 /** Status polling interval while waiting for a not-yet-started child. */
 const POLL_MS = 250
 
@@ -70,7 +75,7 @@ export function apply(ctx) {
 
   ctx.tools.register({
     name: 'wait_subagent',
-    description: 'Wait for one or more background continuable subagents (spawned by subagent or subagent_fork) to finish their current turn. Pass their durable ids as an array in subagent_id — all are awaited concurrently and the result carries one short line per id (done + stop reason); a child\'s closing message arrives as the framework settlement notice immediately after this result; do not expect it here. Blocks until every listed child settles, the optional timeout_ms elapses (one shared window over all ids), or the user interrupts — without timeout_ms, until completion. A just-dispatched child that has not started yet is awaited through a brief startup grace rather than reported as not running. Use it when your next step depends on those results; with independent work remaining, prefer background plus completion notices. Do not pass bash job ids — those use job_output.',
+    description: 'Wait for direct subagents (from subagent or subagent_fork) to finish their current turn. Pass every id in subagent_id; all are awaited together and each gets one done line, while its closing message arrives as the settlement notice right after. Use it when your next step needs the results, instead of messaging the child to check on it. Not for bash jobs (use job_output).',
     parameters: {
       type: 'object',
       properties: {
@@ -78,11 +83,11 @@ export function apply(ctx) {
           type: 'array',
           items: { type: 'string' },
           minItems: 1,
-          description: 'One or more durable subagent ids returned by the subagent or subagent_fork tool call; every id is awaited concurrently.',
+          description: 'Durable ids returned by subagent or subagent_fork.',
         },
         timeout_ms: {
           type: 'integer',
-          description: 'Optional maximum wait in milliseconds applied as one shared window over all ids; omit to wait until every child settles. On expiry the tool returns while some children are still running.',
+          description: 'Optional shared wait window in ms; values below 900000 (15 minutes) are raised to 900000. Omit to wait until every child settles.',
         },
       },
       required: ['subagent_id'],
@@ -123,7 +128,7 @@ export function apply(ctx) {
       const doneLine = (id, info) => `subagent ${id} done (${info && info.stopReason ? info.stopReason : 'completed'}); its closing message follows as the settlement notice.`
 
       const startedAt = Date.now()
-      const capMs = typeof args.timeout_ms === 'number' && args.timeout_ms > 0 ? args.timeout_ms : undefined
+      const capMs = typeof args.timeout_ms === 'number' && args.timeout_ms > 0 ? Math.max(args.timeout_ms, MIN_TIMEOUT_MS) : undefined
 
       /**
        * Wait for one child. Resolves with {kind:'settled',info} |

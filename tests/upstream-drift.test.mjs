@@ -9,7 +9,9 @@ import yaml from 'js-yaml'
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url))
 const ENG = join(ROOT, 'presets/eng.patch.yml')
-const NOASK = join(ROOT, 'presets/eng-noask.patch.yml')
+const PTC = join(ROOT, 'presets/eng-ptc.patch.yml')
+// Each Apollo preset is aligned with the upstream preset it is a copy of.
+const PAIRS = [[ENG, 'standard.patch.yml'], [PTC, 'ptc.patch.yml']]
 const ownRows = [
   ['tool-wait-subagent', '@menghuan1918/dsh-apollo/presets/eng/plugins/wait-subagent/index.js'],
   ['eng-exit-guard', '@menghuan1918/dsh-apollo/presets/eng/plugins/exit-guard/index.js'],
@@ -63,10 +65,10 @@ function dshLayout(t) {
   const required = process.env.DSH_PACKAGE_ROOT !== undefined
   if (root) {
     const require = createRequire(join(root, 'package.json'))
-    let patch
+    let presets
     let semver
     try {
-      patch = join(dirname(require.resolve('@deepseek-ai/dsh-web-app/package.json')), 'presets/standard.patch.yml')
+      presets = join(dirname(require.resolve('@deepseek-ai/dsh-web-app/package.json')), 'presets')
       semver = require('semver')
     } catch (error) {
       if (required) throw new Error('指定的 DSH 安装缺少验证依赖', { cause: error })
@@ -75,9 +77,9 @@ function dshLayout(t) {
     const compatible = semver?.satisfies(version, manifest().engines.dsh)
     if (required) {
       assert.ok(compatible, `指定的 DSH ${version} 不满足 ${manifest().engines.dsh}`)
-      assert.ok(patch && existsSync(patch), '指定的 DSH 安装缺少 standard.patch.yml 基准')
+      for (const [, file] of PAIRS) assert.ok(presets && existsSync(join(presets, file)), `指定的 DSH 安装缺少 ${file} 基准`)
     }
-    if (compatible && patch && existsSync(patch)) return { root, patch, require, semver, version }
+    if (compatible && presets && PAIRS.every(([, file]) => existsSync(join(presets, file)))) return { root, presets, require, semver, version }
   }
   t.skip('未发现满足 engines.dsh 的本机 DSH 安装；显式设置 DSH_PACKAGE_ROOT 可启用验证')
 }
@@ -107,7 +109,7 @@ function assertStandard(eng, standard) {
 }
 
 test('两份预设 patch 结构合法：身份稳定、bundle 引用唯一、无第二份行清单', () => {
-  for (const [file, id, order] of [[ENG, 'eng', 10], [NOASK, 'eng-noask', 11]]) {
+  for (const [file, id, order] of [[ENG, 'eng', 10], [PTC, 'eng-ptc', 11]]) {
     const patches = document(file)
     assert.equal(patches.length, 1)
     assert.equal(patches[0].insert.length, 1)
@@ -117,20 +119,22 @@ test('两份预设 patch 结构合法：身份稳定、bundle 引用唯一、无
     assert.ok(Array.isArray(preset.config.plugins) && preset.config.plugins.length)
     for (const legacy of ['agent.cordis.yml', 'preset.yml']) assert.equal(existsSync(join(ROOT, 'presets', id, legacy)), false)
   }
-  assert.deepEqual(manifest().dsh.bundle.patch, ['./cordis.patch.yml', './presets/eng.patch.yml', './presets/eng-noask.patch.yml'])
+  assert.deepEqual(manifest().dsh.bundle.patch, ['./cordis.patch.yml', './presets/eng.patch.yml', './presets/eng-ptc.patch.yml'])
 })
 
-test('eng 预设与上游 standard 完整对齐，差异只有声明的加法、剔除与调参', (t) => {
+test('eng / eng-ptc 分别与上游 standard / ptc 完整对齐，差异只有声明的加法、剔除与调参', (t) => {
   const layout = dshLayout(t)
   if (!layout) return
-  const eng = rowsOf(ENG)
-  const standard = rowsOf(layout.patch)
-  const upstream = identities(standard)
-  for (const [id, name] of droppedRows) {
-    assert.ok(upstream.some(([rowId, rowName]) => rowId === id && rowName === name), `剔除行必须仍存在于上游 standard：${id}`)
+  for (const [file, base] of PAIRS) {
+    const eng = rowsOf(file)
+    const standard = rowsOf(join(layout.presets, base))
+    const upstream = identities(standard)
+    for (const [id, name] of droppedRows) {
+      assert.ok(upstream.some(([rowId, rowName]) => rowId === id && rowName === name), `剔除行必须仍存在于上游 ${base}：${id}`)
+    }
+    assert.deepEqual(identities(eng).filter(([id]) => !upstream.some(([reference]) => reference === id)), ownRows, base)
+    assertStandard(eng, standard)
   }
-  assert.deepEqual(identities(eng).filter(([id]) => !upstream.some(([reference]) => reference === id)), ownRows)
-  assertStandard(eng, standard)
 })
 
 test('配置比较拒绝额外嵌套键和伪装成 pruner 调参的其他行', () => {
@@ -162,24 +166,22 @@ test('原生 goal 行仍存在于基准安装的 host 组成中', (t) => {
   assert.ok(web.some(([rowId, rowName]) => rowId === 'ui-goal' && rowName === '@deepseek-ai/dsh-client-ui-goal'), '基准安装的 dsh-web-app 必须仍有原生行：ui-goal')
 })
 
-test('eng-noask 恰为 eng 删除 ask 工具并改写提问纪律', () => {
-  const eng = rowsOf(ENG)
-  const noask = structuredClone(rowsOf(NOASK))
-  const asEngPath = (value) => value.replace('@menghuan1918/dsh-apollo/presets/eng-noask/', '@menghuan1918/dsh-apollo/presets/eng/')
-  for (const row of flatten(noask)) {
-    if (row.name) row.name = asEngPath(row.name)
-    if (row.id === 'plan-mode') {
-      assert.equal(row.config.section.includes('ask_user_question'), false)
-      row.config.section = flatten(eng).find((item) => item.id === 'plan-mode').config.section
-    }
+test('eng-ptc 恰为 eng + PTC 呈现 + 禁用 workflow + mode-instructions ptc 开关', () => {
+  const expected = structuredClone(rowsOf(ENG))
+  for (const row of flatten(expected)) {
+    if (row.id === 'workflow-ptc' || row.id === 'tool-workflow') row.disabled = true
+    if (row.id === 'eng-mode-instructions') row.config = { ptc: true }
   }
-  assert.deepEqual(noask, eng.filter((row) => row.id !== 'tool-ask-user'))
+  expected.splice(expected.findIndex((row) => row.id === 'present'), 0, {
+    id: 'tool-presentation', name: '@deepseek-ai/dsh-agent-tool-presentation', config: { mode: 'ptc' },
+  })
+  assert.deepEqual(rowsOf(PTC), expected)
 })
 
 test('两份 patch 的完整模块导出子路径在目标 DSH 安装中均可解析', (t) => {
   const layout = dshLayout(t)
   if (!layout) return
-  for (const file of [ENG, NOASK]) {
+  for (const file of [ENG, PTC]) {
     const names = [declaration(file).name, ...flatten(rowsOf(file)).map((row) => row.name).filter((name) => name?.startsWith('@deepseek-ai/'))]
     assert.ok(names.includes('@deepseek-ai/dsh-agent-preset') && names.includes('@deepseek-ai/dsh-tool-subagent'))
     for (const name of names) assert.doesNotThrow(() => layout.require.resolve(name), `${name} 不可解析`)

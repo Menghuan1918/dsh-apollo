@@ -34,7 +34,7 @@ const JOB_TERMINAL = new Set(['completed', 'killed', 'failed'])
 
 /** 渲染一条运行项清单行。 */
 function lineOf(prefix, id, detail) {
-  return `  - ${prefix} ${id}${detail === undefined || detail === '' ? '' : `（${detail}）`}`
+  return `  - ${prefix} ${id}${detail === undefined || detail === '' ? '' : ` (${detail})`}`
 }
 
 /**
@@ -48,17 +48,17 @@ function buildMessage(children, jobs) {
   for (const child of children) {
     // 0.1.1-rc.2 的条目是 meta:{mode,label}，0.1.2 起 mode/label 升为顶级；
     // 兼容回退只影响展示措辞，绝不抛错。
-    lines.push(lineOf('子代理', child.id, child.label ?? child.meta?.label))
+    lines.push(lineOf('subagent', child.id, child.label ?? child.meta?.label))
   }
   for (const job of jobs) {
-    lines.push(lineOf('后台任务', job.id, job.label === undefined ? job.kind : `${job.label}，${job.kind}`))
+    lines.push(lineOf('background job', job.id, job.label === undefined ? job.kind : `${job.label}, ${job.kind}`))
   }
   const text = [
-    '⚠️ 以下后台工作仍在运行，回合不能结束：',
+    'This background work is still running, so the turn cannot end yet:',
     ...lines,
     '',
-    '请先用 wait_subagent 等待运行中的子代理（需要续用其对话用 send_message）、'
-      + '用 job_output 收取后台命令的结果；确属不需要的用 job_kill 停止，全部处理完毕后再收尾。',
+    'Wait for running subagents with wait_subagent (use send_message to continue one), '
+      + 'collect background command results with job_output, and stop work you no longer need with job_kill. Finish only after all of it is handled.',
   ].join('\n')
   return {
     role: 'user',

@@ -57,7 +57,7 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 
 ### 4. Spawn both sub-agents in parallel
 
-Send both `subagent` calls in a single message — each a fresh child (quality tier = the strongest model this session offers; omit provider/model to inherit the parent route) with a fully self-contained prompt; children see none of this conversation.
+Send both `subagent` calls in a single message — each a fresh quality-tier child with a fully self-contained prompt; children see none of this conversation.
 
 **Standards sub-agent prompt** — include:
 

@@ -16,7 +16,7 @@ export function enabledIn(config, agent) {
     const projections = agent?.ctx?.get?.('sessionProjections')
     if (projections) preset = projections.stateOf(agent.session, 'agentPreset') ?? preset
   } catch { /* Compositions without the optional preset registry use the header. */ }
-  return scope.global || (scope.eng && ['eng', 'eng-noask'].includes(preset))
+  return scope.global || (scope.eng && ['eng', 'eng-ptc'].includes(preset))
 }
 
 /** Exact checks are repeated before every CLI turn, including cold resume. */

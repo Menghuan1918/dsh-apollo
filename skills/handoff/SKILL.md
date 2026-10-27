@@ -1,23 +1,23 @@
 ---
 name: handoff
-description: 把当前对话压缩成一份交接文档，供下一个全新 agent 接续。
-argument-hint: "下一个会话将用来做什么？"
+description: Compress the current conversation into a handoff document for a fresh agent to continue from.
+argument-hint: "What will the next session be used for?"
 disable-model-invocation: true
 ---
 
-把当前对话压缩成一份交接文档，让全新 agent 无需重读父会话即可接续工作。
+Compress the current conversation into a handoff document, so a brand-new agent can pick up the work without re-reading the parent session.
 
-## 存放与复用
+## Storage and reuse
 
-- **已有则复写**：若会话上下文中已存在交接文档（本会话早前写过，或会话开启时注入了一份），整篇重写该文件，不新建。
-- **否则新建**：工作区有 `.workspace-docs/` 时写 `.workspace-docs/notes/<仓库或主题>/`，交接本质上就是一篇 note；否则写目标仓库现有的文档目录。文件名带日期前缀，沿用目录内现有命名风格。
-- 写入 `.workspace-docs/` 时新建文件带 OKF 头（`type: Note` 及 `title`/`description`/`tags`/`status`/`repos`），不登记 `index.md`；提交/推送遵循该仓库既有纪律。目标仓库无此约定时用其现有文档格式。
-- 两个位置都不存在时，回退写 OS 临时目录。
+- **Rewrite if one exists**: if a handoff document is already in the session context (written earlier in this session, or injected when the session started), rewrite that file in full; do not create a new one.
+- **Otherwise create one**: when the workspace has `.workspace-docs/`, write to `.workspace-docs/notes/<repo-or-topic>/` — a handoff is essentially a note; otherwise write to the target repo's existing docs directory. Prefix the file name with the date and follow the naming style already used in that directory.
+- When writing under `.workspace-docs/`, new files carry an OKF header (`type: Note` plus `title`/`description`/`tags`/`status`/`repos`), and are not registered in `index.md`; commit/push follows that repo's existing discipline. Where the target repo has no such convention, use its existing doc format.
+- If neither location exists, fall back to the OS temp directory.
 
-## 内容要求
+## Content requirements
 
-- 含「建议技能」一节，提示接手 agent 应调用的技能。
-- 不复述已落盘物（spec、plan、ADR、issue、commit、diff）的内容，只给路径或 URL。
-- 只写客观事实与验证证据，不写自我免责叙事。
-- 脱敏 API key、密码、个人身份信息等敏感内容。
-- 用户带参数调用时，参数即下一会话焦点，据此裁剪文档。
+- Include a "Suggested skills" section pointing the receiving agent at the skills it should invoke.
+- Do not restate content already on disk (spec, plan, ADR, issue, commit, diff); give paths or URLs only.
+- Record only objective facts and verification evidence; no self-justifying narrative.
+- Redact sensitive content such as API keys, passwords, and personal identity information.
+- When the user invokes it with an argument, that argument is the next session's focus; trim the document accordingly.

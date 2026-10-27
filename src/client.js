@@ -21,6 +21,11 @@ window.__ModuleLoader__.load({
 		const ROW_KEYS = ['@menghuan1918/dsh-apollo#apollo-skills', 'dsh-apollo#apollo-skills'];
 		const CAPABILITIES_URL = '/apollo/api/capabilities';
 		const MODELS_URL = '/apollo/api/models';
+		const ROUTES_URL = '/apollo/api/routes';
+		/** 子代理模型分档（与 src/config.js 的 tiers 同步）。 */
+		const TIERS = ['fast', 'quality'];
+		const TIER_TITLE_KEYS = { fast: 'tierFast', quality: 'tierQuality' };
+		const TIER_HINT_KEYS = { fast: 'tierFastHint', quality: 'tierQualityHint' };
 
 		/** Codex CLI 权限档（与 src/config.js 的 CODEX_PERMISSION_MODES 同步）。 */
 		const CODEX = {
@@ -41,7 +46,7 @@ window.__ModuleLoader__.load({
 		const BACKENDS = [CODEX, CLAUDE];
 
 		const zh = {
-			summary: '工程模式运行时设置：退出守卫、子代理 CLI 后端与接入范围',
+			summary: '工程模式运行时设置：退出守卫、子代理模型分档、CLI 后端与接入范围',
 			title: '工程模式运行时设置',
 			intro: '保存后即时生效，无需重启。配置写入当前 profile 的行配置（cordis.patch.yml）。',
 			loading: '正在读取配置…',
@@ -51,9 +56,24 @@ window.__ModuleLoader__.load({
 			readonly: '当前连接只读（设置镜像为进程内 memory），无法写入宿主配置。',
 			exitGuardLabel: '退出守卫',
 			exitGuardHint: '回合结束时若仍有运行中的子代理或后台命令，注入提醒强制继续处理；用户中断（Esc）始终放行。',
+			tiersTitle: '子代理模型分档',
+			tiersIntro: '工程模式提示词按这里的路由告诉主代理两档各用哪个模型；候选来自「插件 → 子代理 → 模型选择」白名单。',
+			tierFast: '快速档',
+			tierQuality: '质量档',
+			tierFastHint: '快速档：探索、侦察、机械分析、批量排查。',
+			tierQualityHint: '质量档：复杂实现、调试、审查、设计。',
+			tierInherit: '沿用父会话路由',
+			tierEffortDefault: '模型默认',
+			tierRouteLabel: '{tier}路由',
+			tierEffortLabel: '{tier} effort',
+			tierOffList: '(不在白名单) {route}',
+			tiersInactive: '「插件 → 子代理 → 模型选择」未开启或白名单为空，分档不会生效。',
+			routesLoading: '正在读取子代理模型白名单…',
+			routesError: '读取子代理模型白名单失败（不影响保存）。',
+			invalidTierRoute: '{backend}所选路由不在子代理模型白名单内，请改选或改回沿用父会话路由。',
 			scopeTitle: '接入范围',
 			scopeEng: '工程模式预设',
-			scopeEngHint: 'eng / eng-noask 会话可以看到下面这些 CLI 子代理路由。',
+			scopeEngHint: 'eng / eng-ptc 会话可以看到下面这些 CLI 子代理路由。',
 			scopeGlobal: '全部预设',
 			scopeGlobalHint: '所有预设的会话都能看到这些路由（影响面更大）。',
 			scopeNone: '两个范围都关闭时，这些 CLI 路由不会出现在任何会话里。',
@@ -114,7 +134,7 @@ window.__ModuleLoader__.load({
 		};
 
 		const en = {
-			summary: 'Eng mode runtime settings: exit guard, CLI subagent backends, and scope',
+			summary: 'Eng mode runtime settings: exit guard, subagent model tiers, CLI backends, and scope',
 			title: 'Eng mode runtime settings',
 			intro: 'Saving applies immediately, no restart. Values persist in the active profile row config (cordis.patch.yml).',
 			loading: 'Loading configuration…',
@@ -124,9 +144,24 @@ window.__ModuleLoader__.load({
 			readonly: 'This connection is read-only (settings mirror is process-local memory); host configuration cannot be written.',
 			exitGuardLabel: 'Exit guard',
 			exitGuardHint: 'Blocks turn end while subagents or background jobs are still running; interrupt (Esc) always passes through.',
+			tiersTitle: 'Subagent model tiers',
+			tiersIntro: 'The eng mode prompt tells the main agent which route each tier uses; candidates come from the Plugins → Subagent → Model selection allowlist.',
+			tierFast: 'Fast tier',
+			tierQuality: 'Quality tier',
+			tierFastHint: 'Fast tier: exploration, reconnaissance, mechanical analysis, batch checks.',
+			tierQualityHint: 'Quality tier: complex implementation, debugging, review, design.',
+			tierInherit: 'Inherit parent route',
+			tierEffortDefault: 'Model default',
+			tierRouteLabel: '{tier} route',
+			tierEffortLabel: '{tier} effort',
+			tierOffList: '(not allowlisted) {route}',
+			tiersInactive: 'Plugins → Subagent → Model selection is off or its allowlist is empty, so the tiers take no effect.',
+			routesLoading: 'Loading the subagent model allowlist…',
+			routesError: 'Could not read the subagent model allowlist (saving still works).',
+			invalidTierRoute: 'The {backend} route is not in the subagent model allowlist: pick another or inherit the parent route.',
 			scopeTitle: 'Scope',
 			scopeEng: 'Eng preset',
-			scopeEngHint: 'eng / eng-noask sessions see the CLI subagent routes below.',
+			scopeEngHint: 'eng / eng-ptc sessions see the CLI subagent routes below.',
 			scopeGlobal: 'All presets',
 			scopeGlobalHint: 'Every preset’s sessions see these routes (broader impact).',
 			scopeNone: 'With both scopes off, these CLI routes appear in no session.',
@@ -255,7 +290,8 @@ window.__ModuleLoader__.load({
 			'.apollo-models{display:flex;flex-direction:column;gap:6px}',
 			'.apollo-model{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,132px) auto;gap:6px;align-items:center}',
 			'.apollo-modelHead{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,132px) auto;gap:6px;font-size:11.5px;color:var(--dsw-alias-label-tertiary)}',
-			'@media (max-width:640px){.apollo-field,.apollo-model,.apollo-modelHead{grid-template-columns:minmax(0,1fr)}.apollo-fieldLabel{padding-top:0}}',
+			'.apollo-tier{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:6px}',
+			'@media (max-width:640px){.apollo-field,.apollo-model,.apollo-modelHead,.apollo-tier{grid-template-columns:minmax(0,1fr)}.apollo-fieldLabel{padding-top:0}}',
 			'.apollo-button{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:4px;height:28px;padding:0 10px;border:0;border-radius:var(--dsw-radius-sm);font:inherit;font-size:12px;line-height:18px;color:var(--dsw-alias-label-primary);background:transparent;cursor:pointer}',
 			'.apollo-button:disabled{opacity:.4;cursor:not-allowed}',
 			'.apollo-button[data-variant=primary]{background:var(--dsw-alias-button-primary-fill,var(--dsw-alias-label-primary));color:var(--dsw-alias-label-primary-foreground,var(--dsw-alias-bg-layer-3))}',
@@ -314,17 +350,29 @@ window.__ModuleLoader__.load({
 			return backend;
 		}
 
+		/** 一个分档：provider 或 model 为空即整档清空（与 src/config.js 同规则）。 */
+		function tierShape(value) {
+			const source = isRecord(value) ? value : {};
+			const provider = stringOr(source.provider, '').trim();
+			const model = stringOr(source.model, '').trim();
+			if (provider === '' || model === '') return { provider: '', model: '', reasoningEffort: '' };
+			return { provider, model, reasoningEffort: stringOr(source.reasoningEffort, '').trim() };
+		}
+
 		/** 把宿主快照值（或 undefined）规整成表单可安全读写的形状。 */
 		function shape(value) {
 			const source = isRecord(value) ? value : {};
 			const subagents = isRecord(source.subagents) ? source.subagents : {};
+			const tiers = isRecord(source.tiers) ? source.tiers : {};
 			const result = {
 				exitGuard: source.exitGuard === true,
+				tiers: {},
 				subagents: {
 					eng: subagents.eng !== false,
 					global: subagents.global === true,
 				},
 			};
+			for (const tier of TIERS) result.tiers[tier] = tierShape(tiers[tier]);
 			for (const spec of BACKENDS) result.subagents[spec.cli] = backendShape(subagents[spec.cli], spec);
 			return result;
 		}
@@ -346,6 +394,10 @@ window.__ModuleLoader__.load({
 			if (host.exitGuard !== current.exitGuard) {
 				ops.push({ op: 'set', path: ['exitGuard'], value: current.exitGuard });
 			}
+			for (const tier of TIERS) {
+				if (JSON.stringify(host.tiers[tier]) === JSON.stringify(current.tiers[tier])) continue;
+				ops.push({ op: 'set', path: ['tiers', tier], value: tierShape(current.tiers[tier]) });
+			}
 			for (const key of ['eng', 'global']) {
 				if (host.subagents[key] !== current.subagents[key]) {
 					ops.push({ op: 'set', path: ['subagents', key], value: current.subagents[key] });
@@ -366,9 +418,21 @@ window.__ModuleLoader__.load({
 		 * 前端校验（宿主 schema 管不到跨字段关联，这里补齐）：
 		 * 模型 id 非空且唯一；**启用的**后端必须有默认模型，且该模型的 effort
 		 * 列表与默认 effort 齐备——CLI 路由按这三元组选档，缺一项运行时就报错。
-		 * @returns `{ key, titleKey }`（key 用 `{backend}` 参数渲染后端名），或 null。
+		 * 分档：白名单读取成功时，已选路由必须在白名单内（否则子代理派发会被策略拒绝）。
+		 * @param current - 表单当前值。
+		 * @param allowed - `routesOf()` 的结果；白名单未读到时为 null（不校验分档）。
+		 * @returns `{ key, titleKey }`（key 用 `{backend}` 参数渲染后端/分档名），或 null。
 		 */
-		function validate(current) {
+		function validate(current, allowed) {
+			if (allowed !== null && allowed !== undefined) {
+				for (const tier of TIERS) {
+					const value = current.tiers[tier];
+					if (value.provider === '' || value.model === '') continue;
+					if (findRoute(allowed.routes, value) === undefined) {
+						return { key: 'invalidTierRoute', titleKey: TIER_TITLE_KEYS[tier] };
+					}
+				}
+			}
 			for (const spec of BACKENDS) {
 				const backend = current.subagents[spec.cli];
 				const titleKey = spec.cli === 'codex' ? 'codexTitle' : 'claudeTitle';
@@ -390,8 +454,8 @@ window.__ModuleLoader__.load({
 
 		// ── 能力探针（host 半边的只读接口）─────────────────────────────────────
 
-		/** 拉取 `/apollo/api/capabilities`；失败只降级显示，不阻塞表单。 */
-		function useCapabilities() {
+		/** 拉取一个 `/apollo/api/*` 只读接口；失败只降级显示，不阻塞表单。 */
+		function useEndpoint(url) {
 			const [state, setState] = useState({ status: 'loading' });
 			useEffect(() => {
 				let active = true;
@@ -401,7 +465,7 @@ window.__ModuleLoader__.load({
 				};
 				void (async () => {
 					try {
-						const res = await fetch(CAPABILITIES_URL, controller === undefined ? undefined : { signal: controller.signal });
+						const res = await fetch(url, controller === undefined ? undefined : { signal: controller.signal });
 						const body = await res.json().catch(() => undefined);
 						if (!res.ok || body?.ok !== true) throw new Error('HTTP ' + String(res.status));
 						done({ status: 'ready', value: body.value });
@@ -413,8 +477,47 @@ window.__ModuleLoader__.load({
 					active = false;
 					controller?.abort();
 				};
-			}, []);
+			}, [url]);
 			return state;
+		}
+
+		/**
+		 * `/apollo/api/routes` 的结果 → `{ enabled, routes }`；未读到（加载中/失败）时 null。
+		 * 每条路由 `{ provider, model, efforts, defaultEffort }`。
+		 */
+		function routesOf(state) {
+			if (state.status !== 'ready') return null;
+			const value = isRecord(state.value) ? state.value : {};
+			const routes = [];
+			for (const entry of Array.isArray(value.routes) ? value.routes : []) {
+				if (!isRecord(entry)) continue;
+				const provider = stringOr(entry.provider, '').trim();
+				const model = stringOr(entry.model, '').trim();
+				if (provider === '' || model === '') continue;
+				routes.push({
+					provider,
+					model,
+					efforts: Array.isArray(entry.efforts) ? entry.efforts.filter((item) => typeof item === 'string' && item !== '') : [],
+					defaultEffort: stringOr(entry.defaultEffort, ''),
+				});
+			}
+			return { enabled: value.enabled === true, routes };
+		}
+
+		function findRoute(routes, tier) {
+			return routes.find((route) => route.provider === tier.provider && route.model === tier.model);
+		}
+
+		/** 路由下拉的值：`provider/model`（按第一个 `/` 切回；provider id 不含 `/`）。 */
+		function routeKey(route) {
+			return route.provider === '' || route.model === '' ? '' : route.provider + '/' + route.model;
+		}
+
+		function parseRouteKey(key) {
+			const text = String(key ?? '');
+			const at = text.indexOf('/');
+			if (at <= 0 || at === text.length - 1) return { provider: '', model: '' };
+			return { provider: text.slice(0, at), model: text.slice(at + 1) };
 		}
 
 		/** 一行探针结论：已检测到 <路径>（版本）/ 未找到。 */
@@ -525,6 +628,60 @@ window.__ModuleLoader__.load({
 					disabled,
 					onClick: onRemove,
 				}, '−'));
+		}
+
+		/**
+		 * 一个分档：路由下拉（白名单）+ effort（路由有 effort 列表时下拉，否则文本）。
+		 * 已保存但不在白名单里的路由仍作为选项保留（白名单读到时标注出来），不被静默改掉。
+		 */
+		function TierRow({ tier, value, allowed, disabled, t: translate, onPatch }) {
+			const title = translate(TIER_TITLE_KEYS[tier]);
+			const routes = allowed === null ? [] : allowed.routes;
+			const current = routeKey(value);
+			const selected = findRoute(routes, value);
+			const routeOptions = [h('option', { key: '__inherit', value: '' }, translate('tierInherit'))];
+			for (const route of routes) {
+				routeOptions.push(h('option', { key: routeKey(route), value: routeKey(route) }, route.provider + ' / ' + route.model));
+			}
+			if (current !== '' && selected === undefined) {
+				const label = value.provider + ' / ' + value.model;
+				routeOptions.push(h('option', { key: current, value: current },
+					allowed === null ? label : translate('tierOffList', { route: label })));
+			}
+			const effortLabel = translate('tierEffortLabel', { tier: title });
+			const effort = selected !== undefined && selected.efforts.length > 0
+				? h('select', {
+					className: 'apollo-select',
+					id: 'apollo-tier-' + tier + '-effort',
+					'aria-label': effortLabel,
+					value: value.reasoningEffort,
+					disabled: disabled || current === '',
+					onChange: (event) => onPatch({ reasoningEffort: event.target.value }),
+				}, optionNodes(selected.efforts, value.reasoningEffort, translate('tierEffortDefault')))
+				: h('input', {
+					className: 'apollo-input',
+					type: 'text',
+					id: 'apollo-tier-' + tier + '-effort',
+					'aria-label': effortLabel,
+					value: value.reasoningEffort,
+					placeholder: translate('tierEffortDefault'),
+					spellCheck: false,
+					autoComplete: 'off',
+					disabled: disabled || current === '',
+					onChange: (event) => onPatch({ reasoningEffort: event.target.value.trim() }),
+				});
+			return h(Field, { id: 'apollo-tier-' + tier + '-route', label: title, hint: translate(TIER_HINT_KEYS[tier]) },
+				h('div', { className: 'apollo-tier' },
+					h('select', {
+						className: 'apollo-select',
+						id: 'apollo-tier-' + tier + '-route',
+						'aria-label': translate('tierRouteLabel', { tier: title }),
+						value: current,
+						disabled,
+						// 换路由即清空 effort（旧值未必属于新模型）。
+						onChange: (event) => onPatch({ ...parseRouteKey(event.target.value), reasoningEffort: '' }),
+					}, routeOptions),
+					effort));
 		}
 
 		/** 一个 CLI 后端的配置卡片。 */
@@ -652,7 +809,9 @@ window.__ModuleLoader__.load({
 
 		/** 行配置页面主体。 */
 		function ApolloConfigPage({ form, t: translate }) {
-			const capabilities = useCapabilities();
+			const capabilities = useEndpoint(CAPABILITIES_URL);
+			const routesState = useEndpoint(ROUTES_URL);
+			const allowed = routesOf(routesState);
 			const state = form?.state;
 			const revision = state?.revision;
 			const [draft, setDraft] = useState(null);
@@ -666,7 +825,7 @@ window.__ModuleLoader__.load({
 			const live = draft !== null && draft.revision === revision ? draft.value : host;
 			const writable = state?.status === 'ready' && state?.writable === true && state?.mode !== 'memory';
 			const dirty = live !== null && host !== null && JSON.stringify(live) !== JSON.stringify(host);
-			const invalid = live === null ? null : validate(live);
+			const invalid = live === null ? null : validate(live, allowed);
 
 			if (state === undefined) {
 				// 官方页面在镜像读到该命名空间前不传 form：这是正常加载窗口，
@@ -692,6 +851,10 @@ window.__ModuleLoader__.load({
 				});
 				setNotice(null);
 			};
+			const patchTier = (tier, patch) => edit((current) => ({
+				...current,
+				tiers: { ...current.tiers, [tier]: { ...current.tiers[tier], ...patch } },
+			}));
 			const patchBackend = (spec, patch) => edit((current) => ({
 				...current,
 				subagents: {
@@ -842,6 +1005,26 @@ window.__ModuleLoader__.load({
 						disabled: !writable || busy,
 						onChange: (next) => edit((current) => ({ ...current, exitGuard: next })),
 					})),
+				h('div', { className: 'apollo-section' },
+					h('div', { className: 'apollo-sectionHead' },
+						h('h3', { className: 'apollo-title' }, translate('tiersTitle')),
+						h('p', { className: 'apollo-hint' }, translate('tiersIntro'))),
+					routesState.status === 'loading'
+						? h('p', { className: 'apollo-hint' }, translate('routesLoading'))
+						: allowed === null
+							? h('p', { className: 'apollo-note', 'data-tone': 'warn' }, translate('routesError'))
+							: !allowed.enabled || allowed.routes.length === 0
+								? h('p', { className: 'apollo-note', 'data-tone': 'warn' }, translate('tiersInactive'))
+								: null,
+					...TIERS.map((tier) => h(TierRow, {
+						key: tier,
+						tier,
+						value: live.tiers[tier],
+						allowed,
+						disabled: !writable || busy,
+						t: translate,
+						onPatch: (patch) => patchTier(tier, patch),
+					}))),
 				h('div', { className: 'apollo-section' },
 					h('div', { className: 'apollo-sectionHead' },
 						h('h3', { className: 'apollo-title' }, translate('scopeTitle'))),

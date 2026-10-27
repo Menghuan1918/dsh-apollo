@@ -21,7 +21,7 @@ import yaml from 'js-yaml'
 const ROOT = fileURLToPath(new URL('../', import.meta.url))
 const PATCH = join(ROOT, 'cordis.patch.yml')
 const ENG = join(ROOT, 'presets/eng.patch.yml')
-const NOASK = join(ROOT, 'presets/eng-noask.patch.yml')
+const PTC = join(ROOT, 'presets/eng-ptc.patch.yml')
 const PACKAGE_NAME = '@menghuan1918/dsh-apollo'
 const manifest = () => JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const patch = () => yaml.load(readFileSync(PATCH, 'utf8'))
@@ -66,7 +66,7 @@ test('顶层 patch 禁用原生 goal 域并插入稳定的 dsh-better-goal 行',
 test('npm manifest：scoped 名、版本、repository、publishConfig 与 license', () => {
   const m = manifest()
   assert.equal(m.name, PACKAGE_NAME)
-  assert.equal(m.version, '0.3.0')
+  assert.equal(m.version, '0.4.0')
   assert.equal(m.license, 'GPL-3.0-or-later')
   assert.deepEqual(m.repository, {
     type: 'git',
@@ -101,7 +101,7 @@ test('已安装的独立 bundle 声明同一组禁用行与完全相同的 goal 
   assert.deepEqual(insertedRows(patch()).filter(([id]) => id === 'dsh-better-goal'), [GOAL_ROW])
 })
 
-/** Every module name in the two presets that belongs to this scoped package. */
+/** Every module name in the two presets (eng-ptc reuses eng's modules) that belongs to this scoped package. */
 function scopedPresetReferences() {
   const names = []
   const visit = (value) => {
@@ -115,15 +115,12 @@ function scopedPresetReferences() {
       else visit(child)
     }
   }
-  for (const file of [ENG, NOASK]) visit(preset(file))
+  for (const file of [ENG, PTC]) visit(preset(file))
   return [...new Set(names)].sort()
 }
 
 test('scoped 安装布局：包根、client 与全部 preset 子路径真实解析', () => {
   const expected = [
-    `${PACKAGE_NAME}/presets/eng-noask/plugins/exit-guard/index.js`,
-    `${PACKAGE_NAME}/presets/eng-noask/plugins/mode-instructions/index.js`,
-    `${PACKAGE_NAME}/presets/eng-noask/plugins/wait-subagent/index.js`,
     `${PACKAGE_NAME}/presets/eng/plugins/exit-guard/index.js`,
     `${PACKAGE_NAME}/presets/eng/plugins/mode-instructions/index.js`,
     `${PACKAGE_NAME}/presets/eng/plugins/wait-subagent/index.js`,

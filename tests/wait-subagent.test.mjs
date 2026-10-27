@@ -119,14 +119,18 @@ test('宽限期内子代理始终未启动 → 返回可重试的 not-started �
   assert.match(out, /wait_subagent again/)
 })
 
-test('等待已启动子代理时用户 timeout_ms 到期 → timed out 提示', async (t) => {
+test('timeout_ms 低于 15 分钟提升到 15 分钟，到期 → timed out 提示', async (t) => {
   t.mock.timers.enable({ apis: ['setInterval', 'setTimeout', 'Date'] })
   const ctx = makeCtx({ children: [{ id: 'child-1' }] })
   ctx.agentStatus.set('child-1', { status: 'running' })
-  const pending = ctx.getTool().execute({ subagent_id: ['child-1'], timeout_ms: 5000 }, makeExec())
+  let out
+  const pending = ctx.getTool().execute({ subagent_id: ['child-1'], timeout_ms: 5000 }, makeExec()).then((value) => { out = value })
   await flushMicrotasks()
   t.mock.timers.tick(5000)
-  const out = await pending
+  await flushMicrotasks()
+  assert.equal(out, undefined, '低于 15 分钟的 timeout_ms 自动提升到 15 分钟')
+  t.mock.timers.tick(15 * 60_000 - 5000)
+  await pending
   assert.match(out, /timed out waiting for subagent child-1/)
 })
 
@@ -161,7 +165,7 @@ test('混合收场：一个结算一个超时 → done 行 + timed out 行', asy
   const pending = ctx.getTool().execute({ subagent_id: ['child-1', 'child-2'], timeout_ms: 5000 }, makeExec())
   await flushMicrotasks()
   fireEnd(ctx, { id: 'child-1', lastAssistantMessage: '快的结果', stopReason: 'completed' })
-  t.mock.timers.tick(5000)
+  t.mock.timers.tick(15 * 60_000)
   const out = await pending
   const lines = out.split('\n')
   assert.equal(lines.length, 2)

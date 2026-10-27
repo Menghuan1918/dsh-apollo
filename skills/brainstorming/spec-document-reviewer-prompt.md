@@ -1,8 +1,8 @@
 # Spec Document Reviewer Prompt Template
 
-Use this template when dispatching a spec document reviewer via the `subagent` tool (fresh read-only child, quality tier = the strongest model this session offers; omit provider/model to inherit the parent route).
+Use this template when dispatching a spec document reviewer via the `subagent` tool (fresh read-only child, quality tier).
 
-**Purpose:** Verify a main decomposition spec or child spec is complete, consistent, and ready for implementation.
+**Purpose:** Verify a master Spec or sub-Spec is complete, consistent, and ready for implementation.
 
 **Dispatch after:** Spec document is written to the workspace's spec directory (`.workspace-docs/specs/` where that convention exists, otherwise the target repo's own specs directory).
 
@@ -11,8 +11,8 @@ subagent(
   prompt="You are a spec document reviewer. Verify this spec is complete and ready for implementation.
 
     **Spec to review:** [SPEC_FILE_PATH]
-    **Spec type:** [main decomposition | child]
-    **Main spec, if this is a child spec:** [MAIN_SPEC_FILE_PATH or N/A]
+    **Spec type:** [master | sub]
+    **Master Spec, if this is a sub-Spec:** [MASTER_SPEC_FILE_PATH or N/A]
 
     ## What to Check
 
@@ -22,7 +22,7 @@ subagent(
     | Completeness | TODOs, placeholders, "TBD", incomplete sections |
     | Consistency | Internal contradictions, conflicting requirements |
     | Clarity | Requirements ambiguous enough to cause someone to build the wrong thing |
-    | Scope | Main specs decompose large work into child specs; child specs are independently implementable and do not try to implement the whole main spec |
+    | Scope | Master Specs decompose large work into sub-Specs; sub-Specs are independently implementable and do not try to implement the whole master Spec |
     | YAGNI | Unrequested features, over-engineering |
 
     ## Calibration
@@ -32,7 +32,7 @@ subagent(
     interpreted two different ways — those are issues. Minor wording improvements,
     stylistic preferences, and "sections less detailed than others" are not.
 
-    Approve unless there are serious gaps that would lead to a flawed implementation. Do not reject a main decomposition spec merely because it covers multiple subsystems; reject it only if it lacks clear child specs, ordering, boundaries, or shared contracts. Do not reject a child spec merely because it does not implement the whole main spec.
+    Approve unless there are serious gaps that would lead to a flawed implementation. Do not reject a master Spec merely because it covers multiple subsystems; reject it only if it lacks clear sub-Specs, ordering, boundaries, or shared contracts. Do not reject a sub-Spec merely because it does not implement the whole master Spec.
 
     ## Output Format
 

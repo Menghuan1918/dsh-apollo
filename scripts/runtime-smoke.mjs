@@ -32,6 +32,7 @@ process.env.DSH_HOME = home
 process.env.DSH_TELEMETRY_DISABLED = '1'
 const { boot, initProfile, loadProfile, createRuntimeResolution, readProfilePatches, resolveProfileDir, PROFILE_TEMPLATES, PluginPackages } = await import(pathToFileURL(join(dirname(dsh), 'dsh-app-boot/lib/index.js')))
 const { normalizeConfig, currentConfig, liveConfigEntry } = await import('../src/config.js')
+const { collectTierRoutes } = await import('../src/panel.js')
 const version = JSON.parse(await readFile(join(dsh, 'package.json'), 'utf8')).version
 const dir = resolveProfileDir('it', home)
 const installedApollo = join(dir, 'node_modules', packageName)
@@ -73,6 +74,9 @@ const config = normalizeConfig({ subagents: {
 await readFile(join(dir, 'cordis.patch.yml'), 'utf8')
 if (!reuse) await writeFile(join(dir, 'cordis.patch.yml'), JSON.stringify([
   { id: 'headless-startup', disabled: true }, { id: 'headless-runner', disabled: true },
+  // Mirror the web host: base's global workflow rows are disabled so each
+  // preset alone decides whether its agent sees workflow.
+  { id: 'workflow-ptc', disabled: true }, { id: 'tool-workflow', disabled: true },
   { id: 'apollo-skills', config },
   { insert: [
     { id: 'agent-preset-registry', name: '@deepseek-ai/dsh-agent-preset-registry', config: { default: 'eng' } },
@@ -239,11 +243,24 @@ try {
   assert.ok(ctx.schedule && ctx.sessionController, 'The official schedule host services must activate')
   const scheduleTools = ['schedule_create', 'schedule_list', 'schedule_update', 'schedule_delete']
   for (const name of scheduleTools) assert.equal(ctx.tools.get(name, parent.agent), undefined, `eng intentionally omits ${name}`)
-  const noask = await ctx.agents.create({ sessionId: randomUUID(), meta: { cwd, agentPreset: 'eng-noask' }, agentOptions: { provider: 'it-noop', model: 'noop' }, setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'eng-noask') } })
+  const ptc = await ctx.agents.create({ sessionId: randomUUID(), meta: { cwd, agentPreset: 'eng-ptc' }, agentOptions: { provider: 'it-noop', model: 'noop' }, setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'eng-ptc') } })
   try {
-    for (const name of scheduleTools) assert.equal(ctx.tools.get(name, noask.agent), undefined, `eng-noask intentionally omits ${name}`)
-  } finally { await noask.dispose() }
-  console.log('HOST_PRESETS_OK', 'eng', 'eng-noask')
+    for (const name of scheduleTools) assert.equal(ctx.tools.get(name, ptc.agent), undefined, `eng-ptc intentionally omits ${name}`)
+    assert.equal(ctx.tools.get('workflow', ptc.agent), undefined, 'eng-ptc disables workflow like the upstream ptc preset')
+    assert.ok(ctx.tools.get('workflow', parent.agent), 'eng keeps workflow')
+    assert.ok(ctx.tools.get('run_code', ptc.agent), 'eng-ptc presents tools through run_code')
+    assert.equal(ctx.tools.get('run_code', parent.agent), undefined, 'eng stays native')
+    const modeText = async (agent) => (await ctx.systemPrompt.assemble({ agent, scope: agent })).sections.find((section) => section.name === 'eng:mode-instructions')?.text ?? ''
+    assert.match(await modeText(parent.agent), /## Delegation/, 'eng renders the mode-instructions section')
+    assert.doesNotMatch(await modeText(parent.agent), /run_code/, 'eng omits the PTC fan-out rule')
+    assert.match(await modeText(ptc.agent), /dispatch all subagents inside one run_code program/, 'eng-ptc renders the PTC mode-instructions section')
+    await settings({ tiers: { fast: { provider: 'it-noop', model: 'noop', reasoningEffort: '' } } })
+    assert.match(await modeText(parent.agent), /Fast tier[^\n]*provider: `it-noop` · model: `noop`/, 'tier settings render without remount')
+    const tierRoutes = await collectTierRoutes(ctx)
+    assert.equal(tierRoutes.enabled, true)
+    assert.deepEqual(tierRoutes.routes.map(({ provider, model }) => `${provider}/${model}`), ['it-noop/noop'], 'tier routes come from the host allowlist')
+  } finally { await ptc.dispose() }
+  console.log('HOST_PRESETS_OK', 'eng', 'eng-ptc')
   const native = await startChild({ description: 'Verify native delegation', provider: 'it-noop', model: 'noop', prompt: 'Reply Received.' })
   assert.equal(native.end.reason.kind, 'completed', JSON.stringify(native.end))
   await parentNotice(native.id, 'Received.')

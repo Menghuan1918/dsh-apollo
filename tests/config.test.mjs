@@ -32,8 +32,10 @@ import {
 } from '../src/config.js'
 
 /** 规范里写死的默认形状（EXACT）。 */
+const EMPTY_TIER = { provider: '', model: '', reasoningEffort: '' }
 const EXPECTED_DEFAULT = {
   exitGuard: false,
+  tiers: { fast: EMPTY_TIER, quality: EMPTY_TIER },
   subagents: {
     eng: true,
     global: false,
@@ -188,6 +190,8 @@ test('volatile 路径恰好是设置页可编辑集合', () => {
     'subagents.codex',
     'subagents.eng',
     'subagents.global',
+    'tiers.fast',
+    'tiers.quality',
   ])
   // 部署标志是普通字段：改它们应当重挂本行，而不是走 volatile 快路径。
   assert.equal(isVolatilePath(liveSchema, ['trustedHosts']), false)
@@ -231,6 +235,7 @@ test('normalizeConfig：展开 volatile 引用（含嵌套）', () => {
   }
   assert.deepEqual(normalizeConfig(config), {
     exitGuard: true,
+    tiers: { fast: EMPTY_TIER, quality: EMPTY_TIER },
     subagents: {
       eng: false,
       global: true,
@@ -318,6 +323,17 @@ test('normalizeConfig：模型列表去脏、去重、defaultEffort 必须属于
   ])
 })
 
+test('normalizeConfig：分档去空白，provider 或 model 缺失时整档清空', () => {
+  const config = normalizeConfig({ tiers: {
+    fast: { provider: ' deepseek-official ', model: 'deepseek-flash', reasoningEffort: ' max ' },
+    quality: { provider: 'poke2api', model: '  ', reasoningEffort: 'high' },
+  } })
+  assert.deepEqual(config.tiers.fast, { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'max' })
+  assert.deepEqual(config.tiers.quality, EMPTY_TIER)
+  assert.deepEqual(normalizeConfig({ tiers: { fast: 'x', quality: null } }).tiers, { fast: EMPTY_TIER, quality: EMPTY_TIER })
+  assert.deepEqual(Config({}).tiers.fast.get(), EMPTY_TIER)
+})
+
 test('normalizeConfig：trustedHosts 去空、去重、去空白', () => {
   const config = normalizeConfig({ trustedHosts: ['dsh.example.com', ' dsh.example.com ', '', 7, null, 'proxy.local:8443'] })
   assert.deepEqual(config.trustedHosts, ['dsh.example.com', 'proxy.local:8443'])
@@ -337,7 +353,7 @@ test('normalizeConfig：返回全新普通对象（可安全改写、两次调�
 test('dsh-settings 投影：表单字段恰好是 volatile 集合，值不含部署标志', () => {
   const form = volatileForm(liveSchema)
   assert.equal(form?.type, 'object')
-  assert.deepEqual(Object.keys(form.dict).sort(), ['exitGuard', 'subagents'])
+  assert.deepEqual(Object.keys(form.dict).sort(), ['exitGuard', 'subagents', 'tiers'])
   const resolved = Config({
     exitGuard: true,
     trustedHosts: ['dsh.example.com'],
@@ -347,6 +363,7 @@ test('dsh-settings 投影：表单字段恰好是 volatile 集合，值不含部
   const value = projectForm(form, plainConfig(resolved))
   assert.deepEqual(value, {
     exitGuard: true,
+    tiers: { fast: EMPTY_TIER, quality: EMPTY_TIER },
     subagents: {
       eng: true,
       global: false,
@@ -364,6 +381,7 @@ test('dsh-settings 投影：表单字段恰好是 volatile 集合，值不含部
   // 表单写入只允许落在 volatile 路径上：部署标志必须被拒绝。
   assert.equal(isVolatilePath(liveSchema, ['subagents', 'codex', 'models', '0', 'id']), true)
   assert.equal(isVolatilePath(liveSchema, ['subagents', 'eng']), true)
+  assert.equal(isVolatilePath(liveSchema, ['tiers', 'fast']), true)
   assert.equal(isVolatilePath(liveSchema, ['trustedHosts', '0']), false)
 })
 

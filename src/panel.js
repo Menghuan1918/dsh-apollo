@@ -7,8 +7,10 @@
  *     在 PATH 上的解析结果与版本、以及 Codex 的 profile 名称；
  *   - `/apollo/api/models?cli=codex|claude`——**模型自动发现**：Codex 读
  *     `codex debug models` 的 JSON catalog，Claude 读 Anthropic Messages 的
- *     `GET /v1/models`（凭据来自进程 env 或 Claude 设置文件，只在内存里用）。
- * 两者都供浏览器半边（`exports["./client"]` 的 `plugins.row.config` 页面）读取。
+ *     `GET /v1/models`（凭据来自进程 env 或 Claude 设置文件，只在内存里用）；
+ *   - `/apollo/api/routes`——**分档路由**：子代理模型选择白名单里的
+ *     provider/model 及其 reasoning effort（供模型分档下拉框）。
+ * 三者都供浏览器半边（`exports["./client"]` 的 `plugins.row.config` 页面）读取。
  *
  * 为什么是「能力」而不是「配置」：设置本身已经是正式 Config（volatile），读写
  * 走 DSH 自己的 configForms/行配置页面（`src/settings.js` 只做一次旧文件导入），
@@ -91,6 +93,45 @@ const MAX_LISTING_BYTES = 4 * 1024 * 1024
 /** 模型 id / effort 的安全字符集：argv 不经 shell，但仍拒绝空白、引号与控制字符。 */
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/@+\[\]-]*$/
 const EFFORT = /^[A-Za-z][A-Za-z0-9._-]*$/
+
+// ── 子代理分档路由（/apollo/api/routes）──────────────────────────────────────
+
+/** 分档下拉框数据源的完整路径（GET）。 */
+export const ROUTES_PATH = '/apollo/api/routes'
+
+/** 读一个宿主服务；不可见或抛错返回 undefined。 */
+function hostService(ctx, name) {
+  try { return ctx.get?.(name) ?? undefined } catch { return undefined }
+}
+
+/**
+ * 列出子代理模型选择白名单里的路由及各自的 reasoning effort。
+ *
+ * 白名单来自宿主 `subagentModelSelection.current()`（「插件 → 子代理 → 模型
+ * 选择」），effort 来自 `llm.resolveModelInfo`；单条解析失败只让该条 efforts
+ * 为空，不影响其他条目。服务缺失或白名单非法时返回未启用的空清单。
+ * @param ctx - 插件上下文。
+ * @returns `{ enabled, routes: [{ provider, model, efforts, defaultEffort }] }`。
+ */
+export async function collectTierRoutes(ctx) {
+  let selection
+  try { selection = hostService(ctx, 'subagentModelSelection')?.current() } catch { selection = undefined }
+  if (!isRecord(selection) || !Array.isArray(selection.allowedModels)) return { enabled: false, routes: [] }
+  const llm = hostService(ctx, 'llm')
+  const routes = await Promise.all(selection.allowedModels.map(async ({ provider, model }) => {
+    try {
+      const reasoning = (await llm?.resolveModelInfo?.(provider, model))?.reasoning
+      const efforts = Array.isArray(reasoning?.efforts)
+        ? reasoning.efforts.map((effort) => effort?.id).filter((id) => typeof id === 'string' && id !== '')
+        : []
+      const defaultEffort = efforts.includes(reasoning?.defaultEffort) ? reasoning.defaultEffort : ''
+      return { provider, model, efforts, defaultEffort }
+    } catch {
+      return { provider, model, efforts: [], defaultEffort: '' }
+    }
+  }))
+  return { enabled: selection.enabled === true, routes }
+}
 
 // ── 部署标志 tap ────────────────────────────────────────────────────────────
 
@@ -745,6 +786,7 @@ function writeJson(res, status, body) {
 export function registerCapabilitiesRoute(ctx, configFor, deps = {}) {
   const read = deps.read ?? createCapabilitiesReader(deps)
   const discover = deps.discover ?? discoverModels
+  const routes = deps.routes ?? (() => collectTierRoutes(ctx))
   const configOf = () => (typeof configFor === 'function' ? attempt(configFor) : configFor)
   ctx.effect(() => ctx.webServer.register({
     kind: 'prefix',
@@ -757,6 +799,16 @@ export function registerCapabilitiesRoute(ctx, configFor, deps = {}) {
           return
         }
         const url = new URL(req.url ?? '/', 'http://dsh.internal')
+        if (url.pathname === ROUTES_PATH) {
+          if (req.method !== 'GET') {
+            writeJson(res, 405, { ok: false, error: { code: 'method-error', message: 'method not allowed' } })
+            return
+          }
+          const value = await routes()
+          res.setHeader?.('cache-control', 'no-store')
+          writeJson(res, 200, { ok: true, value })
+          return
+        }
         if (url.pathname === MODELS_PATH) {
           if (req.method !== 'GET') {
             writeJson(res, 405, { ok: false, error: { code: 'method-error', message: 'method not allowed' } })
