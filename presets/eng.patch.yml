@@ -179,15 +179,20 @@
 
           # ── compaction ──────────────────────────────────────────────────────────────
 
-          # `compaction-basic` reads `toolResultPrune` through `ctx.get`, so the pruner must
-          # share this realm rather than sit outside it.
+          # The compaction service is preset-owned in the Web composition. The
+          # native `compaction-basic` row is replaced by the independent
+          # dsh-better-compact engine (same stable row id/name as its standalone
+          # bundle); it keeps the native token meter, safe-cut selection,
+          # retention, locking, durable checkpoint transaction and `/compact`,
+          # and adds the native/goal/handoff summary modes. The host-plane
+          # engine inserted by the top-level patch detects this preset-owned
+          # service and stays out of the way, so there is one engine per realm.
           #
-          # `tokenMeter` is deliberately NOT in this realm: the meter stays on the HOST
-          # plane, and the rows here resolve that one instance. It takes no configuration,
-          # keys every fold by Session, and owns the context-meter projection units the
-          # browser reads for every session — behind a realm those units would come and go
-          # with whichever presets happen to be mounted. What a preset chooses is whether
-          # its agent compacts at all, which is `compaction-basic` below.
+          # The engine reads `toolResultPrune` through `ctx.get`, so the pruner
+          # must share this realm rather than sit outside it.
+          #
+          # `tokenMeter` is deliberately NOT in this realm: the meter stays on the
+          # HOST plane, and the rows here resolve that one instance.
           - id: compaction
             name: cordis:group
             group: true
@@ -195,8 +200,8 @@
               compaction: true
               toolResultPruner: true
             config:
-              - id: compaction-basic
-                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: dsh-better-compact-engine
+                name: dsh-better-compact/engine
 
               - id: command-compact
                 name: '@deepseek-ai/dsh-command-compact'
@@ -301,38 +306,26 @@
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
 
-          # ── subagent waiting ─────────────────────────────────────────────────────────
-
-          # Preset-local plugin: explicit wait for one continuable child to settle, so
-          # the agent can block on a specific subagent (pi-style await_task semantics)
-          # without giving up send_message continuations. The module specifier is a
-          # bare subpath of this package (@menghuan1918/dsh-apollo/presets/eng/plugins/...):
-          # config.plugins names resolve from the profile directory's node_modules,
-          # where this package is installed or linked; it has zero bare imports on
-          # purpose.
-          - id: tool-wait-subagent
-            name: '@menghuan1918/dsh-apollo/presets/eng/plugins/wait-subagent/index.js'
-
           # ── exit guard ───────────────────────────────────────────────────────────────
           #
-          # Preset-local plugin: pi-atlas 式退出守卫。回合结束（agent/turn-stopping）
-          # 时若有运行中的直接子代理或后台任务，注入 next-step 提醒（agent.steer）
-          # 强制回合继续，直到 wait_subagent / job_output / job_kill 处理完毕或用户
-          # 中断（被中断回合不触发）。开关为正式 Config.exitGuard，默认关闭，
-          # 每次事件读取当前值，设置保存后即时生效。监听器注册型
-          # 插件，无服务发布，无需 realm。
+          # Preset-local plugin: pi-atlas 式退出守卫（仅后台任务）。回合结束
+          # （agent/turn-stopping）时若本会话仍有运行中的 DSH 后台 job，注入
+          # next-step 提醒（agent.steer）强制回合继续，直到 job_output / job_kill
+          # 处理完毕或用户中断（被中断回合不触发）。运行中子代理的拦截由
+          # dsh-better-subagent 的 childExitGuard 拥有，这里不再重复判断。开关为
+          # Apollo Config.exitGuard，默认关闭，每次事件读取当前值，设置保存后即时
+          # 生效。监听器注册型插件，无服务发布，无需 realm。
           - id: eng-exit-guard
             name: '@menghuan1918/dsh-apollo/presets/eng/plugins/exit-guard/index.js'
 
           # ── mode instructions ────────────────────────────────────────────────────────
 
-          # Preset-local prompt section carrying the engineering discipline (moved out
-          # of the user-global ~/.dsh/AGENTS.md), the delegation policy, the model
-          # tiers rendered from Apollo settings (`tiers.*`), and the exit guard
-          # contract when that switch is on. Registered as a system-prompt section
-          # (order 1, right after the persona slot) so it is scoped to sessions
-          # mounted on this preset; its text is re-rendered per request from the live
-          # Apollo config. `ptc: true` (set by eng-ptc) adds the rule for fanning
-          # out subagents inside one run_code program.
+          # Preset-local prompt section carrying only the general engineering
+          # discipline (moved out of the user-global ~/.dsh/AGENTS.md) and the
+          # job-only exit guard contract. Subagent delegation, model tiers, PTC
+          # fan-out and the child guard are rendered by dsh-better-subagent's own
+          # per-Agent sections — Apollo keeps no second generator. Registered as a
+          # system-prompt section (order 1, right after the persona slot) and
+          # re-rendered per request from the live Apollo config.
           - id: eng-mode-instructions
             name: '@menghuan1918/dsh-apollo/presets/eng/plugins/mode-instructions/index.js'

@@ -7,8 +7,9 @@
 #     run_code TypeScript SDK (needs the host `ptc-runtime` row);
 #   - `workflow-ptc` and `tool-workflow` disabled: PTC fans out by calling
 #     subagent several times inside one run_code program instead;
-# plus `eng-mode-instructions { ptc: true }`, which adds the rule for fanning
-# out subagents inside one run_code program. Preset-local plugins reuse the eng modules.
+# Preset-local plugins reuse the eng modules. Subagent fan-out wording is owned
+# by dsh-better-subagent (it detects the `eng-ptc` preset itself), so this row
+# carries no `ptc` switch.
 # tests/upstream-drift.test.mjs checks this file against both eng and the
 # upstream `ptc` preset; edit eng first, then redo these deltas.
 #
@@ -96,8 +97,8 @@
               compaction: true
               toolResultPruner: true
             config:
-              - id: compaction-basic
-                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: dsh-better-compact-engine
+                name: dsh-better-compact/engine
 
               - id: command-compact
                 name: '@deepseek-ai/dsh-command-compact'
@@ -174,13 +175,8 @@
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
 
-          - id: tool-wait-subagent
-            name: '@menghuan1918/dsh-apollo/presets/eng/plugins/wait-subagent/index.js'
-
           - id: eng-exit-guard
             name: '@menghuan1918/dsh-apollo/presets/eng/plugins/exit-guard/index.js'
 
           - id: eng-mode-instructions
             name: '@menghuan1918/dsh-apollo/presets/eng/plugins/mode-instructions/index.js'
-            config:
-              ptc: true

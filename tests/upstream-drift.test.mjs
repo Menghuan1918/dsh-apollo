@@ -13,7 +13,7 @@ const PTC = join(ROOT, 'presets/eng-ptc.patch.yml')
 // Each Apollo preset is aligned with the upstream preset it is a copy of.
 const PAIRS = [[ENG, 'standard.patch.yml'], [PTC, 'ptc.patch.yml']]
 const ownRows = [
-  ['tool-wait-subagent', '@menghuan1918/dsh-apollo/presets/eng/plugins/wait-subagent/index.js'],
+  ['dsh-better-compact-engine', 'dsh-better-compact/engine'],
   ['eng-exit-guard', '@menghuan1918/dsh-apollo/presets/eng/plugins/exit-guard/index.js'],
   ['eng-mode-instructions', '@menghuan1918/dsh-apollo/presets/eng/plugins/mode-instructions/index.js'],
 ]
@@ -84,9 +84,20 @@ function dshLayout(t) {
   t.skip('未发现满足 engines.dsh 的本机 DSH 安装；显式设置 DSH_PACKAGE_ROOT 可启用验证')
 }
 
-/** Remove the documented Apollo additions, deliberate removals, and exact tuning values. */
+/**
+ * Remove the documented Apollo additions, deliberate removals, and exact tuning
+ * values. The preset-owned compaction engine is normalized back to the native
+ * row it replaces so the rest of the preset can be compared byte-for-byte.
+ */
 function normalizedEng(rows) {
   const normalized = structuredClone(rows).filter((row) => !isDropped(row) && !ownRows.some(([id, name]) => row.id === id && row.name === name))
+  for (const row of flatten(normalized)) {
+    if (row.id === 'compaction' && row.group === true) {
+      row.config = row.config.map((child) => child.id === 'dsh-better-compact-engine' && child.name === 'dsh-better-compact/engine'
+        ? { id: 'compaction-basic', name: '@deepseek-ai/dsh-compaction-basic' }
+        : child)
+    }
+  }
   for (const row of flatten(normalized)) {
     if (row.id === 'tool-jobs' && Object.hasOwn(row.config ?? {}, 'maxConsecutiveWakes')) {
       assert.equal(row.config.maxConsecutiveWakes, 5000)
@@ -166,11 +177,10 @@ test('原生 goal 行仍存在于基准安装的 host 组成中', (t) => {
   assert.ok(web.some(([rowId, rowName]) => rowId === 'ui-goal' && rowName === '@deepseek-ai/dsh-client-ui-goal'), '基准安装的 dsh-web-app 必须仍有原生行：ui-goal')
 })
 
-test('eng-ptc 恰为 eng + PTC 呈现 + 禁用 workflow + mode-instructions ptc 开关', () => {
+test('eng-ptc 恰为 eng + PTC 呈现 + 禁用 workflow', () => {
   const expected = structuredClone(rowsOf(ENG))
   for (const row of flatten(expected)) {
     if (row.id === 'workflow-ptc' || row.id === 'tool-workflow') row.disabled = true
-    if (row.id === 'eng-mode-instructions') row.config = { ptc: true }
   }
   expected.splice(expected.findIndex((row) => row.id === 'present'), 0, {
     id: 'tool-presentation', name: '@deepseek-ai/dsh-agent-tool-presentation', config: { mode: 'ptc' },

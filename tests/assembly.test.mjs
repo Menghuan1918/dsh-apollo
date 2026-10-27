@@ -1,12 +1,13 @@
 /**
- * 顶层 bundle 装配解析：原生 goal 域禁用行、独立的 dsh-better-goal 稳定行，
- * 以及 Apollo 的运行时依赖声明。
+ * 顶层 bundle 装配解析：原生 goal 域禁用行、独立 dsh-better-goal 稳定行、
+ * dsh-better-compact companion/engine 行、dsh-better-subagent 行、原生
+ * compaction-basic 停用，以及 Apollo 的精确运行时依赖声明。
  *
- * 为什么需要：dsh-better-goal 的 bundle patch 不会因为它是 Apollo 的依赖而
- * 自动应用（DSH 只把直接安装的 bundle 加入 `dsh.profile.bundles`），所以
- * Apollo 的 cordis.patch.yml 必须自己携带同样的禁用行和插入行，且 id/name
- * 逐字相同；两个 bundle 同时选中时 Loader 按行 id 去重，只挂载一次。这里只
- * 解析装配数据，不加载插件、不启动 Loader。
+ * 为什么需要：独立插件的 bundle patch 不会因为它是 Apollo 的依赖而自动应用
+ * （DSH 只把直接安装的 bundle 加入 `dsh.profile.bundles`），所以 Apollo 的
+ * cordis.patch.yml 必须自己携带同样的禁停行和插入行，且 id/name 逐字相同；
+ * 两个 bundle 同时选中时 Loader 按行 id 去重，只挂载一次。这里只解析装配
+ * 数据，不加载插件、不启动 Loader。
  */
 
 import { test } from 'node:test'
@@ -23,6 +24,9 @@ const PATCH = join(ROOT, 'cordis.patch.yml')
 const ENG = join(ROOT, 'presets/eng.patch.yml')
 const PTC = join(ROOT, 'presets/eng-ptc.patch.yml')
 const PACKAGE_NAME = '@menghuan1918/dsh-apollo'
+const SUBAGENT_NAME = '@menghuan1918/dsh-better-subagent'
+const COMPACT_NAME = 'dsh-better-compact'
+const ENGINE_NAME = 'dsh-better-compact/engine'
 const manifest = () => JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const patch = () => yaml.load(readFileSync(PATCH, 'utf8'))
 // The presets carry `!!js` platform expressions; parse them as data, never evaluate.
@@ -31,7 +35,9 @@ const presetSchema = yaml.DEFAULT_SCHEMA.extend(new yaml.Type('tag:yaml.org,2002
   construct: (source) => ({ javascript: source }),
 }))
 const preset = (file) => yaml.load(readFileSync(file, 'utf8'), { schema: presetSchema })
-/** Native goal rows the independent bundle disables; ids are compared in this order. */
+const document = (file) => yaml.load(readFileSync(file, 'utf8'), { schema: presetSchema })
+
+/** Native goal rows the independent goal bundle disables; ids are compared in this order. */
 const NATIVE_GOAL_IDS = [
   'command-goal',
   'goal',
@@ -40,6 +46,10 @@ const NATIVE_GOAL_IDS = [
   'ui-goal',
 ]
 const GOAL_ROW = ['dsh-better-goal', 'dsh-better-goal']
+const COMPACT_ROW = [COMPACT_NAME, COMPACT_NAME]
+const ENGINE_ROW = ['dsh-better-compact-engine', ENGINE_NAME]
+const SUBAGENT_ROW = ['dsh-better-subagent', SUBAGENT_NAME]
+const APOLLO_ROW = ['apollo-skills', PACKAGE_NAME]
 
 const disabledIds = (patches) => patches
   .filter((entry) => entry.disabled === true)
@@ -48,25 +58,52 @@ const disabledIds = (patches) => patches
 const insertedRows = (patches) => patches
   .flatMap((entry) => entry.insert ?? [])
   .map(({ id, name }) => [id, name])
+const rowsOfPreset = (file) => preset(file)
+  .flatMap((entry) => entry.insert ?? [])
+  .find((row) => row.name === '@deepseek-ai/dsh-agent-preset')
+  .config.plugins
+const flatten = (rows) => rows.flatMap((row) => [row, ...(row.group === true ? flatten(row.config) : [])])
+const installed = (specifier) => {
+  try {
+    const require = createRequire(join(ROOT, 'package.json'))
+    return dirname(require.resolve(`${specifier}/package.json`))
+  } catch {
+    return undefined
+  }
+}
+const bundleRows = (dir) => {
+  const rows = document(join(dir, 'cordis.patch.yml'))
+  return { disabled: disabledIds(rows), inserted: insertedRows(rows) }
+}
 
-test('顶层 patch 禁用原生 goal 域并插入稳定的 dsh-better-goal 行', () => {
+test('顶层 patch 禁用原生 goal 域与原生 compaction-basic，并插入稳定的独立行', () => {
   const patches = patch()
   assert.equal(Array.isArray(patches), true)
-  assert.deepEqual(disabledIds(patches), [...NATIVE_GOAL_IDS].sort())
+  assert.deepEqual(disabledIds(patches), [...NATIVE_GOAL_IDS, 'compaction-basic'].sort())
   for (const entry of patches) {
     if (entry.disabled !== true) continue
     assert.deepEqual(Object.keys(entry).sort(), ['disabled', 'id'], '禁用行必须只按 id 生效，不能带 name 或配置')
   }
-  assert.deepEqual(insertedRows(patches), [GOAL_ROW, ['apollo-skills', PACKAGE_NAME]], 'goal 行与本包 apollo-skills 行都必须留在顶层 insert')
+  assert.deepEqual(insertedRows(patches), [
+    GOAL_ROW,
+    COMPACT_ROW,
+    ENGINE_ROW,
+    SUBAGENT_ROW,
+    APOLLO_ROW,
+  ], 'goal / compact companion / compact engine / subagent / apollo 行都必须留在顶层 insert')
   for (const row of patches.flatMap((entry) => entry.insert ?? [])) {
     assert.deepEqual(Object.keys(row).sort(), ['id', 'name'], '插入行不得带 config/group/disabled')
   }
+  const ids = insertedRows(patches).map(([id]) => id)
+  for (const id of ['dsh-better-goal', 'dsh-better-compact', 'dsh-better-compact-engine', 'dsh-better-subagent', 'apollo-skills']) {
+    assert.equal(ids.filter((candidate) => candidate === id).length, 1, `${id} 只能有一个稳定行`)
+  }
 })
 
-test('npm manifest：scoped 名、版本、repository、publishConfig 与 license', () => {
+test('npm manifest：scoped 名、0.5.0、repository、publishConfig 与 license', () => {
   const m = manifest()
   assert.equal(m.name, PACKAGE_NAME)
-  assert.equal(m.version, '0.4.1')
+  assert.equal(m.version, '0.5.0')
   assert.equal(m.license, 'GPL-3.0-or-later')
   assert.deepEqual(m.repository, {
     type: 'git',
@@ -78,27 +115,63 @@ test('npm manifest：scoped 名、版本、repository、publishConfig 与 licens
   })
 })
 
-test('package.json 将独立 goal 插件声明为精确 npm 版本', () => {
-  const spec = manifest().dependencies?.['dsh-better-goal']
-  assert.equal(spec, '0.2.0', 'goal 依赖必须是精确 npm 版本，不能用 Git/file/link/range')
-  assert.doesNotMatch(spec, /^(?:github:|git\+|git:|file:|link:|workspace:|npm:|https?:)/)
+test('package.json 把三个独立插件声明为精确 npm 版本', () => {
+  const dependencies = manifest().dependencies ?? {}
+  assert.equal(dependencies['dsh-better-goal'], '0.2.0', 'goal 依赖必须是精确 npm 版本')
+  assert.equal(dependencies[SUBAGENT_NAME], '0.1.0', 'better-subagent 依赖必须是精确 npm 版本')
+  assert.equal(dependencies[COMPACT_NAME], '0.1.0', 'better-compact 依赖必须是精确 npm 版本')
+  for (const spec of [dependencies['dsh-better-goal'], dependencies[SUBAGENT_NAME], dependencies[COMPACT_NAME]]) {
+    assert.doesNotMatch(spec, /^(?:github:|git\+|git:|file:|link:|workspace:|npm:|https?:)/)
+  }
 })
 
-function independentPackageDir() {
-  try {
-    return dirname(createRequire(join(ROOT, 'package.json')).resolve('dsh-better-goal/package.json'))
-  } catch {
-    return undefined
+test('已安装的独立 bundle 声明同一组稳定行：goal、compact、subagent', (t) => {
+  const goal = installed('dsh-better-goal')
+  const subagent = installed(SUBAGENT_NAME)
+  const compact = installed(COMPACT_NAME)
+  if (goal === undefined || subagent === undefined || compact === undefined) {
+    return t.skip('独立插件未安装（link 开发时需先安装依赖）')
   }
-}
+  const apollo = bundleRows(ROOT)
+  const goalRows = bundleRows(goal)
+  assert.deepEqual(goalRows.disabled, [...NATIVE_GOAL_IDS].sort(), 'Apollo 与 goal bundle 的原生 goal 禁用行必须一致')
+  assert.deepEqual(goalRows.inserted, [GOAL_ROW])
+  assert.deepEqual(apollo.inserted.filter(([id]) => id === 'dsh-better-goal'), [GOAL_ROW])
 
-test('已安装的独立 bundle 声明同一组禁用行与完全相同的 goal 行', (t) => {
-  const dir = independentPackageDir()
-  if (dir === undefined) return t.skip('dsh-better-goal 未安装（link 开发时需先在 Apollo 根目录安装依赖）')
-  const independent = yaml.load(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8'))
-  assert.deepEqual(disabledIds(independent), disabledIds(patch()), 'Apollo 与独立 bundle 的原生禁用行必须一致')
-  assert.deepEqual(insertedRows(independent).filter(([id]) => id === 'dsh-better-goal'), [GOAL_ROW])
-  assert.deepEqual(insertedRows(patch()).filter(([id]) => id === 'dsh-better-goal'), [GOAL_ROW])
+  const compactRows = bundleRows(compact)
+  assert.deepEqual(compactRows.disabled, ['compaction-basic'], 'compact bundle 只停用原生 host-plane 压缩行')
+  assert.deepEqual(compactRows.inserted, [COMPACT_ROW, ENGINE_ROW])
+  assert.deepEqual(apollo.inserted.filter(([id]) => id === COMPACT_NAME || id === 'dsh-better-compact-engine'), compactRows.inserted)
+
+  const subagentRows = bundleRows(subagent)
+  assert.deepEqual(subagentRows.inserted, [SUBAGENT_ROW])
+  assert.deepEqual(apollo.inserted.filter(([id]) => id === 'dsh-better-subagent'), subagentRows.inserted)
+})
+
+test('Apollo 预设与独立 compact 预设引用同一个 engine 稳定行', (t) => {
+  const compact = installed(COMPACT_NAME)
+  if (compact === undefined) return t.skip('dsh-better-compact 未安装')
+  const standalone = flatten(rowsOfPreset(join(compact, 'presets/better-compact.patch.yml')))
+    .find((row) => row.id === 'dsh-better-compact-engine')
+  assert.deepEqual([standalone.id, standalone.name], ENGINE_ROW)
+  for (const file of [ENG, PTC]) {
+    const engine = flatten(rowsOfPreset(file)).find((row) => row.id === 'dsh-better-compact-engine')
+    assert.deepEqual([engine.id, engine.name], [standalone.id, standalone.name], `${file} 的 engine 行必须与独立预设一致`)
+    const group = rowsOfPreset(file).find((row) => row.id === 'compaction')
+    assert.ok(group?.group === true && group.isolate?.compaction === true, 'engine 必须位于预设自己的 compaction 隔离域')
+    assert.equal(flatten(group.config).some((row) => row.id === 'compaction-basic'), false, '预设内不能再保留原生 compaction-basic')
+  }
+})
+
+test('预设不携带第二份 subagent registry / wait 工具，也不引用迁移后的实现', () => {
+  for (const file of [ENG, PTC]) {
+    const rows = flatten(rowsOfPreset(file))
+    assert.equal(rows.some((row) => row.id === 'tool-wait-subagent'), false, 'wait_subagent 由 dsh-better-subagent 的宿主行提供')
+    assert.equal(rows.some((row) => row.id === 'dsh-better-subagent'), false, 'subagent 宿主行在顶层 patch，不应复制进预设')
+    assert.equal(rows.some((row) => row.name === 'dsh-better-compact'), false, 'compact companion 行在顶层 patch，预设只带 engine')
+    assert.equal(rows.some((row) => row.id === 'compaction-basic'), false, '预设内不能保留原生 compaction 引擎')
+    assert.equal(rows.filter((row) => row.id === 'tool-subagent').length, 1, '原生 subagent 工具仍由预设提供且只有一份')
+  }
 })
 
 /** Every module name in the two presets (eng-ptc reuses eng's modules) that belongs to this scoped package. */
@@ -123,7 +196,6 @@ test('scoped 安装布局：包根、client 与全部 preset 子路径真实解�
   const expected = [
     `${PACKAGE_NAME}/presets/eng/plugins/exit-guard/index.js`,
     `${PACKAGE_NAME}/presets/eng/plugins/mode-instructions/index.js`,
-    `${PACKAGE_NAME}/presets/eng/plugins/wait-subagent/index.js`,
   ].sort()
   assert.deepEqual(scopedPresetReferences(), expected)
 

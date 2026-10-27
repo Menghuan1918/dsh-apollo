@@ -1,22 +1,33 @@
-# dsh-apollo bundle patch: inserts the two host-plane rows this package needs
-# into the profile roster. Applied as a profile bundle layer (the first entry
-# of the `dsh.bundle.patch` array in package.json — the eng/eng-ptc preset
-# patches in presets/ load after it); activate with
-# `dsh plugin --profile <name> add link:<path-to>/dsh-apollo`.
+# dsh-apollo bundle patch: inserts the host-plane rows this package needs into
+# the profile roster. Applied as a profile bundle layer (the first entry of the
+# `dsh.bundle.patch` array in package.json — the eng/eng-ptc preset patches in
+# presets/ load after it); activate with
+# `dsh plugin --profile <name> add @menghuan1918/dsh-apollo`.
+#
+# Apollo 0.5.0 is an integration bundle. The subagent and compaction features
+# are owned by two independent plugins, and Apollo repeats their *same stable
+# rows* here because DSH does not auto-apply a transitive dependency's bundle
+# patch (`dsh plugin add` only selects directly installed bundles):
+#
+#   - `@menghuan1918/dsh-better-subagent` owns the Codex/Claude CLI subagents,
+#     `wait_subagent`, the running-child exit guard, the subagent settings page
+#     and every subagent-specific prompt section;
+#   - `dsh-better-compact` (host companion) + `dsh-better-compact/engine`
+#     (engine row) own compaction; the native host-plane `compaction-basic` is
+#     disabled here exactly like the standalone bundle, and the eng/eng-ptc
+#     presets carry the engine row inside their own compaction realm;
+#   - `dsh-better-goal` keeps owning the goal domain.
+#
+# Selecting both the standalone bundle and Apollo still loads one instance: the
+# Loader keys entries by row id. The same rule makes the double-explicit-bundle
+# combination unaddressable in DSH 0.2.1-rc.2 (the config editor excludes
+# duplicate ids), so prefer one explicit entry; see docs/DEVELOPMENT.md.
 #
 # ── goal domain: independent dsh-better-goal row ────────────────────────────
 # The native goal service, round driver, /goal command, model-facing tool and
-# GoalBar UI are disabled below and replaced by the independent dsh-better-goal
-# plugin. Its own bundle patch declares exactly these native disables plus the
-# same top-level row (id and name `dsh-better-goal`), so selecting both bundles
-# still loads one row: the Loader keys entries by row id.
-#
-# Apollo carries the lines itself because DSH does not auto-apply a transitive
-# dependency's bundle patch — `dsh plugin add` only selects the directly
-# installed bundle. Consequently, disabling or removing the standalone
-# dsh-better-goal bundle does NOT disable this row; goal remains available
-# through Apollo. Conversely, a profile that already selected the standalone
-# bundle must not hand-write a third row.
+# GoalBar UI are disabled below and replaced by dsh-better-goal's own stable
+# row. Disabling or removing the standalone dsh-better-goal bundle does NOT
+# disable this row; goal remains available through Apollo.
 - id: goal
   disabled: true
 - id: goal-round-driver
@@ -32,6 +43,32 @@
     - id: dsh-better-goal
       name: dsh-better-goal
 
+# ── compaction: independent dsh-better-compact rows ─────────────────────────
+# Same stable rows/ids as the standalone bundle. `compaction-basic` is the
+# native host-plane default; Web compositions already disable it and mount
+# compaction inside each preset, while headless compositions keep this
+# disabled row so exactly one compaction service exists. The host-plane engine
+# detects a preset-owned engine and stays out of the way.
+- id: compaction-basic
+  disabled: true
+
+- insert:
+    - id: dsh-better-compact
+      name: dsh-better-compact
+
+    - id: dsh-better-compact-engine
+      name: dsh-better-compact/engine
+
+# ── subagent enhancement: independent dsh-better-subagent row ───────────────
+# One host-plane row owns the CLI adapters/routing bridge, the `wait_subagent`
+# tool, the running-child exit guard, `/better-subagent/api/*` (+ the
+# `/apollo/api/*` read aliases) and the subagent prompt sections. It does not
+# replace the native subagent registry: create/fork/message/interrupt still
+# come from the host tools.
+- insert:
+    - id: dsh-better-subagent
+      name: '@menghuan1918/dsh-better-subagent'
+
 # ── Apollo host row ─────────────────────────────────────────────────────────
 # The apollo-skills row is one row on purpose. The row's module specifier must
 # be this package's npm name (`@menghuan1918/dsh-apollo`), not a short alias,
@@ -42,37 +79,33 @@
 # would resolve host code only if an alias existed, then silently lose the
 # client half (the manifest name no longer matches). The page-side closure id
 # is the manifest package name too. It rejects a second active row resolving to
-# the same package name ("resolves from multiple active Loader sources"). So
-# this one node half does every job:
+# the same package name ("resolves from multiple active Loader sources").
 #
-#   1. registers the packaged skills/ tree on the skill registry's global layer
-#      (every preset mounting tool-skill then exposes the catalog);
-#   2. mounts the formal row Config (src/config.js, a @deepseek-ai/schemastery
-#      schema) together with the configForm that edits it from Plugins →
-#      Apollo; volatile fields apply without reloading this row;
-#   3. registers the read-only capability endpoint /apollo/api/capabilities
-#      (src/panel.js), which that form reads to show where each CLI resolved;
-#   4. installs the CLI subagent bridge (src/subagents.js) over the existing
-#      subagent tools — it adds no tool of its own;
-#   5. when the row config sets `declareOwnsHost: true`, taps the index HTML so
-#      the official client treats a proxied page as loopback.
+# Apollo 0.5.0 keeps only the responsibilities that were not migrated:
+#   1. the packaged skills/ tree on the skill registry's global layer;
+#   2. the formal row Config (src/config.js) with its minimal browser page —
+#      the background-job `exitGuard` switch and the `declareOwnsHost`
+#      deployment flag, plus deprecated load-only fields kept so old profiles
+#      load during migration;
+#   3. the one-time legacy `exitGuard` import and the one-time old-config
+#      migration into dsh-better-subagent / dsh-better-compact (src/migrate.js);
+#   4. the `declareOwnsHost` index tap.
+# It no longer registers `/apollo/api/*` (dsh-better-subagent owns those read
+# aliases) and no longer implements CLI protocols, subagent routing, the wait
+# tool, tier/delegation prompt generation or the child exit guard.
 #
-# Row config — two classes of fields (details in README, section 配置):
-#   - volatile, editable from the Web form: `exitGuard`, `tiers.{fast,quality}`,
-#     `subagents.{eng,global}`, `subagents.{codex,claude}.*`
-#     (enabled / executable / profile / permissionMode / defaultModel / models[]).
-#     Changes do NOT reload this row.
-#   - deployment flags, hand-written here, never edited from the Web form (the
-#     settings layer rejects writes outside the volatile paths):
-#     `trustedHosts: string[]` — reverse-proxy authorities additionally allowed
-#     to call /apollo/api/* (loopback is always trusted);
-#     `declareOwnsHost: boolean` — the boot global above; off by default,
-#     enable only behind a trusted proxy.
+# Row config — two classes of fields (details in README, section 设置与权限):
+#   - volatile, editable from the Web form: `exitGuard` (background jobs only)
+#     and the deprecated `tiers.*` / `subagents.*` / `exitGuard`-era fields that
+#     the migration reads; every deprecated field is inert at runtime;
+#   - deployment flags, hand-written here, never edited from the Web form:
+#     `trustedHosts` (deprecated, load-only; the new plugin owns its own
+#     `trustedHosts`), `declareOwnsHost` (the boot global above; off by
+#     default, enable only behind a trusted proxy).
 #
 # Presets are separate bundle-patch rows (presets/eng.patch.yml,
 # presets/eng-ptc.patch.yml): a preset is an `insert` of a
-# `@deepseek-ai/dsh-agent-preset` row read straight from that file — the old
-# sync-into-<dshHome>/.agent-presets delivery no longer exists.
+# `@deepseek-ai/dsh-agent-preset` row read straight from that file.
 - insert:
     - id: apollo-skills
       name: '@menghuan1918/dsh-apollo'
