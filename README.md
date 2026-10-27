@@ -133,7 +133,8 @@ flowchart LR
 
 1. 重启 profile（只刷新网页不算重载）。
 2. 迁移写入的压缩设置需要**再重载一次**才会被运行中的引擎采用（引擎使用载入时冻结快照；设置页/inspect 会显示 `requiresReload`）。
-3. 如果旧 profile 曾用网页编辑器保存过 `preset-eng` / `preset-eng-ptc` 的整份覆盖，那份覆盖会按 DSH 规则优先于新 bundle 的预设；其中如果还引用原生 `compaction-basic`，需要重新保存/清理该预设覆盖，才能用上新的 engine。迁移会报告无法唯一确定来源的 ambiguity，不会猜。
+3. 如果旧 profile 曾用网页编辑器保存过 `preset-eng` / `preset-eng-ptc` 的整份覆盖，那份覆盖会按 DSH 规则优先于新 bundle 的预设；其中如果还引用原生 `compaction-basic`，需要重新保存/清理该预设覆盖，才能用上新的 engine。
+4. 如果旧预设行已经被手动删除，迁移会报告 `source-missing` 而不是假装保留：请按 [dsh-better-compact 的配置表](https://github.com/Menghuan1918/dsh-better-compact#configuration) 手工把旧值填进新的 compact 行，或恢复升级前的 `cordis.patch.yml` 备份。多个预设显式配置无法确定时迁移报告 `ambiguous`，不会猜。
 
 ## 设置与行归属
 

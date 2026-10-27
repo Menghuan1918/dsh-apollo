@@ -197,6 +197,8 @@ npm install --no-save /path/to/menghuan1918-dsh-better-subagent-0.1.0.tgz /path/
 
 若目标命名空间一直不可读/不可写（例如双显式 bundle 导致写入被拒），日志明确要求重载 profile，迁移保持幂等，下次启动会再试；不宣告成功。迁移不删除旧值，也不创建迁移 sidecar。
 
+来源缺失（旧预设行已被删除、或默认预设行不可读）时报告 `source-missing` 与需要处理的 row id；显式导入路径是把旧原生键手工写进 `dsh-better-compact` 行，或从升级前的 `cordis.patch.yml` 备份恢复该预设行。两个预设显式配置不同且无法确定活跃预设时报告 `ambiguous`，不猜。
+
 ### 子代理迁移
 
 来源：`apollo-skills` 的**有效配置**。volatile 字段来自 `describe().value`；非 volatile 的 `trustedHosts` 来自旧行 raw config（`describe().value` 只投影 volatile 表单，不能用来判断 trustedHosts）。
