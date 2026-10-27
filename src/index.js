@@ -1,14 +1,20 @@
 /**
- * Apollo's single host row registers bundled skills, profile-backed settings,
- * and the CLI adapters that extend existing subagent tools. Presets are still
- * delivered by bundle patches. Browser code remains a no-build closure factory.
+ * Apollo's single host row registers bundled skills, its own minimal row
+ * settings, and the one-time old-config migration into the independent
+ * dsh-better-subagent / dsh-better-compact rows. Presets are still delivered by
+ * bundle patches. Browser code remains a no-build closure factory.
+ *
+ * Apollo no longer implements subagent CLI protocols/routing, the wait tool,
+ * capability/model HTTP probes, tier/delegation prompt generation or the child
+ * exit guard — those are owned by the standalone plugins and only assembled
+ * here through the shared stable rows.
  */
 
 import { readFile, readdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { mountMigration } from './migrate.js'
 import { mountSettings } from './settings.js'
-import { mountSubagents } from './subagents.js'
 export { Config } from './config.js'
 
 const PROVIDER_NAME = 'dsh-apollo'
@@ -23,12 +29,12 @@ export const name = 'apollo-skills'
 /** Service required by the bundled skill provider. */
 export const inject = ['skills']
 
-/** Register the packaged skills provider and mount the panel. */
+/** Register the packaged skills provider, mount settings and old-config migration. */
 export function apply(ctx, config) {
   ctx.skills.registerProvider(() => createProvider(ctx))
   if (typeof ctx.inject === 'function') {
-    mountSettings(ctx, config)
-    mountSubagents(ctx, config)
+    const settings = mountSettings(ctx, config)
+    mountMigration(ctx, config, { legacyImport: settings.legacyImport })
   }
 }
 

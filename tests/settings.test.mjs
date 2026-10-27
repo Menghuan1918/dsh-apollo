@@ -3,8 +3,8 @@
  *
  * 覆盖：旧 eng.json / atlas.json 只读读取与优先级、导入补丁规则（当前 profile
  * 显式值优先、无意义写入跳过）、`importLegacyConfig` 的等待 Loader/服务缺失/
- * 行不可配置路径，以及 `mountSettings` 的装配（延迟 webServer→能力路由、
- * 延迟 settings→页面策略 + 一次性导入、无服务时不炸）。
+ * 行不可配置路径，以及 `mountSettings` 的装配（延迟 settings→页面策略 +
+ * 一次性导入、declareOwnsHost tap、零 HTTP 路由、无服务时不炸）。
  *
  * 以 fake ctx 驱动，不启真实 HTTP 服务、不落真实 profile。
  */
@@ -230,30 +230,23 @@ function makeMountCtx(services, { fiber = { id: 'fiber' } } = {}) {
   return { ctx, injections }
 }
 
-test('mountSettings：延迟注入 webServer 与 settings，并注册能力路由', () => {
+test('mountSettings：只延迟注入 settings；零 HTTP 路由（路由归独立插件）', async () => {
   const routes = []
   const effects = []
   const { ctx, injections } = makeMountCtx({
-    webServer: {
-      webServer: { register: (route) => { routes.push(route); return () => {} } },
-      effect: (factory, label) => { effects.push(label); return factory() },
-      get: () => undefined,
-    },
     settings: {
       settings: { configure: () => () => {}, describe: async () => [], update: async () => {} },
-      effect: () => () => {},
+      effect: (factory, label) => { effects.push(label); return factory() },
     },
   })
-  mountSettings(ctx, { trustedHosts: ['dsh.example.com'] })
-  assert.deepEqual(injections, [['webServer'], ['settings']])
-  assert.equal(routes.length, 1)
-  assert.equal(routes[0].kind, 'prefix')
-  assert.equal(routes[0].path, '/apollo/api')
-  assert.equal(typeof routes[0].handler, 'function')
-  assert.deepEqual(effects, ['apollo-panel: /apollo/api capabilities route'])
+  const mount = mountSettings(ctx, { trustedHosts: ['dsh.example.com'] })
+  assert.deepEqual(injections, [['settings']], '不能再注入 webServer 注册能力路由')
+  await mount.legacyImport
+  assert.deepEqual(routes, [])
+  assert.deepEqual(effects, ['apollo-settings: row config page policy'])
 })
 
-test('mountSettings：登记行配置页面策略（auto:false + 本插件 fiber）', () => {
+test('mountSettings：登记行配置页面策略（auto:false + 本插件 fiber）', async () => {
   const configureCalls = []
   const fiber = { id: 'apollo-fiber' }
   const { ctx } = makeMountCtx({
@@ -267,21 +260,17 @@ test('mountSettings：登记行配置页面策略（auto:false + 本插件 fiber
       logger: { warn: () => {}, info: () => {} },
     },
   }, { fiber })
-  mountSettings(ctx, {})
+  const mount = mountSettings(ctx, {})
+  await mount.legacyImport
   assert.equal(configureCalls.length, 1)
   assert.deepEqual(configureCalls[0], [{ auto: false }, fiber])
 })
 
-test('mountSettings：策略登记抛错时只告警，不影响导入与其余装配', async () => {
+test('mountSettings：策略登记抛错时只告警，不影响一次性导入', async () => {
   const warnings = []
   await withHome({ 'eng.json': '{"exitGuard":true}' }, async (env) => {
     const calls = []
     const { ctx } = makeMountCtx({
-      webServer: {
-        webServer: { register: () => () => {} },
-        effect: (factory) => factory(),
-        get: () => undefined,
-      },
       settings: {
         settings: {
           configure: () => { throw new Error('already configured') },
@@ -292,59 +281,57 @@ test('mountSettings：策略登记抛错时只告警，不影响导入与其余�
         logger: { warn: (message) => warnings.push(message), info: () => {} },
       },
     })
-    mountSettings(ctx, {}, { env })
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    const mount = mountSettings(ctx, {}, { env })
+    await mount.legacyImport
     assert.equal(warnings.length, 1)
     assert.match(warnings[0], /page policy was not registered/)
     assert.deepEqual(calls, [[ENTRY_ID, { exitGuard: true }, 3]])
   })
 })
 
-test('mountSettings：declareOwnsHost:true 时装上反代 tap（无需再调 mountPanel）', () => {
+test('mountSettings：declareOwnsHost:true 时装上反代 tap，且不注册路由', () => {
   const taps = []
-  const { ctx } = makeMountCtx({
+  const routes = []
+  const { ctx, injections } = makeMountCtx({
     webServer: {
-      webServer: { register: () => () => {}, tapIndex: (tap) => { taps.push(tap); return () => {} } },
+      webServer: { register: (route) => { routes.push(route); return () => {} }, tapIndex: (tap) => { taps.push(tap); return () => {} } },
       effect: (factory) => factory(),
-      get: () => undefined,
     },
   })
   mountSettings(ctx, { declareOwnsHost: true })
+  assert.deepEqual(injections, [['webServer'], ['settings']])
   assert.equal(taps.length, 1)
   assert.equal(taps[0]('<head></head>').includes('__DSH_TRANSPORT__'), true)
+  assert.deepEqual(routes, [])
 })
 
 test('mountSettings：declareOwnsHost 缺省时不装 tap', () => {
   const taps = []
-  const { ctx } = makeMountCtx({
+  const { ctx, injections } = makeMountCtx({
     webServer: {
       webServer: { register: () => () => {}, tapIndex: (tap) => { taps.push(tap); return () => {} } },
       effect: (factory) => factory(),
-      get: () => undefined,
     },
   })
   mountSettings(ctx, { trustedHosts: ['dsh.example.com'] })
+  assert.deepEqual(injections, [['settings']])
   assert.deepEqual(taps, [])
 })
 
-test('mountSettings：服务缺失（headless）时安静返回，不注册任何东西', () => {
+test('mountSettings：服务缺失（headless）时安静返回，只保留 settings 注入', () => {
   const injections = []
   const ctx = { fiber: {}, inject: (names) => { injections.push(names) } }
   mountSettings(ctx, {})
-  assert.deepEqual(injections, [['webServer'], ['settings']])
-
-  // declareOwnsHost 打开时多一条 webServer 注入（tap 与能力路由各一次），
-  // 但两者在没有 webServer 的组合里都安静跳过。
+  assert.deepEqual(injections, [['settings']])
   const withTap = []
   const tapCtx = { fiber: {}, inject: (names) => { withTap.push(names) } }
   mountSettings(tapCtx, { declareOwnsHost: true })
-  assert.deepEqual(withTap, [['webServer'], ['webServer'], ['settings']])
+  assert.deepEqual(withTap, [['webServer'], ['settings']])
 })
 
-test('mountSettings：同一份装配里旧配置只导入一次', async () => {
+test('mountSettings：同一份装配里旧配置只导入一次，legacyImport 在完成后 resolve', async () => {
   await withHome({ 'eng.json': '{"exitGuard":true}' }, async (env) => {
     const calls = []
-    const injections = []
     const settingsCtx = {
       settings: {
         configure: () => () => {},
@@ -357,7 +344,6 @@ test('mountSettings：同一份装配里旧配置只导入一次', async () => {
     const ctx = {
       fiber: {},
       inject(names, callback) {
-        injections.push(names)
         if (names.length === 1 && names[0] === 'settings') {
           // 同一服务反复可用（settings 重载）时回调会多次触发。
           callback(settingsCtx)
@@ -365,25 +351,8 @@ test('mountSettings：同一份装配里旧配置只导入一次', async () => {
         }
       },
     }
-    mountSettings(ctx, {}, { env })
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    const mount = mountSettings(ctx, {}, { env })
+    await mount.legacyImport
     assert.equal(calls.length, 1)
   })
-})
-
-test('mountSettings：webServer 出现后能力路由按活配置读 trustedHosts', async () => {
-  const routes = []
-  const { ctx } = makeMountCtx({
-    webServer: {
-      webServer: { register: (route) => { routes.push(route); return () => {} } },
-      effect: (factory) => factory(),
-      get: () => undefined,
-    },
-  })
-  mountSettings(ctx, { trustedHosts: ['dsh.example.com'] }, { route: { read: async () => ({ executables: {}, codexProfiles: [] }) } })
-  assert.equal(routes.length, 1)
-  const res = { status: undefined, body: '', writeHead(status) { this.status = status }, end(payload) { this.body = payload } }
-  await routes[0].handler({ url: '/apollo/api/capabilities', method: 'GET', headers: { host: 'dsh.example.com' } }, res)
-  assert.equal(res.status, 200)
-  assert.deepEqual(JSON.parse(res.body), { ok: true, value: { executables: {}, codexProfiles: [] } })
 })

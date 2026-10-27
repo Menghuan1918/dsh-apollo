@@ -11,10 +11,18 @@
  *   - 普通字段（`trustedHosts`、`declareOwnsHost`）是**部署标志**：只在行配置里
  *     声明，改动会让 Loader 正常重挂本行（重挂才需要重新读）。
  *
+ * 0.5.0 的所有权边界：
+ *   - **仍在运行时使用**：`exitGuard`（只控制运行中后台 job 的退出守卫）与
+ *     `declareOwnsHost`（宿主部署标志）。最小行配置页只展示 `exitGuard`。
+ *   - **deprecated、运行时不再读取**：`tiers.*`、`subagents.*`、`trustedHosts`。
+ *     它们只保留旧默认值，让 0.4.x 的 profile 能正常装载；`src/migrate.js`
+ *     在启动后把用户值一次性补进 dsh-better-subagent 的同名路径
+ *     （`exitGuard` → `childExitGuard`），之后这些字段保持惰性，客户端也不把
+ *     它们当作可用的子代理设置。不要新增消费方。
+ *
  * 可编辑范围（volatile，即 dsh-settings 投影出的行配置表单字段）：
- * `exitGuard`、`tiers.fast`、`tiers.quality`、`subagents.eng`、`subagents.global`、
- * `subagents.codex.*`、`subagents.claude.*`。表单写入只能落在 volatile 路径上（dsh-settings 会拒绝
- * 其他路径），所以部署标志不会从网页上被改写。
+ * `exitGuard`、以及 deprecated 的 `tiers.*` / `subagents.*`。表单写入只能落在
+ * volatile 路径上（dsh-settings 会拒绝其他路径），所以部署标志不会从网页上被改写。
  *
  * 持久化：DSH 的 configEditor 把表单写入落到活动 profile 的 cordis.patch.yml
  * （本行 id 的 `config` 覆盖层），不再有 `<dshHome>/eng.json` 写入路径；旧文件
@@ -107,19 +115,28 @@ export const TIER_NAMES = Object.freeze(['fast', 'quality'])
 /**
  * 本插件行的正式配置 schema。
  *
- * `exitGuard`、`subagents.{eng,global}`、`subagents.{codex,claude}` 标 volatile
- * （即时生效、不重挂）；`trustedHosts`、`declareOwnsHost` 是普通部署标志
- * （改动重挂本行后生效）。
+ * `exitGuard` 与 deprecated 的 `subagents.{eng,global}`、`subagents.{codex,claude}`
+ * 标 volatile（即时生效、不重挂）；`trustedHosts`（deprecated）与
+ * `declareOwnsHost` 是普通部署标志（改动重挂本行后生效）。
  */
 export const Config = z.object({
-  /** 退出守卫总开关（默认关闭，显式开启才拦回合结束）。 */
+  /**
+   * 退出守卫总开关（默认关闭）：只控制运行中**后台 job** 的拦截。
+   * 运行中子代理的拦截由 dsh-better-subagent 的 childExitGuard 拥有。
+   */
   exitGuard: z.boolean().default(false).volatile(),
-  /** 子代理模型分档（工程模式提示词按此渲染；路由须在 allowedModels 白名单内）。 */
+  /**
+   * @deprecated 0.5.0 起重命名为 dsh-better-subagent 的 `tiers.*`，本字段只供
+   * 迁移读取；运行时提示词不再从这里生成。保留旧默认值以装载旧 profile。
+   */
   tiers: z.object({
     fast: TierSchema,
     quality: TierSchema,
   }),
-  /** 子代理 CLI 后端的接入范围与每后端配置。 */
+  /**
+   * @deprecated 0.5.0 起由 dsh-better-subagent 拥有同名字段；这里只为旧 profile
+   * 装载与一次性迁移保留。运行时（CLI 路由、范围判断、提示词）不再读取。
+   */
   subagents: z.object({
     /** 工程模式预设（`eng`/`eng-ptc`）可见这些后端。 */
     eng: z.boolean().default(true).volatile(),
@@ -128,7 +145,11 @@ export const Config = z.object({
     codex: backendSchema(BACKENDS.codex),
     claude: backendSchema(BACKENDS.claude),
   }),
-  /** 允许调用本包 HTTP 路由的反向代理权威（host 或 host:port）；默认只信 loopback。 */
+  /**
+   * @deprecated 0.5.0 起由 dsh-better-subagent 的 `trustedHosts` 拥有（只约束
+   * 该插件的只读接口）；这里只为旧 profile 装载与迁移保留，Apollo 不再注册
+   * HTTP 路由，字段在运行时无效。
+   */
   trustedHosts: z.array(z.string()).default([]),
   /** 注入 `__DSH_TRANSPORT__.ownsHost` 让官方 client 把反代页面当 loopback（默认关闭）。 */
   declareOwnsHost: z.boolean().default(false),

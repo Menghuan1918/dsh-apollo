@@ -2,33 +2,28 @@
  * `eng-mode-instructions` — preset-scoped prompt section for 工程模式
  * (`eng`) and 工程(PTC)模式 (`eng-ptc`).
  *
- * Carries what no other surface states: the general engineering discipline
- * (moved out of the user-global ~/.dsh/AGENTS.md, which keeps only
- * machine-local conventions), the delegation policy, the subagent model tiers
- * rendered from Apollo settings (`tiers.*`), and the exit guard contract while
- * that switch is on. Tool mechanics, background-job etiquette and run_code
- * syntax live in the harness prompt and tool descriptions and are NOT
- * repeated here.
+ * 0.5.0 boundary: this section carries ONLY what still belongs to Apollo — the
+ * general engineering discipline (moved out of the user-global ~/.dsh/AGENTS.md,
+ * which keeps only machine-local conventions) and the job-only exit-guard
+ * contract while that switch is on.
  *
- * The text is a function re-rendered per request from the live Apollo config,
- * so settings edits apply without remounting; an edit costs the prefix cache
- * once, which is acceptable for rarely changed settings. The row config
- * `ptc: true` (set by eng-ptc) adds a rule for fanning out subagents inside
- * one run_code program (workflow usage is left to the harness tool guidance); run_code mechanics themselves
- * come from the harness `tools:sdk` / `tools:ptc-only` sections.
+ * Subagent delegation, fast/quality model tiers, PTC fan-out, the CLI catalog
+ * and the running-child guard are owned by dsh-better-subagent's per-Agent
+ * prompt sections (registered on `agent/created`). Apollo keeps no second
+ * generator and no `ptc` switch: the new plugin detects `eng-ptc` itself.
+ * Tool mechanics, background-job etiquette and run_code syntax live in the
+ * harness prompt and tool descriptions and are not repeated here.
+ *
+ * The text is a function re-rendered per request from the live Apollo config, so
+ * settings edits apply without remounting; an edit costs the prefix cache once,
+ * which is acceptable for rarely changed settings.
  */
 
-import z from '@deepseek-ai/schemastery'
 import { currentConfig } from '../../../../src/config.js'
 
 export const name = 'eng-mode-instructions'
 
 export const inject = ['systemPrompt']
-
-export const Config = z.object({
-  /** Render the PTC variant (eng-ptc). */
-  ptc: z.boolean().default(false),
-})
 
 const PRINCIPLES = `# Engineering mode
 
@@ -69,56 +64,25 @@ For coding and infrastructure work. These are defaults; explicit user instructio
 - Never sleep longer than 60s at once; for longer waits use stepped probes, sentinel files, or completion notices.
 - Run services that must outlive the turn (dev servers, watchers) under pm2/nohup outside the job registry, and say which ones are still running when you finish.`
 
-const DELEGATION_HEAD = `## Delegation
-- Subagents cannot see this conversation: state the goal, write scope, deliverable, and verification, and give real file paths for prior outputs.
-- Opening reconnaissance: when starting non-trivial work in an unfamiliar or large codebase, immediately dispatch fast-tier scouts in parallel (structure, relevant modules, conventions, test entry points), all in one message; the main agent reads only the instruction files that define the task. A scout prompt needs only goal, boundaries, and deliverable.
-- Delegate read-only, parallelizable, stateless investigation by default instead of trying it in the main thread first; when a new unknown appears mid-task and 1–2 rounds of digging do not converge, delegate it.
-- Implementation chunks with non-overlapping write scopes can run in parallel; keep linear work, tightly coupled changes, and debugging that needs live state in the main thread.`
-
-const FANOUT_PTC = '- For repeated same-shaped work, dispatch all subagents inside one run_code program, then collect them with wait_subagent.'
-
-const DELEGATION_TAIL = `- When you need a subagent's result, wait patiently with wait_subagent. Do not poll or prod it with send_message; send a message only to give it genuinely new information or a correction.
-- The main agent owns integration, review, and final verification. Subagent reports are leads, not evidence: check the actual changes yourself.
-- When a subagent ends in an error or empty result, read why, fix the cause, and re-dispatch once; take over in the main thread only if it fails again without an external blocker, and say why.`
-
-const EXIT_GUARD = `## Exit guard
-- If subagents or background commands are still running when the turn would end, the system injects a reminder and the turn continues. Collect them with wait_subagent / job_output, stop unneeded ones with job_kill, then finish.`
-
-/** One tier as model-facing argument text; an unset tier inherits the parent route. */
-export function renderTier(tier) {
-  if (!tier?.provider || !tier?.model) return 'omit provider / model / reasoning_effort to inherit the parent route'
-  const parts = [`provider: \`${tier.provider}\``, `model: \`${tier.model}\``]
-  if (tier.reasoningEffort) parts.push(`reasoning_effort: \`${tier.reasoningEffort}\``)
-  return parts.join(' · ')
-}
+const JOB_EXIT_GUARD = `## Exit guard
+- If background commands are still running when the turn would end, the system injects a reminder and the turn continues. Collect them with job_output, stop unneeded ones with job_kill, then finish.`
 
 /**
- * Render the full section text.
- * @param config - normalized Apollo config (`exitGuard`, `tiers`).
- * @param options - `{ ptc }` from this row's config.
+ * Render the section text.
+ * @param config - normalized Apollo config (`exitGuard`).
  * @returns the section markdown.
  */
-export function renderInstructions(config, options = {}) {
-  const tiers = `## Subagent model tiers
-- Fast tier (exploration, reconnaissance, mechanical analysis, batch triage): ${renderTier(config.tiers?.fast)}
-- Quality tier (complex implementation, debugging, review, design): ${renderTier(config.tiers?.quality)}
-- Start exploration on the fast tier; when coverage falls short or key questions remain, re-dispatch the unresolved part on the quality tier. Escalating means re-dispatching, not modifying an existing subagent.
-- subagent_fork takes no model choice: it keeps the parent route to reuse the prefix cache.`
-  const blocks = [
-    PRINCIPLES,
-    [DELEGATION_HEAD, ...(options.ptc ? [FANOUT_PTC] : []), DELEGATION_TAIL].join('\n'),
-    tiers,
-  ]
-  if (config.exitGuard) blocks.push(EXIT_GUARD)
+export function renderInstructions(config) {
+  const blocks = [PRINCIPLES]
+  if (config?.exitGuard) blocks.push(JOB_EXIT_GUARD)
   return blocks.join('\n\n')
 }
 
-export function apply(ctx, config) {
-  const options = { ptc: config?.ptc === true }
+export function apply(ctx) {
   ctx.effect(() => ctx.systemPrompt.section({
     name: 'eng:mode-instructions',
     order: 1,
     interpolate: false,
-    text: () => renderInstructions(currentConfig(ctx), options),
+    text: () => renderInstructions(currentConfig(ctx)),
   }), 'eng-mode-instructions.section()')
 }

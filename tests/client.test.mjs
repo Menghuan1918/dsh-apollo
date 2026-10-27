@@ -1,8 +1,8 @@
 /**
- * 浏览器半边（src/client.js）真实 React 测试：react-test-renderer@18 驱动真实 hooks
- * 与元素树（不需要 react-dom/浏览器）。宿主面按 0.2.0-rc.2 公开形状构造：`form` =
- * 官方插件页 formFor() 的 `{ state, mutate }`，`slots` = keyed 槽声明生命周期，
- * capabilities 用假 fetch（默认不触网）。client.js 只 require('react')。
+ * 浏览器半边（src/client.js）真实 React 测试：react-test-renderer@18 驱动真实
+ * hooks 与元素树（不需要 react-dom/浏览器）。宿主面按 0.2.0-rc.2 公开形状构造：
+ * `form` = 官方插件页 formFor() 的 `{ state, mutate }`，`slots` = keyed 槽声明生命周期。
+ * client.js 只 require('react')，且 0.5.0 起不再 fetch 任何 `/apollo/api/*`。
  */
 
 import { test } from 'node:test'
@@ -10,7 +10,6 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import * as React from 'react'
 import TestRenderer from 'react-test-renderer'
-import { CLAUDE_PERMISSION_MODES, CODEX_PERMISSION_MODES } from '../src/config.js'
 
 const { createElement } = React
 const act = TestRenderer.act ?? TestRenderer.default?.act
@@ -21,18 +20,7 @@ const NS = 'apollo'
 /** 假 t：键名 + 参数（断言不依赖文案）。 */
 const t = (key, params) => (params === undefined ? key : key + '(' + JSON.stringify(params) + ')')
 
-const READY = {
-  exitGuard: false,
-  subagents: {
-    eng: true,
-    global: false,
-    codex: {
-      enabled: true, executable: 'codex', profile: 'work', permissionMode: 'read-only', defaultModel: 'gpt-5',
-      models: [{ id: 'gpt-5', efforts: ['low', 'high'], defaultEffort: 'high' }],
-    },
-    claude: { enabled: false, executable: 'claude', permissionMode: 'plan', defaultModel: '', models: [] },
-  },
-}
+const READY = { exitGuard: false }
 
 /** ConfigForm 公开面：getSnapshot() + mutate(ops, revision)。 */
 function makeForm(options = {}) {
@@ -41,14 +29,13 @@ function makeForm(options = {}) {
     status: options.status ?? 'ready',
     value: options.value ?? READY,
     base: options.value ?? READY,
-    user: options.user,
+    user: options.user ?? {},
     revision: options.revision ?? 1,
     writable: options.writable ?? true,
     mode: options.mode ?? 'host',
   }
   const calls = []
   let settle = null
-  // 镜像折叠：把写入的 set 操作落到值上并推进 revision。
   const accept = (ops) => {
     const value = structuredClone(snapshot.value)
     for (const op of ops) {
@@ -174,7 +161,6 @@ async function mountPage(options = {}) {
     controller,
     get renderer() { return renderer },
     async run(run) { await act(async () => { await run() }) },
-    /** 模拟官方页面重渲染（镜像折叠后送来新的快照）。 */
     async update() { await act(async () => { renderer.update(element()) }) },
   }
   await act(async () => { renderer = TestRenderer.create(element()) })
@@ -184,10 +170,9 @@ async function mountPage(options = {}) {
 // 只匹配宿主元素：组件实例也会带同名 props。
 const host = (node) => typeof node.type === 'string'
 const byId = (renderer, id) => renderer.root.findAll((node) => host(node) && node.props?.id === id)[0]
-const byLabel = (renderer, label) => renderer.root.findAll((node) => host(node) && node.props?.['aria-label'] === label)[0]
 const byType = (renderer, type) => renderer.root.findAllByType(type)
 const saveButton = (renderer) => byType(renderer, 'button').find((node) => node.props['data-variant'] === 'primary')
-const optionsOf = (node) => node.findAllByType('option').map((option) => option.props.value)
+const resetButton = (renderer) => byType(renderer, 'button').find((node) => node.props['data-variant'] === 'outline')
 
 function textOf(node) {
   if (node === null || node === undefined) return ''
@@ -198,27 +183,13 @@ function textOf(node) {
 
 const pageText = (renderer) => textOf(renderer.toJSON())
 
-/** 假 fetch：默认绝不触网。 */
-const CAPABILITIES = {
-  executables: { codex: { executable: 'codex', path: '/opt/bin/codex', version: 'codex-cli 9.9.9' }, claude: { executable: 'claude', path: null, version: null } },
-  codexProfiles: ['default', 'work'],
-}
-
-function useFetch(handler) {
-  const original = globalThis.fetch
-  globalThis.fetch = handler
-  return () => { globalThis.fetch = original }
-}
-
-useFetch(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, value: CAPABILITIES }) }))
-
 test('装载与 slot 注册：声明才注册、新键与旧键并排、塌缩回收、summary 只回一行', async () => {
   const { slots, effects, dicts, loaded, declare } = install()
   assert.equal(loaded.entry.id, '@menghuan1918/dsh-apollo')
   assert.deepEqual(loaded.exports.inject, ['slots', 'locale'])
   assert.equal(SOURCE.includes('document.'), false)
+  assert.equal(SOURCE.includes('/apollo/api/'), false, 'Apollo 不再读取或注册 /apollo/api/*')
 
-  // 页面未打开（槽未声明）：只挂等待，不注册。
   assert.deepEqual(slots.injected, ['plugins.row.config'])
   assert.equal(slots.registrations.length, 0)
   assert.deepEqual(effects.map((effect) => effect.label), ['@menghuan1918/dsh-apollo: dictionaries', '@menghuan1918/dsh-apollo: row config page'])
@@ -231,25 +202,21 @@ test('装载与 slot 注册：声明才注册、新键与旧键并排、塌缩�
     { name: 'plugins.row.config', key: 'dsh-apollo#apollo-skills', locale: NS },
   ])
   assert.equal(declared.disposers.length, 1)
-  // 两个键注册同一个页面组件。
   assert.equal(new Set(slots.registrations.map((entry) => entry.component)).size, 1)
 
-  // summary：一行文案，不挂样式表。
   let renderer
   await act(async () => { renderer = TestRenderer.create(createElement(declared.component, { view: 'summary', t })) })
   assert.equal(pageText(renderer), 'summary')
   assert.equal(byType(renderer, 'style').length, 0)
   await act(async () => { renderer.unmount() })
 
-  // 声明塌缩回收。
   slots.undeclare('plugins.row.config')
   assert.equal(slots.registrations.length, 0)
 })
 
-test('ready：真实渲染表单 + 唯一 <style>，权限档与 src/config.js 一致', async () => {
+test('ready：只渲染 exitGuard 开关、样式表与迁移说明；不再有旧子代理表单', async () => {
   const page = await mountPage()
   const renderer = page.renderer
-  await page.run(async () => { await Promise.resolve() })
 
   const styles = byType(renderer, 'style')
   assert.equal(styles.length, 1)
@@ -258,65 +225,73 @@ test('ready：真实渲染表单 + 唯一 <style>，权限档与 src/config.js �
   assert.equal(renderer.root.findAll((node) => String(node.props.className ?? '').includes('apollo-root')).length, 1)
 
   assert.equal(byId(renderer, 'apollo-exit-guard').props['aria-checked'], false)
-  assert.deepEqual(optionsOf(byId(renderer, 'apollo-codex-permission')), [...CODEX_PERMISSION_MODES])
-  assert.deepEqual(optionsOf(byId(renderer, 'apollo-claude-permission')), [...CLAUDE_PERMISSION_MODES])
-  // 探针成功：profile 选项来自 host 探针，可执行文件显示解析结果。
-  assert.deepEqual(optionsOf(byId(renderer, 'apollo-codex-profile')), ['', 'default', 'work'])
-  assert.match(pageText(renderer), /\/opt\/bin\/codex/)
-  assert.equal(saveButton(renderer).props.disabled, true)
+  assert.equal(byType(renderer, 'select').length, 0, 'CLI 权限/模型控件已迁移')
+  assert.equal(byType(renderer, 'input').length, 0, '可执行文件/模型输入已迁移')
+  assert.equal(renderer.root.findAll((node) => String(node.props.id ?? '').startsWith('apollo-codex')).length, 0)
+  assert.match(pageText(renderer), /migratedTitle/)
+  assert.match(pageText(renderer), /deprecatedBody/)
+  assert.equal(saveButton(renderer).props.disabled, true, '无改动时保存不可用')
+  assert.equal(resetButton(renderer).props.disabled, true)
 
-  // 重渲染仍是同一个样式节点（不重复注入）。
   await page.update()
-  assert.equal(byType(renderer, 'style').length, 1)
+  assert.equal(byType(renderer, 'style').length, 1, '重渲染不重复注入样式')
 })
 
-test('只读：writable=false 与 mode=memory 都禁用全部控件且不写入', async () => {
-  for (const form of [{ writable: false }, { mode: 'memory' }]) {
-    const page = await mountPage({ form })
-    const renderer = page.renderer
-    const controls = renderer.root.findAll((node) => ['input', 'select', 'button'].includes(node.type))
-    assert.ok(controls.length > 5)
-    for (const control of controls) assert.equal(control.props.disabled, true, String(control.type))
-    assert.match(pageText(renderer), /readonly/)
-    await page.run(async () => { saveButton(renderer).props.onClick() })
-    assert.deepEqual(page.controller.calls, [])
-  }
-})
-
-test('同一 act 内连续编辑 → 单次 mutate（真实 hooks 状态队列）', async () => {
-  const page = await mountPage()
+test('切换开关 → 保存只提交 exitGuard set 操作并带当前 revision', async () => {
+  const page = await mountPage({ form: { revision: 7 } })
   const renderer = page.renderer
-
-  await act(async () => {
-    byId(renderer, 'apollo-exit-guard').props.onClick()
-    byId(renderer, 'apollo-scope-global').props.onClick()
-    byId(renderer, 'apollo-codex-permission').props.onChange({ target: { value: 'workspace-write' } })
-    byId(renderer, 'apollo-codex-default-model').props.onChange({ target: { value: 'gpt-5.1' } })
-    byLabel(renderer, 'modelIdPlaceholder 1').props.onChange({ target: { value: 'gpt-5.1' } })
-  })
-
-  assert.deepEqual(page.controller.calls, [])
+  await page.run(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
   assert.equal(byId(renderer, 'apollo-exit-guard').props['aria-checked'], true)
-  assert.equal(byId(renderer, 'apollo-scope-global').props['aria-checked'], true)
   assert.equal(saveButton(renderer).props.disabled, false)
 
-  await page.run(async () => { saveButton(renderer).props.onClick() })
-  assert.equal(page.controller.calls.length, 1)
-  assert.equal(page.controller.calls[0].revision, 1)
-  assert.deepEqual(page.controller.calls[0].ops, [
-    { op: 'set', path: ['exitGuard'], value: true },
-    { op: 'set', path: ['subagents', 'global'], value: true },
-    { op: 'set', path: ['subagents', 'codex', 'permissionMode'], value: 'workspace-write' },
-    { op: 'set', path: ['subagents', 'codex', 'defaultModel'], value: 'gpt-5.1' },
-    { op: 'set', path: ['subagents', 'codex', 'models'], value: [{ id: 'gpt-5.1', efforts: ['low', 'high'], defaultEffort: 'high' }] },
-  ])
-  await page.update()
+  await page.run(async () => {
+    saveButton(renderer).props.onClick()
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+  assert.deepEqual(page.controller.calls, [{ ops: [{ op: 'set', path: ['exitGuard'], value: true }], revision: 7 }])
   assert.match(pageText(renderer), /saved/)
-  assert.equal(saveButton(renderer).props.disabled, true)
+  await page.update()
+  assert.equal(byId(renderer, 'apollo-exit-guard').props['aria-checked'], true, '镜像折叠后的宿主值就是新值')
 })
 
-test('saving 与 conflict：挂起态、false 回退宿主值、抛错保留草稿', async () => {
-  // 挂起：按钮显示 saving 且禁用，宿主接受后 revision 前进。
+test('放弃改动：恢复宿主值，不发写入', async () => {
+  const page = await mountPage()
+  const renderer = page.renderer
+  await page.run(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
+  assert.equal(byId(renderer, 'apollo-exit-guard').props['aria-checked'], true)
+  await page.run(async () => { resetButton(renderer).props.onClick() })
+  assert.equal(byId(renderer, 'apollo-exit-guard').props['aria-checked'], false)
+  assert.deepEqual(page.controller.calls, [])
+})
+
+test('冲突（mutate=false）：提示 conflict 并丢弃草稿', async () => {
+  const page = await mountPage({ form: { behavior: 'refuse' } })
+  const renderer = page.renderer
+  await page.run(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
+  await page.run(async () => {
+    saveButton(renderer).props.onClick()
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+  assert.match(pageText(renderer), /conflict/)
+  assert.equal(byId(renderer, 'apollo-exit-guard').props['aria-checked'], false)
+})
+
+test('传输错误（mutate 抛错）：错误提示可见，草稿保留可重试', async () => {
+  const page = await mountPage({ form: { behavior: 'reject' } })
+  const renderer = page.renderer
+  await page.run(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
+  await page.run(async () => {
+    saveButton(renderer).props.onClick()
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+  assert.match(pageText(renderer), /saveFailed/)
+  assert.equal(byId(renderer, 'apollo-exit-guard').props['aria-checked'], true)
+})
+
+test('挂起态：saving 且控件禁用；完成后恢复', async () => {
   const pending = makeForm({ behavior: 'manual' })
   const page = await mountPage({ controller: pending })
   const renderer = page.renderer
@@ -329,316 +304,36 @@ test('saving 与 conflict：挂起态、false 回退宿主值、抛错保留草�
   await page.update()
   assert.equal(pending.getSnapshot().revision, 2)
   assert.match(pageText(renderer), /saved/)
-
-  // false：宿主拒绝 → 回退宿主值 + warn，且不再可保存。
-  const refusing = makeForm({ behavior: 'refuse' })
-  const refused = await mountPage({ controller: refusing })
-  const back = refused.renderer
-  await refused.run(async () => { byId(back, 'apollo-exit-guard').props.onClick() })
-  await refused.run(async () => { saveButton(back).props.onClick() })
-  await refused.update()
-  assert.equal(refusing.calls.length, 1)
-  assert.equal(byId(back, 'apollo-exit-guard').props['aria-checked'], false)
-  assert.match(pageText(back), /conflict/)
-  assert.equal(saveButton(back).props.disabled, true)
-
-  // 抛错：保留草稿、显示失败详情、可再次保存。
-  const failing = makeForm({ behavior: 'reject' })
-  const failed = await mountPage({ controller: failing })
-  const kept = failed.renderer
-  await failed.run(async () => { byId(kept, 'apollo-exit-guard').props.onClick() })
-  await failed.run(async () => { saveButton(kept).props.onClick() })
-  await failed.update()
-  assert.match(pageText(kept), /saveFailed/)
-  assert.match(pageText(kept), /transport down/)
-  assert.equal(byId(kept, 'apollo-exit-guard').props['aria-checked'], true)
-  assert.equal(saveButton(kept).props.disabled, false)
 })
 
-test('模型 effort 关联与启用校验：缓冲保住逗号、失配清空、缺项阻止保存', async () => {
-  const page = await mountPage()
-  const renderer = page.renderer
-
-  // effort 文本缓冲：未输完的逗号不被吃掉；默认 effort 失配即清空。
-  await page.run(async () => { byLabel(renderer, 'modelsLabel 1').props.onChange({ target: { value: 'low, mid, ' } }) })
-  assert.equal(byLabel(renderer, 'modelsLabel 1').props.value, 'low, mid, ')
-  assert.equal(byLabel(renderer, 'modelDefaultEffort 1').props.value, '')
-  assert.deepEqual(optionsOf(byLabel(renderer, 'modelDefaultEffort 1')), ['', 'low', 'mid'])
-
-  // 启用的后端缺默认 effort → 阻止保存并点明后端。
-  assert.equal(saveButton(renderer).props.disabled, true)
-  assert.match(pageText(renderer), /invalidDefaultEffort.*codexTitle/)
-
-  // 选定默认 effort 后可保存。
-  await page.run(async () => { byLabel(renderer, 'modelDefaultEffort 1').props.onChange({ target: { value: 'mid' } }) })
-  assert.equal(saveButton(renderer).props.disabled, false)
-  await page.run(async () => { saveButton(renderer).props.onClick() })
-  assert.deepEqual(page.controller.calls[0].ops, [{
-    op: 'set',
-    path: ['subagents', 'codex', 'models'],
-    value: [{ id: 'gpt-5', efforts: ['low', 'mid'], defaultEffort: 'mid' }],
-  }])
-
-  // 清空默认模型 / 删掉全部模型：都阻止保存并给出明确原因。
-  await page.run(async () => { byId(renderer, 'apollo-codex-default-model').props.onChange({ target: { value: '' } }) })
-  assert.equal(saveButton(renderer).props.disabled, true)
-  assert.match(pageText(renderer), /invalidDefaultModel/)
-  await page.run(async () => { byLabel(renderer, 'modelRemove').props.onClick() })
-  assert.equal(saveButton(renderer).props.disabled, true)
-  assert.match(pageText(renderer), /invalidNoModels/)
-})
-
-test('capabilities 失败：降级提示但保存仍可用', async () => {
-  const restore = useFetch(async () => { throw new Error('offline') })
-  try {
-    const page = await mountPage()
+test('只读 / memory / 不可用 / 加载中状态分别可见且禁用写入', async () => {
+  for (const [form, expected] of [
+    [{ writable: false }, /readonlyNote/],
+    [{ mode: 'memory' }, /readonlyNote/],
+    [{ status: 'unavailable' }, /unavailable/],
+  ]) {
+    const page = await mountPage({ form })
     const renderer = page.renderer
-    await page.run(async () => {})
-    assert.match(pageText(renderer), /capabilitiesError/)
-
-    await page.run(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
-    await page.run(async () => { await saveButton(renderer).props.onClick() })
-    assert.equal(page.controller.calls.length, 1)
-  } finally {
-    restore()
+    assert.match(pageText(renderer), expected)
+    const toggle = byId(renderer, 'apollo-exit-guard')
+    if (toggle !== undefined) assert.equal(toggle.props.disabled, true)
+    await act(async () => { renderer.unmount() })
   }
+
+  const loading = await mountPage({ form: { status: 'loading' } })
+  assert.match(pageText(loading.renderer), /loading/)
+  await act(async () => { loading.renderer.unmount() })
+
+  const setup = install()
+  const { component } = setup.declare()
+  let renderer
+  await act(async () => { renderer = TestRenderer.create(createElement(component, { view: 'page', t })) })
+  assert.match(pageText(renderer), /waitingForm/, 'form 尚未提供时显示等待窗口')
+  await act(async () => { renderer.unmount() })
 })
 
-test('自动发现：按 cli 请求、保留已有模型、只追加新 id、空默认模型自动补上', async () => {
-  const requests = []
-  const discovery = {
-    codex: {
-      models: [
-        { id: 'gpt-5', efforts: ['low'], defaultEffort: 'low' },
-        { id: 'gpt-5.1', efforts: ['low', 'high'], defaultEffort: 'high' },
-      ],
-      source: 'codex-catalog',
-      error: null,
-    },
-    claude: {
-      models: [{ id: 'claude-opus-5-5', efforts: ['low', 'high'], defaultEffort: 'high' }],
-      source: 'claude-models-api',
-      error: null,
-    },
-  }
-  const restore = useFetch(async (url) => {
-    const target = String(url)
-    if (target.startsWith('/apollo/api/models')) {
-      requests.push(target)
-      const cli = new URL('http://dsh.internal' + target).searchParams.get('cli')
-      return { ok: true, status: 200, json: async () => ({ ok: true, value: discovery[cli] }) }
-    }
-    return { ok: true, status: 200, json: async () => ({ ok: true, value: CAPABILITIES }) }
-  })
-  try {
-    const page = await mountPage()
-    const renderer = page.renderer
-
-    await page.run(async () => { await byId(renderer, 'apollo-codex-discover').props.onClick() })
-    // 已存在的 gpt-5 保留宿主值（efforts 未被发现结果覆盖），新 id 追加。
-    assert.equal(byLabel(renderer, 'modelIdPlaceholder 1').props.value, 'gpt-5')
-    assert.equal(byLabel(renderer, 'modelIdPlaceholder 2').props.value, 'gpt-5.1')
-    assert.deepEqual(optionsOf(byId(renderer, 'apollo-codex-default-model')), ['', 'gpt-5', 'gpt-5.1'])
-    assert.equal(byId(renderer, 'apollo-codex-default-model').props.value, 'gpt-5')
-
-    await page.run(async () => { await byId(renderer, 'apollo-claude-discover').props.onClick() })
-    assert.equal(byLabel(renderer, 'modelIdPlaceholder 1').props.value, 'gpt-5')
-    assert.equal(byId(renderer, 'apollo-claude-default-model').props.value, 'claude-opus-5-5')
-    assert.match(pageText(renderer), /discoverDone/)
-    assert.deepEqual(requests, ['/apollo/api/models?cli=codex', '/apollo/api/models?cli=claude'])
-
-    await page.run(async () => { await saveButton(renderer).props.onClick() })
-    assert.deepEqual(page.controller.calls[0].ops, [
-      {
-        op: 'set',
-        path: ['subagents', 'codex', 'models'],
-        value: [
-          { id: 'gpt-5', efforts: ['low', 'high'], defaultEffort: 'high' },
-          { id: 'gpt-5.1', efforts: ['low', 'high'], defaultEffort: 'high' },
-        ],
-      },
-      {
-        op: 'set',
-        path: ['subagents', 'claude', 'defaultModel'],
-        value: 'claude-opus-5-5',
-      },
-      {
-        op: 'set',
-        path: ['subagents', 'claude', 'models'],
-        value: [{ id: 'claude-opus-5-5', efforts: ['low', 'high'], defaultEffort: 'high' }],
-      },
-    ])
-  } finally {
-    restore()
-  }
-})
-
-test('自动发现失败：显示宿主给的 code（含 HTTP 状态），不改草稿', async () => {
-  const restore = useFetch(async (url) => {
-    const target = String(url)
-    if (target.startsWith('/apollo/api/models')) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
-          ok: true,
-          value: { models: [], source: null, error: { code: 'unauthorized', status: 401 } },
-        }),
-      }
-    }
-    return { ok: true, status: 200, json: async () => ({ ok: true, value: CAPABILITIES }) }
-  })
-  try {
-    const page = await mountPage()
-    const renderer = page.renderer
-    await page.run(async () => { await byId(renderer, 'apollo-codex-discover').props.onClick() })
-    assert.match(pageText(renderer), /discoverFailed/)
-    assert.match(pageText(renderer), /discoverReasonUnauthorized/)
-    assert.match(pageText(renderer), /401/)
-    assert.equal(saveButton(renderer).props.disabled, true)
-    assert.deepEqual(page.controller.calls, [])
-  } finally {
-    restore()
-  }
-})
-
-// ── 子代理模型分档 ───────────────────────────────────────────────────────
-
-const ROUTES = {
-  enabled: true,
-  routes: [
-    { provider: 'deepseek-official', model: 'deepseek-flash', efforts: ['low', 'max'], defaultEffort: 'max' },
-    { provider: 'poke2api', model: 'gpt-6.1-sol', efforts: [], defaultEffort: '' },
-  ],
-}
-
-/** 假 fetch：/apollo/api/routes 走 routes 处理器，其余回探针数据。 */
-function useRoutes(routes) {
-  const requests = []
-  const restore = useFetch(async (url) => {
-    const target = String(url)
-    if (target.startsWith('/apollo/api/routes')) {
-      requests.push(target)
-      if (routes instanceof Error) throw routes
-      return { ok: true, status: 200, json: async () => ({ ok: true, value: routes }) }
-    }
-    return { ok: true, status: 200, json: async () => ({ ok: true, value: CAPABILITIES }) }
-  })
-  return { requests, restore }
-}
-
-const labelsOf = (node) => node.findAllByType('option').map((option) => textOf(option.props.children))
-
-test('模型分档：候选来自白名单，effort 有列表时下拉、否则文本，保存整档写入', async () => {
-  const { requests, restore } = useRoutes(ROUTES)
-  try {
-    const page = await mountPage()
-    const renderer = page.renderer
-    await page.run(async () => {})
-    assert.deepEqual(requests, ['/apollo/api/routes'])
-    assert.match(pageText(renderer), /tiersTitle/)
-    assert.doesNotMatch(pageText(renderer), /tiersInactive|routesError/)
-
-    const fast = byId(renderer, 'apollo-tier-fast-route')
-    assert.deepEqual(optionsOf(fast), ['', 'deepseek-official/deepseek-flash', 'poke2api/gpt-6.1-sol'])
-    assert.deepEqual(labelsOf(fast), ['tierInherit', 'deepseek-official / deepseek-flash', 'poke2api / gpt-6.1-sol'])
-    assert.equal(fast.props.value, '')
-    // 沿用父会话路由时 effort 无意义：禁用。
-    assert.equal(byId(renderer, 'apollo-tier-fast-effort').props.disabled, true)
-
-    await page.run(async () => { byId(renderer, 'apollo-tier-fast-route').props.onChange({ target: { value: 'deepseek-official/deepseek-flash' } }) })
-    const effort = byId(renderer, 'apollo-tier-fast-effort')
-    assert.equal(effort.type, 'select')
-    assert.deepEqual(optionsOf(effort), ['', 'low', 'max'])
-    assert.deepEqual(labelsOf(effort), ['tierEffortDefault', 'low', 'max'])
-    await page.run(async () => { byId(renderer, 'apollo-tier-fast-effort').props.onChange({ target: { value: 'max' } }) })
-
-    // 路由没有 effort 列表：文本输入。
-    await page.run(async () => { byId(renderer, 'apollo-tier-quality-route').props.onChange({ target: { value: 'poke2api/gpt-6.1-sol' } }) })
-    assert.equal(byId(renderer, 'apollo-tier-quality-effort').type, 'input')
-    await page.run(async () => { byId(renderer, 'apollo-tier-quality-effort').props.onChange({ target: { value: ' high ' } }) })
-
-    assert.equal(saveButton(renderer).props.disabled, false)
-    await page.run(async () => { await saveButton(renderer).props.onClick() })
-    assert.deepEqual(page.controller.calls[0].ops, [
-      { op: 'set', path: ['tiers', 'fast'], value: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'max' } },
-      { op: 'set', path: ['tiers', 'quality'], value: { provider: 'poke2api', model: 'gpt-6.1-sol', reasoningEffort: 'high' } },
-    ])
-
-    // 换路由清空 effort；改回沿用父会话路由整档清空。
-    await page.update()
-    await page.run(async () => { byId(renderer, 'apollo-tier-fast-route').props.onChange({ target: { value: 'poke2api/gpt-6.1-sol' } }) })
-    assert.equal(byId(renderer, 'apollo-tier-fast-effort').props.value, '')
-    await page.run(async () => { byId(renderer, 'apollo-tier-fast-route').props.onChange({ target: { value: '' } }) })
-    await page.run(async () => { await saveButton(renderer).props.onClick() })
-    assert.deepEqual(page.controller.calls[1].ops, [
-      { op: 'set', path: ['tiers', 'fast'], value: { provider: '', model: '', reasoningEffort: '' } },
-    ])
-  } finally {
-    restore()
-  }
-})
-
-test('模型分档：已存路由不在白名单 → 标注并阻止保存；改回沿用后可保存', async () => {
-  const { restore } = useRoutes(ROUTES)
-  try {
-    const value = { ...READY, tiers: { fast: { provider: 'old', model: 'gone', reasoningEffort: 'high' } } }
-    const page = await mountPage({ form: { value } })
-    const renderer = page.renderer
-    await page.run(async () => {})
-
-    const fast = byId(renderer, 'apollo-tier-fast-route')
-    assert.equal(fast.props.value, 'old/gone')
-    assert.deepEqual(optionsOf(fast), ['', 'deepseek-official/deepseek-flash', 'poke2api/gpt-6.1-sol', 'old/gone'])
-    assert.match(labelsOf(fast)[3], /tierOffList.*old \/ gone/)
-    // 未知路由没有 effort 列表：文本输入保留旧值。
-    assert.equal(byId(renderer, 'apollo-tier-fast-effort').props.value, 'high')
-
-    await page.run(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
-    assert.equal(saveButton(renderer).props.disabled, true)
-    assert.match(pageText(renderer), /invalidTierRoute.*tierFast/)
-    await page.run(async () => { await saveButton(renderer).props.onClick() })
-    assert.deepEqual(page.controller.calls, [])
-
-    await page.run(async () => { byId(renderer, 'apollo-tier-fast-route').props.onChange({ target: { value: '' } }) })
-    assert.equal(saveButton(renderer).props.disabled, false)
-    await page.run(async () => { await saveButton(renderer).props.onClick() })
-    assert.deepEqual(page.controller.calls[0].ops, [
-      { op: 'set', path: ['exitGuard'], value: true },
-      { op: 'set', path: ['tiers', 'fast'], value: { provider: '', model: '', reasoningEffort: '' } },
-    ])
-  } finally {
-    restore()
-  }
-})
-
-test('模型分档：白名单关闭/为空给出提醒；读取失败降级但不阻止保存', async () => {
-  for (const routes of [{ enabled: false, routes: ROUTES.routes }, { enabled: true, routes: [] }]) {
-    const { restore } = useRoutes(routes)
-    try {
-      const page = await mountPage()
-      await page.run(async () => {})
-      assert.match(pageText(page.renderer), /tiersInactive/)
-    } finally {
-      restore()
-    }
-  }
-
-  const { restore } = useRoutes(new Error('offline'))
-  try {
-    const value = { ...READY, tiers: { fast: { provider: 'old', model: 'gone', reasoningEffort: '' } } }
-    const page = await mountPage({ form: { value } })
-    const renderer = page.renderer
-    await page.run(async () => {})
-    assert.match(pageText(renderer), /routesError/)
-    // 白名单未读到：已存路由原样保留为选项，不标注、不阻止保存。
-    const fast = byId(renderer, 'apollo-tier-fast-route')
-    assert.deepEqual(optionsOf(fast), ['', 'old/gone'])
-    assert.deepEqual(labelsOf(fast), ['tierInherit', 'old / gone'])
-    await page.run(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
-    await page.run(async () => { await saveButton(renderer).props.onClick() })
-    assert.deepEqual(page.controller.calls[0].ops, [{ op: 'set', path: ['exitGuard'], value: true }])
-  } finally {
-    restore()
-  }
+test('没有对外部服务的隐式依赖：client.js 不引用新插件的页面键/网络', () => {
+  assert.equal(SOURCE.includes("'@menghuan1918/dsh-better-subagent#"), false)
+  assert.equal(SOURCE.includes("'dsh-better-compact#"), false)
+  assert.equal(SOURCE.includes('fetch('), false)
 })

@@ -147,17 +147,6 @@ test('权限档常量：与两个 CLI 的实测取值一一对应', () => {
   assert.equal(CLAUDE_PERMISSION_MODES.includes('default'), false)
 })
 
-test('浏览器半边的权限档清单与 config.js 同步（无法 import，只能文本对齐）', () => {
-  const source = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
-  const lists = [...source.matchAll(/permissions: \[([^\]]*)\]/g)].map((match) => match[1]
-    .split(',')
-    .map((entry) => entry.trim().replace(/^'|'$/g, ''))
-    .filter((entry) => entry !== ''))
-  assert.equal(lists.length, 2)
-  assert.deepEqual(lists[0], [...CODEX_PERMISSION_MODES])
-  assert.deepEqual(lists[1], [...CLAUDE_PERMISSION_MODES])
-})
-
 test('Config 解析空配置即默认形状，且 volatile 字段是引用', () => {
   const resolved = Config({})
   assert.equal(resolved.exitGuard.get(), false)
@@ -175,7 +164,7 @@ test('Config 拒绝非法权限档（union 校验）', () => {
   assert.equal(Config({ subagents: { codex: { permissionMode: 'danger-full-access' } } }).subagents.codex.get().permissionMode, 'danger-full-access')
 })
 
-test('volatile 路径恰好是设置页可编辑集合', () => {
+test('volatile 路径恰好是设置页可编辑集合（deprecated 字段为旧 profile 迁移保留）', () => {
   const paths = []
   const walk = (node, path) => {
     if (node.meta?.volatile === true) paths.push(path.join('.'))
