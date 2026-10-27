@@ -23,6 +23,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   authenticate,
   bootProfile,
@@ -40,7 +41,7 @@ assert.ok(['apollo', 'standalone', 'both', 'all'].includes(mode), 'mode must be 
 if (mode === 'all') {
   const { spawnSync } = await import('node:child_process')
   for (const one of ['apollo', 'standalone', 'both']) {
-    const result = spawnSync(process.execPath, [new URL(import.meta.url).pathname, one], { stdio: 'inherit', env: process.env })
+    const result = spawnSync(process.execPath, [fileURLToPath(import.meta.url), one], { stdio: 'inherit', env: process.env })
     assert.equal(result.status, 0, `${one} scenario failed`)
   }
   process.exit(0)
