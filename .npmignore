@@ -1,0 +1,13 @@
+# Private Better Plugins design specs: local-only, never published. The
+# package.json `files` whitelist already omits them; this is defence in depth
+# for an accidental `files: ["docs"]` change.
+docs/specs/
+
+# Development-only material.
+tests/
+scripts/
+prompts/
+.github/
+.worktrees/
+*.tgz
+package-lock.json

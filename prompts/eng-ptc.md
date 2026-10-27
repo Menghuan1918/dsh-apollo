@@ -2,23 +2,27 @@
 
 # `eng-ptc` system prompt
 
-Assembled by a headless DSH 0.2.1-rc.2 host for model `example-model`. Per-request runtime context (time, working directory) and tool schemas are omitted; web-only sections of the Web GUI host are not included. Sections in order: `harness:identity`, `deployment:persona-prefix`, `eng:mode-instructions`, `tools:ptc-only`, `context:file-reference`, `tool:bash`, `tool:read`, `tool:write`, `tool:edit`, `tool:glob`, `tool:grep`, `tool:jobs`, `tool:web_search`, `tool:web_fetch`, `tool:goal`, `tool:subagent`, `tools:sdk`.
+Assembled by a headless DSH 0.2.1-rc.2 host for model `example-model`. Per-request runtime context (time, working directory) and tool schemas are omitted; web-only sections of the Web GUI host are not included. Sections in order: `harness:identity`, `deployment:persona-prefix`, `eng:mode-instructions`, `better-subagent:delegation`, `tools:ptc-only`, `context:file-reference`, `tool:bash`, `tool:read`, `tool:write`, `tool:edit`, `tool:glob`, `tool:grep`, `tool:jobs`, `tool:web_search`, `tool:web_fetch`, `tool:goal`, `tool:subagent`, `tools:sdk`.
 
-Apollo settings used:
+Apollo / dsh-better-subagent settings used:
 
 ```json
 {
-  "exitGuard": false,
-  "tiers": {
-    "fast": {
-      "provider": "<fast-provider>",
-      "model": "<fast-model>",
-      "reasoningEffort": "<fast-effort>"
-    },
-    "quality": {
-      "provider": "<quality-provider>",
-      "model": "<quality-model>",
-      "reasoningEffort": "<quality-effort>"
+  "apollo-skills": {
+    "exitGuard": false
+  },
+  "dsh-better-subagent": {
+    "tiers": {
+      "fast": {
+        "provider": "<fast-provider>",
+        "model": "<fast-model>",
+        "reasoningEffort": "<fast-effort>"
+      },
+      "quality": {
+        "provider": "<quality-provider>",
+        "model": "<quality-model>",
+        "reasoningEffort": "<quality-effort>"
+      }
     }
   }
 }
@@ -81,7 +85,6 @@ For coding and infrastructure work. These are defaults; explicit user instructio
 - When you need a subagent's result, wait patiently with wait_subagent. Do not poll or prod it with send_message; send a message only to give it genuinely new information or a correction.
 - The main agent owns integration, review, and final verification. Subagent reports are leads, not evidence: check the actual changes yourself.
 - When a subagent ends in an error or empty result, read why, fix the cause, and re-dispatch once; take over in the main thread only if it fails again without an external blocker, and say why.
-
 ## Subagent model tiers
 - Fast tier (exploration, reconnaissance, mechanical analysis, batch triage): provider: `<fast-provider>` · model: `<fast-model>` · reasoning_effort: `<fast-effort>`
 - Quality tier (complex implementation, debugging, review, design): provider: `<quality-provider>` · model: `<quality-model>` · reasoning_effort: `<quality-effort>`

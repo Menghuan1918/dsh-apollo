@@ -1,11 +1,13 @@
 // Render the system prompt a real DSH host assembles for the eng / eng-ptc
 // presets into prompts/<preset>.md, for human review. Opt-in: needs an
-// installed DSH (DSH_PACKAGE_ROOT) and the dsh-better-goal source next to this
-// repo (or APOLLO_GOAL_SOURCE). Uses a temporary home and a headless profile;
+// installed DSH (DSH_PACKAGE_ROOT) and the three independent plugin packages
+// (installed under this package's node_modules, or next to this repo via the
+// APOLLO_*_SOURCE env overrides). Uses a temporary home and a headless profile;
 // no Web server is started. Run: `npm run prompts`.
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -14,17 +16,48 @@ const root = fileURLToPath(new URL('../', import.meta.url))
 const dsh = process.env.DSH_PACKAGE_ROOT
 if (!dsh) throw new Error('Set DSH_PACKAGE_ROOT to the installed @deepseek-ai/dsh package directory')
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
-const goalSource = resolve(process.env.APOLLO_GOAL_SOURCE ?? join(root, '..', 'dsh-better-goal'))
-const goalName = JSON.parse(await readFile(join(goalSource, 'package.json'), 'utf8')).name
+const require = createRequire(join(root, 'package.json'))
 
-/** Settings the rendered prompts use; tests re-render the Apollo section from the JSON block. */
-const SETTINGS = {
-  exitGuard: false,
+/**
+ * Resolve one shipped package from the verification install (tarball layout), or
+ * fall back to the sibling source checkout. The prompt profile must contain the
+ * real package files, not a hand-written copy of their prompt text.
+ */
+async function resolvePackage(name, envKey, sibling) {
+  const override = process.env[envKey]
+  if (override !== undefined) return resolve(override)
+  try {
+    return dirname(require.resolve(`${name}/package.json`))
+  } catch {
+    const fallback = resolve(join(root, '..', sibling))
+    await readFile(join(fallback, 'package.json'), 'utf8')
+    return fallback
+  }
+}
+
+const goalSource = await resolvePackage('dsh-better-goal', 'APOLLO_GOAL_SOURCE', 'dsh-better-goal')
+const subagentSource = await resolvePackage('@menghuan1918/dsh-better-subagent', 'APOLLO_SUBAGENT_SOURCE', 'dsh-better-subagent')
+const compactSource = await resolvePackage('dsh-better-compact', 'APOLLO_COMPACT_SOURCE', 'dsh-better-compact')
+const goalName = JSON.parse(await readFile(join(goalSource, 'package.json'), 'utf8')).name
+const subagentName = JSON.parse(await readFile(join(subagentSource, 'package.json'), 'utf8')).name
+const compactName = JSON.parse(await readFile(join(compactSource, 'package.json'), 'utf8')).name
+assert.equal(subagentName, '@menghuan1918/dsh-better-subagent')
+assert.equal(compactName, 'dsh-better-compact')
+assert.equal(manifest.dependencies[subagentName], '0.1.0')
+assert.equal(manifest.dependencies[compactName], '0.1.0')
+assert.equal(manifest.dependencies[goalName], '0.2.0')
+
+/** Root row settings the rendered prompts use; tests re-render the Apollo section from the JSON block. */
+const APOLLO_SETTINGS = { exitGuard: false }
+// The subagent prompt sections are rendered from dsh-better-subagent's own row;
+// placeholder routes keep the snapshot stable without depending on a real model.
+const SUBAGENT_SETTINGS = {
   tiers: {
     fast: { provider: '<fast-provider>', model: '<fast-model>', reasoningEffort: '<fast-effort>' },
     quality: { provider: '<quality-provider>', model: '<quality-model>', reasoningEffort: '<quality-effort>' },
   },
 }
+const SETTINGS = { 'apollo-skills': APOLLO_SETTINGS, 'dsh-better-subagent': SUBAGENT_SETTINGS }
 const PRESETS = ['eng', 'eng-ptc']
 const MODEL = 'example-model'
 
@@ -45,22 +78,30 @@ async function copyPackage(source, target) {
   })
 }
 
+/** Real installed layout: `node_modules/<pkg name>` (scoped packages keep their scope dir). */
+const profilePackage = (name) => join(dir, 'node_modules', ...name.split('/'))
+
 initProfile(dir, [...PROFILE_TEMPLATES.headless.bundles, manifest.name])
-const installed = join(dir, 'node_modules', manifest.name)
+const installed = profilePackage(manifest.name)
 await copyPackage(root, installed)
-await copyPackage(goalSource, join(dir, 'node_modules', goalName))
+for (const [name, source] of [[goalName, goalSource], [subagentName, subagentSource], [compactName, compactSource]]) {
+  await copyPackage(source, profilePackage(name))
+}
 const profileManifest = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'))
-profileManifest.dependencies[manifest.name] = `link:${installed}`
+for (const name of [manifest.name, goalName, subagentName, compactName]) {
+  profileManifest.dependencies[name] = `link:${profilePackage(name)}`
+}
 await writeFile(join(dir, 'package.json'), JSON.stringify(profileManifest, null, 2))
 await writeFile(join(dir, 'cordis.yml'), '[]\n')
 await writeFile(join(dir, 'cordis.patch.yml'), JSON.stringify([
   { id: 'headless-startup', disabled: true }, { id: 'headless-runner', disabled: true },
   // Mirror the web host: base's global workflow rows are disabled so each preset decides.
   { id: 'workflow-ptc', disabled: true }, { id: 'tool-workflow', disabled: true },
-  { id: 'apollo-skills', config: SETTINGS },
+  { id: 'apollo-skills', config: APOLLO_SETTINGS },
+  { id: 'dsh-better-subagent', config: SUBAGENT_SETTINGS },
   { insert: [
     { id: 'agent-preset-registry', name: '@deepseek-ai/dsh-agent-preset-registry', config: { default: 'eng' } },
-    { id: 'subagent-model-selection-settings', name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings', config: { enabled: true, allowedModels: Object.values(SETTINGS.tiers).map(({ provider, model }) => ({ provider, model })) } },
+    { id: 'subagent-model-selection-settings', name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings', config: { enabled: true, allowedModels: Object.values(SUBAGENT_SETTINGS.tiers).map(({ provider, model }) => ({ provider, model })) } },
   ] },
 ]))
 
@@ -79,6 +120,9 @@ const overlays = [{ id: 'credentials', disabled: false, config: { watch: false }
 ] }]
 const profileContext = { name: 'prompts', dir, patchPath: profile.patchPath, installAnchor, cwd, home, startedBundles: profileManifest.dsh.profile.bundles, overlays, telemetryDisabledEnv: '1' }
 const resolution = await createRuntimeResolution({ installAnchor, profile })
+for (const name of [goalName, subagentName, compactName]) {
+  assert.ok(resolution.entries.some((entry) => entry.name === name), `${name} must resolve through the runtime package table`)
+}
 const ctx = await boot('apollo-prompts', join(dir, 'cordis.yml'), readProfilePatches('apollo-prompts', profileContext, profile), async (host) => {
   host.provide('profileContext', profileContext)
   await host.plugin(PluginPackages, { resolution })
@@ -106,7 +150,7 @@ try {
         '',
         `Assembled by a headless DSH ${version} host for model \`${MODEL}\`. Per-request runtime context (time, working directory) and tool schemas are omitted; web-only sections of the Web GUI host are not included. Sections in order: ${assembly.sections.filter((section) => section.text !== '').map((section) => `\`${section.name}\``).join(', ')}.`,
         '',
-        'Apollo settings used:',
+        'Apollo / dsh-better-subagent settings used:',
         '',
         '```json',
         JSON.stringify(SETTINGS, null, 2),

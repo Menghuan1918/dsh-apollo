@@ -432,10 +432,13 @@ export async function migrateSubagent({ settings, configEditor, descriptors, sou
   try {
     if (fields.length > 0) await settings.update(SUBAGENT_NS, patch, target.revision)
     if (trustedHosts !== undefined) {
-      if (configEditor === undefined || entry === undefined) {
+      // settings.update reconciles profile patches, which may replace the
+      // target row's Loader entry; re-read it before the non-volatile write.
+      const fresh = targetEntryOf(configEditor, SUBAGENT_NS)
+      if (configEditor === undefined || fresh === undefined) {
         return { status: 'pending', fields, error: 'trustedHosts needs the config editor, which is unavailable' }
       }
-      await configEditor.edit(entry, (current) => ({ ...current, trustedHosts }))
+      await configEditor.edit(fresh, (current) => ({ ...current, trustedHosts }))
     }
   } catch (error) {
     return { status: 'pending', fields, error: errorMessage(error) }
@@ -522,9 +525,14 @@ export async function runMigration(ctx, options = {}) {
     return { status: 'pending', error: message }
   }
   const sourceDescriptor = descriptors.find((row) => row?.ns === APOLLO_NS)
-  const source = sourceDescriptor?.value ?? normalizeConfig(options.config)
   const configEditor = options.configEditor ?? serviceOf(ctx, 'configEditor')
   const agentPresets = options.agentPresets ?? serviceOf(ctx, 'agentPresets')
+  // describe().value only projects the *volatile* form, so read the Apollo
+  // row's raw config for non-volatile fields (trustedHosts) and overlay the
+  // live volatile values on top.
+  const rawSource = targetEntryOf(configEditor, APOLLO_NS)?.options?.config
+  const sourceBase = isRecord(rawSource) ? rawSource : isRecord(options.config) ? options.config : {}
+  const source = normalizeConfig({ ...sourceBase, ...(sourceDescriptor?.value ?? {}) })
   const subagent = await migrateSubagent({ settings, configEditor, descriptors, source, log })
   const compact = await migrateCompact({ settings, configEditor, descriptors, agentPresets, log })
   const status = [subagent.status, compact.status].some((value) => value === 'error')

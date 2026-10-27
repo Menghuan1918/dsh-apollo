@@ -21,7 +21,8 @@
   },
   "scripts": {
     "test": "node --test",
-    "prompts": "node scripts/render-prompts.mjs"
+    "prompts": "node scripts/render-prompts.mjs",
+    "smoke": "node scripts/runtime-smoke.mjs"
   },
   "files": [
     "src",
