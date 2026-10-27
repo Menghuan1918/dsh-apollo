@@ -247,6 +247,9 @@ export function planCompactMigration({ source, targetUser, targetBase }) {
   if (provider !== model) {
     return invalid('the native source sets only one of summarizationProvider / summarizationModel')
   }
+  // The summary route is one pair: if the target declares either half, leave
+  // both alone instead of mixing the target provider with a source model.
+  const targetOwnsSummaryPair = hasOwn(user, 'summarizationProvider') || hasOwn(user, 'summarizationModel')
   const fill = (key, value, baseValue) => {
     if (hasOwn(user, key) || isDeepStrictEqual(value, baseValue)) return
     patch[key] = clone(value)
@@ -254,6 +257,7 @@ export function planCompactMigration({ source, targetUser, targetBase }) {
   }
   for (const key of COMPACT_KEYS) {
     if (!hasOwn(source, key)) continue
+    if (targetOwnsSummaryPair && (key === 'summarizationProvider' || key === 'summarizationModel')) continue
     fill(key, source[key], base[key])
   }
   if (ratio || tokens) {
@@ -469,6 +473,9 @@ export async function migrateCompact({ settings, configEditor, descriptors, agen
     if (selected.status === 'ambiguous') {
       log?.warn?.(`apollo-migration: native compaction config is ambiguous (${selected.rowIds.join(', ')} differ); ` +
         `choose the active preset / keep one source and reload to migrate ${COMPACT_NS}`)
+    } else if (selected.status === 'source-missing') {
+      log?.warn?.(`apollo-migration: default preset row "${selected.rowId}" is not readable, so the old native ` +
+        `compaction config cannot be imported. Configure ${COMPACT_NS} directly, or restore the preset row and reload.`)
     }
     return selected
   }
@@ -531,7 +538,10 @@ export async function runMigration(ctx, options = {}) {
   // row's raw config for non-volatile fields (trustedHosts) and overlay the
   // live volatile values on top.
   const rawSource = targetEntryOf(configEditor, APOLLO_NS)?.options?.config
-  const sourceBase = isRecord(rawSource) ? rawSource : isRecord(options.config) ? options.config : {}
+  const sourceBase = {
+    ...(isRecord(options.config) ? options.config : {}),
+    ...(isRecord(rawSource) ? rawSource : {}),
+  }
   const source = normalizeConfig({ ...sourceBase, ...(sourceDescriptor?.value ?? {}) })
   const subagent = await migrateSubagent({ settings, configEditor, descriptors, source, log })
   const compact = await migrateCompact({ settings, configEditor, descriptors, agentPresets, log })
@@ -541,6 +551,11 @@ export async function runMigration(ctx, options = {}) {
       ? 'pending'
       : ['ambiguous', 'invalid', 'source-missing'].includes(compact.status) ? 'blocked'
         : 'complete'
+  for (const [name, section] of [['subagent', subagent], ['compact', compact]]) {
+    if (section.error !== undefined) {
+      log?.warn?.(`apollo-migration: ${name} is ${section.status}: ${section.error}`)
+    }
+  }
   log?.[status === 'complete' ? 'info' : 'warn']?.(
     `apollo-migration: ${status} (subagent=${subagent.status}, compact=${compact.status})`,
   )

@@ -232,7 +232,7 @@ dsh plugin --profile <profile> remove dsh-better-compact
 - `npm test`：配置/装配/漂移/迁移纯函数/settings/客户端/prompt/发布清单全部通过，含真实 temp-profile 迁移测试；
 - `npm run prompts`：用发布布局复制 Apollo + 三个独立包，由真实 headless 宿主重新生成两份快照；
 - `npm pack --dry-run --json`：发布清单无 Specs/tests/scripts/prompts/tarball；
-- `node scripts/runtime-smoke.mjs apollo|standalone|both`：临时 profile + 脚本化 LLM 适配器（无凭据），覆盖单实例行、旧配置迁移、eng 回合、native subagent create/wait、手动 `/compact`、inspect、保存→`requiresReload`→重启→`activeConfig`、独立组合与双显式 bundle 的只读限制。
+- `node scripts/runtime-smoke.mjs apollo|standalone|both`：临时 profile + 脚本化 LLM 适配器（无凭据），覆盖单实例行、旧配置迁移、eng 回合、native subagent create/wait、手动 `/compact`、inspect、真实后台 job 退出守卫、保存→`requiresReload`→重启→`activeConfig`、独立组合与双显式 bundle 的只读限制。
 
 **未验证 / 明确限制**：
 

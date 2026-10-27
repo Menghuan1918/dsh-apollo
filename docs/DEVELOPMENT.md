@@ -409,7 +409,7 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh node scripts/runtime-smo
 
 | 场景 | 覆盖 |
 |---|---|
-| `apollo` | 每个稳定行恰好一个实例；迁移旧行/旧预设配置并重载采用 engine 快照；真实 `eng` 回合与 prompt section；native `subagent` → `wait_subagent`；手动 `/compact` 经 better-compact 预设 engine；HTTP inspect；保存 compact 设置 → `requiresReload` → 重启 → `activeConfig` 更新 |
+| `apollo` | 每个稳定行恰好一个实例；迁移旧行/旧预设配置并重载采用 engine 快照；真实 `eng` 回合与 prompt section；native `subagent` → `wait_subagent`；手动 `/compact` 经 better-compact 预设 engine；HTTP inspect；真实后台 job 退出守卫（启动 job → steer → 模型 job_kill → 回合收尾）；保存 compact 设置 → `requiresReload` → 重启 → `activeConfig` 更新 |
 | `standalone` | 只选两个独立 bundle；无 Apollo 行/预设；global 范围渲染 delegation；`wait_subagent`/host-plane engine/手动压缩/inspect |
 | `both` | Apollo + 两个独立 bundle 同时显式选中；每行一个实例；行可读但写入被拒（rc.2 只读限制）；单实例工具/提示词仍工作 |
 

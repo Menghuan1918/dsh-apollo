@@ -268,6 +268,15 @@ test('planCompactMigration：目标显式值优先（含保留方式二选一）
   assert.deepEqual(plan.patch, { summarizationProvider: 'p', summarizationModel: 'm' })
 })
 
+test('planCompactMigration：目标只声明摘要对的一半时整对不混写', () => {
+  const plan = planCompactMigration({
+    source: { summarizationProvider: 'src', summarizationModel: 'src-model' },
+    targetUser: { summarizationProvider: 'user' },
+    targetBase: COMPACT_BASE,
+  })
+  assert.deepEqual(plan.patch, {}, '配对字段不能与来源混合')
+})
+
 test('planCompactMigration：冲突/半对来源拒绝迁移而不是猜测', () => {
   assert.equal(planCompactMigration({ source: { retainRatio: 0.2, retainTokens: 10 }, targetUser: {}, targetBase: COMPACT_BASE }).status, 'invalid')
   assert.equal(planCompactMigration({ source: { summarizationProvider: 'p' }, targetUser: {}, targetBase: COMPACT_BASE }).status, 'invalid')
@@ -415,6 +424,7 @@ test('runMigration：目标写入被拒绝 → pending，保留旧来源且不�
   const result = await runMigration(ctx, { configEditor: host.configEditor, timeoutMs: 50, intervalMs: 5 })
   assert.equal(result.status, 'pending')
   assert.match(result.subagent.error, /SETTINGS_CONFLICT/)
+  assert.match(host.log.warnings.join('\n'), /subagent is pending: SETTINGS_CONFLICT/, 'pending 原因必须写进日志')
   assert.equal(host.descriptors.get(SUBAGENT_NS).value.childExitGuard, false, '旧来源未被删除/篡改')
 })
 

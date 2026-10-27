@@ -86,6 +86,16 @@ function lastUserText(messages) {
   return ''
 }
 
+/** A scripted tool call. */
+function* toolCall(name, args) {
+  const id = `smoke-${randomUUID()}`
+  const argumentsText = JSON.stringify(args)
+  yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+  yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: argumentsText }
+  yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name, arguments: argumentsText } }
+  yield { type: 'finish', reason: { kind: 'tool-calls' } }
+}
+
 /** Scripted provider: normal turns echo a fixed text, compaction returns the goal structure. */
 function makeAdapter(state) {
   const info = { provider: 'it-noop', id: 'noop', name: 'Noop', inputModalities: ['text'] }
@@ -111,6 +121,23 @@ function makeAdapter(state) {
         return
       }
       state.calls += 1
+      const userText = lastUserText(options.messages ?? [])
+      // Real-host job exit guard: start a background job, then react to the
+      // injected Apollo notice by killing it so the turn can finish.
+      if (state.jobGuard !== undefined) {
+        if (state.jobGuard.phase === 'start') {
+          state.jobGuard.phase = 'waiting'
+          yield* toolCall('bash', { command: 'sleep 30', description: 'exit guard smoke job', run_in_background: true })
+          return
+        }
+        if (state.jobGuard.phase === 'waiting' && userText.includes('This background work is still running')) {
+          state.jobGuard.guardSeen = true
+          state.jobGuard.phase = 'killing'
+          state.jobGuard.jobId = /background job (\S+)/.exec(userText)?.[1]
+          yield* toolCall('job_kill', { job_id: state.jobGuard.jobId })
+          return
+        }
+      }
       const text = state.normalText ?? 'Smoke response.'
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'text-delta', index: 0, text }
@@ -322,6 +349,28 @@ async function scenarioApollo() {
     assert.equal(inspected.body.activeConfig.mode, 'goal')
     assert.equal(inspected.body.requiresReload, false)
     check('manual-compact-and-inspect')
+
+    // ── real-host background-job exit guard ────────────────────────────────
+    const apolloRow = (await ctx.settings.describe()).find((entry) => entry.ns === 'apollo-skills')
+    await ctx.settings.update('apollo-skills', { exitGuard: true }, apolloRow.revision)
+    const guardAgent = await createAgent(ctx, { preset: 'eng' })
+    const guardRecorder = record(ctx, guardAgent)
+    state.jobGuard = { phase: 'start', guardSeen: false, jobId: undefined }
+    try {
+      await runTurn(guardAgent, guardRecorder, 'Start a background job for the exit guard smoke.')
+      assert.equal(state.jobGuard.guardSeen, true, 'the job guard notice must reach the model')
+      assert.ok(state.jobGuard.jobId, 'the notice names the running job')
+      assert.ok(guardRecorder.events.some((event) => event.type === 'user/message'
+        && event.data?.source?.kind === 'better-apollo-job-exit-guard'), 'the guard notice is durably logged with its producer kind')
+      await waitUntil(() => ctx.get('jobs').list(guardAgent.id)
+        .every((job) => ['completed', 'killed', 'failed'].includes(job.status)), 'background job to settle', 5_000)
+    } finally {
+      state.jobGuard = undefined
+      const again = (await ctx.settings.describe()).find((entry) => entry.ns === 'apollo-skills')
+      await ctx.settings.update('apollo-skills', { exitGuard: false }, again.revision)
+      guardRecorder.dispose()
+    }
+    check('job-exit-guard-real-host')
 
     // ── save → requiresReload → profile restart → activeConfig ──────────────
     const row = (await ctx.settings.describe()).find((entry) => entry.ns === 'dsh-better-compact')
