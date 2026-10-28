@@ -52,7 +52,7 @@ assert.equal(ptcName, 'dsh-better-ptc')
 assert.equal(manifest.dependencies[subagentName], '0.2.0')
 assert.equal(manifest.dependencies[compactName], '0.1.2')
 assert.equal(manifest.dependencies[goalName], '0.2.1')
-assert.equal(manifest.dependencies[askName], '0.1.4')
+assert.equal(manifest.dependencies[askName], '0.1.5')
 assert.equal(manifest.dependencies[ptcName], '0.1.0')
 
 /** Root row settings the rendered prompts use; tests re-render the Apollo section from the JSON block. */
