@@ -38,14 +38,22 @@ async function resolvePackage(name, envKey, sibling) {
 const goalSource = await resolvePackage('dsh-better-goal', 'APOLLO_GOAL_SOURCE', 'dsh-better-goal')
 const subagentSource = await resolvePackage('@menghuan1918/dsh-better-subagent', 'APOLLO_SUBAGENT_SOURCE', 'dsh-better-subagent')
 const compactSource = await resolvePackage('dsh-better-compact', 'APOLLO_COMPACT_SOURCE', 'dsh-better-compact')
+const askSource = await resolvePackage('dsh-better-ask-user', 'APOLLO_ASK_SOURCE', 'dsh-better-ask-user')
+const ptcSource = await resolvePackage('dsh-better-ptc', 'APOLLO_PTC_SOURCE', 'dsh-better-ptc')
 const goalName = JSON.parse(await readFile(join(goalSource, 'package.json'), 'utf8')).name
 const subagentName = JSON.parse(await readFile(join(subagentSource, 'package.json'), 'utf8')).name
 const compactName = JSON.parse(await readFile(join(compactSource, 'package.json'), 'utf8')).name
+const askName = JSON.parse(await readFile(join(askSource, 'package.json'), 'utf8')).name
+const ptcName = JSON.parse(await readFile(join(ptcSource, 'package.json'), 'utf8')).name
 assert.equal(subagentName, '@menghuan1918/dsh-better-subagent')
 assert.equal(compactName, 'dsh-better-compact')
-assert.equal(manifest.dependencies[subagentName], '0.1.1')
+assert.equal(askName, 'dsh-better-ask-user')
+assert.equal(ptcName, 'dsh-better-ptc')
+assert.equal(manifest.dependencies[subagentName], '0.2.0')
 assert.equal(manifest.dependencies[compactName], '0.1.2')
-assert.equal(manifest.dependencies[goalName], '0.2.0')
+assert.equal(manifest.dependencies[goalName], '0.2.1')
+assert.equal(manifest.dependencies[askName], '0.1.0')
+assert.equal(manifest.dependencies[ptcName], '0.1.0')
 
 /** Root row settings the rendered prompts use; tests re-render the Apollo section from the JSON block. */
 const APOLLO_SETTINGS = { exitGuard: false }
@@ -57,7 +65,12 @@ const SUBAGENT_SETTINGS = {
     quality: { provider: '<quality-provider>', model: '<quality-model>', reasoningEffort: '<quality-effort>' },
   },
 }
-const SETTINGS = { 'apollo-skills': APOLLO_SETTINGS, 'dsh-better-subagent': SUBAGENT_SETTINGS }
+const ASK_SETTINGS = { questionTimeoutSeconds: 120, timeoutBehavior: 'native', goalTimeoutBehavior: 'native' }
+const SETTINGS = {
+  'apollo-skills': APOLLO_SETTINGS,
+  'dsh-better-subagent': SUBAGENT_SETTINGS,
+  'dsh-better-ask-user': ASK_SETTINGS,
+}
 const PRESETS = ['eng', 'eng-ptc']
 const MODEL = 'example-model'
 
@@ -84,11 +97,17 @@ const profilePackage = (name) => join(dir, 'node_modules', ...name.split('/'))
 initProfile(dir, [...PROFILE_TEMPLATES.headless.bundles, manifest.name])
 const installed = profilePackage(manifest.name)
 await copyPackage(root, installed)
-for (const [name, source] of [[goalName, goalSource], [subagentName, subagentSource], [compactName, compactSource]]) {
+for (const [name, source] of [
+  [goalName, goalSource],
+  [subagentName, subagentSource],
+  [compactName, compactSource],
+  [askName, askSource],
+  [ptcName, ptcSource],
+]) {
   await copyPackage(source, profilePackage(name))
 }
 const profileManifest = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'))
-for (const name of [manifest.name, goalName, subagentName, compactName]) {
+for (const name of [manifest.name, goalName, subagentName, compactName, askName, ptcName]) {
   profileManifest.dependencies[name] = `link:${profilePackage(name)}`
 }
 await writeFile(join(dir, 'package.json'), JSON.stringify(profileManifest, null, 2))
@@ -99,6 +118,7 @@ await writeFile(join(dir, 'cordis.patch.yml'), JSON.stringify([
   { id: 'workflow-ptc', disabled: true }, { id: 'tool-workflow', disabled: true },
   { id: 'apollo-skills', config: APOLLO_SETTINGS },
   { id: 'dsh-better-subagent', config: SUBAGENT_SETTINGS },
+  { id: 'dsh-better-ask-user', config: ASK_SETTINGS },
   { insert: [
     { id: 'agent-preset-registry', name: '@deepseek-ai/dsh-agent-preset-registry', config: { default: 'eng' } },
     { id: 'subagent-model-selection-settings', name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings', config: { enabled: true, allowedModels: Object.values(SUBAGENT_SETTINGS.tiers).map(({ provider, model }) => ({ provider, model })) } },
@@ -120,7 +140,7 @@ const overlays = [{ id: 'credentials', disabled: false, config: { watch: false }
 ] }]
 const profileContext = { name: 'prompts', dir, patchPath: profile.patchPath, installAnchor, cwd, home, startedBundles: profileManifest.dsh.profile.bundles, overlays, telemetryDisabledEnv: '1' }
 const resolution = await createRuntimeResolution({ installAnchor, profile })
-for (const name of [goalName, subagentName, compactName]) {
+for (const name of [goalName, subagentName, compactName, askName, ptcName]) {
   assert.ok(resolution.entries.some((entry) => entry.name === name), `${name} must resolve through the runtime package table`)
 }
 const ctx = await boot('apollo-prompts', join(dir, 'cordis.yml'), readProfilePatches('apollo-prompts', profileContext, profile), async (host) => {
@@ -150,7 +170,7 @@ try {
         '',
         `Assembled by a headless DSH ${version} host for model \`${MODEL}\`. Per-request runtime context (time, working directory) and tool schemas are omitted; web-only sections of the Web GUI host are not included. Sections in order: ${assembly.sections.filter((section) => section.text !== '').map((section) => `\`${section.name}\``).join(', ')}.`,
         '',
-        'Apollo / dsh-better-subagent settings used:',
+        'Apollo / dsh-better-subagent / dsh-better-ask-user settings used:',
         '',
         '```json',
         JSON.stringify(SETTINGS, null, 2),

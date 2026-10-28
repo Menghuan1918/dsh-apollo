@@ -2,7 +2,7 @@
 
 面向维护者、集成者和需要排查装配问题的用户。用户安装与配置请看 [README](../README.md)；本文保留 DSH 插件的实现细节、旧配置迁移、组合安装边界与验证方法。
 
-当前实现版本：`0.5.3`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
+当前实现版本：`0.6.0`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
 
 ## 目录
 
@@ -33,9 +33,11 @@
 
 | 依赖 | 版本 | 所有权 |
 |---|---|---|
-| `dsh-better-goal` | `0.2.0` | 目标域 |
-| `@menghuan1918/dsh-better-subagent` | `0.1.1` | 子代理 CLI/等待/child guard/分档/设置页 |
+| `dsh-better-goal` | `0.2.1` | 目标域（`questionTimeoutSeconds` 已弃用、仅保留读取） |
+| `@menghuan1918/dsh-better-subagent` | `0.2.0` | 子代理 CLI/等待/child guard/分档/设置页；注册 `wait_subagent` PTC 豁免 |
 | `dsh-better-compact` | `0.1.2` | 压缩 companion + engine + 设置页/诊断 |
+| `dsh-better-ask-user` | `0.1.0` | 提问等待/输入续期/卡片/超时行为；注册 `ask_user_question` PTC 豁免；旧 goal 等待迁移 |
+| `dsh-better-ptc` | `0.1.0` | 单例 PTC deadline 豁免服务 |
 | `@deepseek-ai/schemastery` | `~3.18.4` | Apollo 行 Config |
 | `react` | peer | 宿主提供 |
 
@@ -80,7 +82,7 @@ npm install
 
 ## Apollo 行：保留与弃用
 
-`apollo-skills` 是 Apollo 唯一的宿主插件行，0.5.0 后只承担：
+`apollo-skills` 是 Apollo 的主宿主插件行，0.5.0 后只承担：
 
 1. 向技能注册表的全局层注册包内 `skills/*/SKILL.md`（rank 600，用户技能根可覆盖）；
 2. 挂载正式行 Config（[src/config.js](../src/config.js)）与最小浏览器行页；
@@ -88,6 +90,8 @@ npm install
 4. 行配置 `declareOwnsHost: true` 时给 index HTML 注入 `__DSH_TRANSPORT__.ownsHost`（[src/owns-host.js](../src/owns-host.js)）。
 
 **不再负责**：CLI 协议/适配/身份 KV、`wait_subagent`、能力/模型/路由 HTTP 探针、子代理设置页、模型分档与委派提示词生成、运行中子代理退出判断。Apollo 不注册任何 HTTP 路由；`/apollo/api/*` 由 better-subagent 作为只读兼容别名拥有，重复注册同一 `(kind, path)` 会被 webServer 拒绝。
+
+PTC deadline 豁免由独立的 `dsh-better-ptc` 单例行提供（无浏览器半边、无设置页）：它包裹挂载的 PTC runtime 的 prototype `run`，在已注册工具（`wait_subagent` / `ask_user_question`）在途时暂停 `run_code` 的 elapsed budget，返回后继续剩余预算；普通嵌套工具仍消耗预算。ask-user 与 subagent 都只插入同一个稳定行并调用 `ctx.betterPtc.register(...)`，Loader 去重保证只有一份服务和一层包装。没有 `ptcRuntime` 或 runtime 不提供 numeric timeout 时注册为 no-op。
 
 ### 配置分类
 
@@ -158,7 +162,8 @@ npm install
 - `tool-jobs.maxConsecutiveWakes = 5000`；
 - `tool-result-pruner` 阈值是上游 2 倍（16384/8192/2048）；
 - 保留 `eng-exit-guard`、`eng-mode-instructions` 两个本地插件；
-- 原生 delegation 工具行、tool-subagent 行保持一份，作为宿主 registry 的消费者。
+- 原生 delegation 工具行、tool-subagent 行保持一份，作为宿主 registry 的消费者；
+- `tool-ask-user` 不再固定 `timeout`：基础行保留为 fallback/shadow 探针，新 ask-user 宿主行在每个 Agent 上注册 `ask_user_question` 影子，等待时长与超时行为来自 ask-user 行设置。
 
 `eng-ptc` 是 eng 的拷贝，差异恰为上游 `ptc` 相对 `standard` 的差异：`tool-presentation { mode: ptc }`、`workflow-ptc` / `tool-workflow` disabled。0.5.0 起不再有 `eng-mode-instructions` 的 `ptc` 开关；better-subagent 自己识别 `eng-ptc` 追加 fan-out 规则。
 
@@ -313,10 +318,10 @@ DSH_PACKAGE_ROOT="/…/node_modules/@deepseek-ai/dsh" npm run prompts
 ### npm 安装
 
 ```sh
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.2
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.6.0
 ```
 
-包发布后即可用此命令安装，并带入三个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。0.5.0 已发布；0.5.1 是迁移修复版本；0.5.2 依赖 compact 0.1.1，修复 Web 设置表单的 schema rehydrate。
+包发布后即可用此命令安装，并带入五个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。0.6.0 目前尚未发布；本轮在本地 worktrees + 临时 profile 验证。
 
 ### GitHub 源码安装
 
@@ -324,20 +329,23 @@ dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.2
 dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 ```
 
-GitHub main 仍是源码安装选项。它同样按 `package.json` 解析精确依赖；子包 0.1.0/0.1.1 在 registry 可取得前，源码安装会因依赖 404 失败。
+GitHub main 仍是源码安装选项。它同样按 `package.json` 解析精确依赖；五个子包在 registry 可取得前，源码安装会因依赖 404 失败。
 
 ### 本地 link 安装
 
 ```sh
 cd /absolute/path/to/dsh-apollo
-npm install
-npm install --no-save /tmp/better-plugin-packs/menghuan1918-dsh-better-subagent-0.1.0.tgz /tmp/better-plugin-packs/dsh-better-compact-0.1.0.tgz
+# 五个子包尚未发布时不要直接 npm install（会因精确依赖 404 失败）。
+# 先把本地目录/tarball 装进 Apollo 的 node_modules；本工作区已经就绪。
+npm install --no-save /absolute/path/to/dsh-better-ptc /absolute/path/to/dsh-better-ask-user \
+  /absolute/path/to/dsh-better-subagent /absolute/path/to/dsh-better-goal \
+  /absolute/path/to/dsh-better-compact
 dsh plugin --profile <profile> add link:/absolute/path/to/dsh-apollo
 ```
 
 注意：
 
-- `dsh plugin add link:` 只链接 Apollo 本身，不会代装它的依赖；必须先 `npm install`（子包未发布时用本地 tarball `--no-save` 仅作验证）；
+- `dsh plugin add link:` 只链接 Apollo 本身，不会代装它的依赖；必须先 `npm install`（子包未发布时用本地目录/tarball `--no-save` 仅作验证）；
 - 不要提交 `file:` / `link:` / Git 依赖；发布版必须保持精确 npm 版本；
 - 不需要启动额外服务或构建 Web 资源；宿主提供 React。
 
@@ -347,7 +355,7 @@ dsh plugin --profile <profile> add link:/absolute/path/to/dsh-apollo
 dsh --profile <profile> --dump-config
 ```
 
-应看到 `apollo-skills`、`dsh-better-goal`、`dsh-better-compact`、`dsh-better-compact-engine`、`dsh-better-subagent` 行和两个工程预设。若缺少独立插件的行，先确认依赖是否安装；若同时显式选中了独立 bundle，参考上面的只读限制。
+应看到 `apollo-skills`、`dsh-better-goal`、`dsh-better-compact`、`dsh-better-compact-engine`、`dsh-better-subagent`、`dsh-better-ptc`、`dsh-better-ask-user` 行和两个工程预设；`ui-user-questions` 应被禁用。若缺少独立插件的行，先确认依赖是否安装；若同时显式选中了独立 bundle，参考上面的只读限制。
 
 ### 升级
 
@@ -368,9 +376,9 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 
 两个子仓和 Apollo 都用 GitHub Release 触发 `.github/workflows/release.yml`，通过 npm trusted publishing（OIDC）发布，仓库里不存 npm token。tag 必须是 `v<package.json 的 version>`，CI 会先校验再跑测试和 `npm publish --provenance`。
 
-1. 先发布 `@menghuan1918/dsh-better-subagent@0.1.0` 与 `dsh-better-compact@0.1.1`（各自仓库的 Release）；
-2. 在官方 registry（`https://registry.npmjs.org/`）确认两个版本可取得、可安装；
-3. 再把 Apollo 的精确依赖指向已发布版本，推 main 并发布 Apollo Release（0.5.0 已发布；本轮为 `v0.5.2`）；
+1. 先发布 `dsh-better-ptc@0.1.0`、`dsh-better-ask-user@0.1.0`、`@menghuan1918/dsh-better-subagent@0.2.0`、`dsh-better-goal@0.2.1`、`dsh-better-compact@0.1.2`（各自仓库的 Release）；
+2. 在官方 registry（`https://registry.npmjs.org/`）确认五个版本可取得、可安装；
+3. 再把 Apollo 的精确依赖指向已发布版本，推 main 并发布 Apollo Release（本轮为 `v0.6.0`）；
 4. 子包版本可取得前，不要把指向它们的精确依赖推到 Apollo main，否则 `npm install` / GitHub 源码安装会 404。
 
 ## 测试与冒烟
@@ -429,7 +437,7 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh node scripts/runtime-smo
 - 本仓库不运行真实 Codex/Claude CLI；两个子包各自的 `cli-smoke` / runtime smoke 负责真实 CLI 生命周期。
 - 真实模型摘要保真、缓存命中率、S3 可视化页面的 GUI 验收不在 Apollo 侧冒烟内。
 - 未修改用户当前运行的 profile，未验证当前 GUI；当前 URL 以执行时 runtime context 为准。
-- 单元测试通过不等于 registry 发布/安装路径通过；子包 0.1.0/0.1.1 已发布；registry 安装路径已用 fresh cache 验证。
+- 单元测试通过不等于 registry 发布/安装路径通过；五个子包的目标版本尚未发布，registry 安装路径未验证。
 
 ## 历史兼容
 
@@ -461,11 +469,11 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh node scripts/runtime-smo
 | 文件 | 职责 |
 |---|---|
 | [package.json](../package.json) | 包元数据、bundle patch 顺序、浏览器注入、精确依赖 |
-| [cordis.patch.yml](../cordis.patch.yml) | 原生 goal/compaction 行禁用；goal、compact companion/engine、subagent、`apollo-skills` 顶层行 |
+| [cordis.patch.yml](../cordis.patch.yml) | 原生 goal/compaction/官方 Web 提问卡片禁用；goal、compact companion/engine、subagent、shared ptc、ask-user、`apollo-skills` 顶层行 |
 | [presets/eng.patch.yml](../presets/eng.patch.yml) / [presets/eng-ptc.patch.yml](../presets/eng-ptc.patch.yml) | 两套预设的行清单唯一事实源 |
 | [presets/eng/plugins/exit-guard/index.js](../presets/eng/plugins/exit-guard/index.js) | job-only 退出守卫 |
 | [presets/eng/plugins/mode-instructions/index.js](../presets/eng/plugins/mode-instructions/index.js) | 工程纪律 + job 守卫提示词 |
-| [src/index.js](../src/index.js) | 宿主行入口：技能 provider、settings、迁移 |
+| [src/index.js](../src/index.js) | 主宿主行入口：技能 provider、settings、迁移 |
 | [src/config.js](../src/config.js) | 正式配置 schema、deprecated 字段、规整与活配置读取 |
 | [src/settings.js](../src/settings.js) | 行页面策略、旧文件导入、legacyImport 就绪 Promise |
 | [src/owns-host.js](../src/owns-host.js) | `declareOwnsHost` index tap（唯一 web helper） |

@@ -1,8 +1,10 @@
 /**
  * Apollo's single host row registers bundled skills, its own minimal row
- * settings, and the one-time old-config migration into the independent
- * dsh-better-subagent / dsh-better-compact rows. Presets are still delivered by
- * bundle patches. Browser code remains a no-build closure factory.
+ * settings, the one-time old-config migration into the independent
+ * dsh-better-subagent / dsh-better-compact / dsh-better-ask-user rows. Presets
+ * are still delivered by bundle patches. Browser code remains a no-build
+ * closure factory. The PTC deadline exemption is owned by the independent
+ * dsh-better-ptc singleton row, not this package.
  *
  * Apollo no longer implements subagent CLI protocols/routing, the wait tool,
  * capability/model HTTP probes, tier/delegation prompt generation or the child

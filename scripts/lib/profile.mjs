@@ -3,7 +3,7 @@
  * migration test.
  *
  * Builds a throwaway DSH_HOME/profile from the installed runtime
- * (DSH_PACKAGE_ROOT) plus this repo and the three independent plugin packages.
+ * (DSH_PACKAGE_ROOT) plus this repo and the five independent plugin packages.
  * The copies use each package's shipped `files` list, matching a published
  * tarball (no node_modules, .git, tests, scripts or private specs); peers resolve
  * from the same runtime as the host through a symlinked @deepseek-ai scope.
@@ -19,6 +19,8 @@ export const APOLLO_ROOT = fileURLToPath(new URL('../../', import.meta.url))
 export const SUBAGENT_NAME = '@menghuan1918/dsh-better-subagent'
 export const COMPACT_NAME = 'dsh-better-compact'
 export const GOAL_NAME = 'dsh-better-goal'
+export const ASK_NAME = 'dsh-better-ask-user'
+export const PTC_NAME = 'dsh-better-ptc'
 
 /** Installed @deepseek-ai/dsh package directory. */
 export function dshRoot() {
@@ -45,14 +47,18 @@ export async function packageSources() {
   const goal = source(GOAL_NAME)
   const subagent = source(SUBAGENT_NAME)
   const compact = source(COMPACT_NAME)
-  for (const [name, dir] of [[SUBAGENT_NAME, subagent], [COMPACT_NAME, compact], [GOAL_NAME, goal]]) {
+  const ask = source(ASK_NAME)
+  const ptc = source(PTC_NAME)
+  for (const [name, dir] of [[SUBAGENT_NAME, subagent], [COMPACT_NAME, compact], [GOAL_NAME, goal], [ASK_NAME, ask], [PTC_NAME, ptc]]) {
     const manifest = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'))
     if (manifest.name !== name) throw new Error(`${dir} is not ${name}`)
   }
   const apolloManifest = apollo
-  if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.1.1'
+  if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.2.0'
     || apolloManifest.dependencies[COMPACT_NAME] !== '0.1.2'
-    || apolloManifest.dependencies[GOAL_NAME] !== '0.2.0') {
+    || apolloManifest.dependencies[GOAL_NAME] !== '0.2.1'
+    || apolloManifest.dependencies[ASK_NAME] !== '0.1.0'
+    || apolloManifest.dependencies[PTC_NAME] !== '0.1.0') {
     throw new Error('Apollo dependencies must pin the verification versions')
   }
   return {
@@ -60,6 +66,8 @@ export async function packageSources() {
     goal: { name: GOAL_NAME, dir: goal, manifest: JSON.parse(await readFile(join(goal, 'package.json'), 'utf8')) },
     subagent: { name: SUBAGENT_NAME, dir: subagent, manifest: JSON.parse(await readFile(join(subagent, 'package.json'), 'utf8')) },
     compact: { name: COMPACT_NAME, dir: compact, manifest: JSON.parse(await readFile(join(compact, 'package.json'), 'utf8')) },
+    ask: { name: ASK_NAME, dir: ask, manifest: JSON.parse(await readFile(join(ask, 'package.json'), 'utf8')) },
+    ptc: { name: PTC_NAME, dir: ptc, manifest: JSON.parse(await readFile(join(ptc, 'package.json'), 'utf8')) },
   }
 }
 
@@ -119,7 +127,7 @@ export async function prepareProfile(options = {}) {
   appBoot.initProfile(dir, [...appBoot.PROFILE_TEMPLATES.headless.bundles, ...bundles])
   await mkdir(join(dir, 'node_modules'), { recursive: true })
   const copied = new Map()
-  for (const source of [sources.apollo, sources.goal, sources.subagent, sources.compact]) {
+  for (const source of [sources.apollo, sources.goal, sources.subagent, sources.compact, sources.ask, sources.ptc]) {
     const target = profilePackage(dir, source.name)
     await copyShipped(source.dir, target)
     copied.set(source.name, target)

@@ -49,6 +49,8 @@ const GOAL_ROW = ['dsh-better-goal', 'dsh-better-goal']
 const COMPACT_ROW = [COMPACT_NAME, COMPACT_NAME]
 const ENGINE_ROW = ['dsh-better-compact-engine', ENGINE_NAME]
 const SUBAGENT_ROW = ['dsh-better-subagent', SUBAGENT_NAME]
+const ASK_ROW = ['dsh-better-ask-user', 'dsh-better-ask-user']
+const PTC_ROW = ['dsh-better-ptc', 'dsh-better-ptc']
 const APOLLO_ROW = ['apollo-skills', PACKAGE_NAME]
 
 const disabledIds = (patches) => patches
@@ -79,7 +81,7 @@ const bundleRows = (dir) => {
 test('顶层 patch 禁用原生 goal 域与原生 compaction-basic，并插入稳定的独立行', () => {
   const patches = patch()
   assert.equal(Array.isArray(patches), true)
-  assert.deepEqual(disabledIds(patches), [...NATIVE_GOAL_IDS, 'compaction-basic'].sort())
+  assert.deepEqual(disabledIds(patches), [...NATIVE_GOAL_IDS, 'compaction-basic', 'ui-user-questions'].sort())
   for (const entry of patches) {
     if (entry.disabled !== true) continue
     assert.deepEqual(Object.keys(entry).sort(), ['disabled', 'id'], '禁用行必须只按 id 生效，不能带 name 或配置')
@@ -89,21 +91,23 @@ test('顶层 patch 禁用原生 goal 域与原生 compaction-basic，并插入�
     COMPACT_ROW,
     ENGINE_ROW,
     SUBAGENT_ROW,
+    PTC_ROW,
+    ASK_ROW,
     APOLLO_ROW,
-  ], 'goal / compact companion / compact engine / subagent / apollo 行都必须留在顶层 insert')
+  ], 'goal / compact companion / compact engine / subagent / ptc / ask-user / apollo 行都必须留在顶层 insert')
   for (const row of patches.flatMap((entry) => entry.insert ?? [])) {
     assert.deepEqual(Object.keys(row).sort(), ['id', 'name'], '插入行不得带 config/group/disabled')
   }
   const ids = insertedRows(patches).map(([id]) => id)
-  for (const id of ['dsh-better-goal', 'dsh-better-compact', 'dsh-better-compact-engine', 'dsh-better-subagent', 'apollo-skills']) {
+  for (const id of ['dsh-better-goal', 'dsh-better-compact', 'dsh-better-compact-engine', 'dsh-better-subagent', 'dsh-better-ptc', 'dsh-better-ask-user', 'apollo-skills']) {
     assert.equal(ids.filter((candidate) => candidate === id).length, 1, `${id} 只能有一个稳定行`)
   }
 })
 
-test('npm manifest：scoped 名、0.5.3、repository、publishConfig 与 license', () => {
+test('npm manifest：scoped 名、0.6.0、repository、publishConfig 与 license', () => {
   const m = manifest()
   assert.equal(m.name, PACKAGE_NAME)
-  assert.equal(m.version, '0.5.3')
+  assert.equal(m.version, '0.6.0')
   assert.equal(m.license, 'GPL-3.0-or-later')
   assert.deepEqual(m.repository, {
     type: 'git',
@@ -115,17 +119,19 @@ test('npm manifest：scoped 名、0.5.3、repository、publishConfig 与 license
   })
 })
 
-test('package.json 把三个独立插件声明为精确 npm 版本', () => {
+test('package.json 把五个独立插件声明为精确 npm 版本', () => {
   const dependencies = manifest().dependencies ?? {}
-  assert.equal(dependencies['dsh-better-goal'], '0.2.0', 'goal 依赖必须是精确 npm 版本')
-  assert.equal(dependencies[SUBAGENT_NAME], '0.1.1', 'better-subagent 依赖必须是精确 npm 版本')
+  assert.equal(dependencies['dsh-better-goal'], '0.2.1', 'goal 依赖必须是精确 npm 版本')
+  assert.equal(dependencies[SUBAGENT_NAME], '0.2.0', 'better-subagent 依赖必须是精确 npm 版本')
   assert.equal(dependencies[COMPACT_NAME], '0.1.2', 'better-compact 依赖必须是精确 npm 版本')
-  for (const spec of [dependencies['dsh-better-goal'], dependencies[SUBAGENT_NAME], dependencies[COMPACT_NAME]]) {
+  assert.equal(dependencies['dsh-better-ask-user'], '0.1.0', 'ask-user 依赖必须是精确 npm 版本')
+  assert.equal(dependencies['dsh-better-ptc'], '0.1.0', 'ptc 依赖必须是精确 npm 版本')
+  for (const spec of [dependencies['dsh-better-goal'], dependencies[SUBAGENT_NAME], dependencies[COMPACT_NAME], dependencies['dsh-better-ask-user'], dependencies['dsh-better-ptc']]) {
     assert.doesNotMatch(spec, /^(?:github:|git\+|git:|file:|link:|workspace:|npm:|https?:)/)
   }
 })
 
-test('已安装的独立 bundle 声明同一组稳定行：goal、compact、subagent', (t) => {
+test('已安装的独立 bundle 声明同一组稳定行：goal、compact、subagent、ptc、ask-user', (t) => {
   const goal = installed('dsh-better-goal')
   const subagent = installed(SUBAGENT_NAME)
   const compact = installed(COMPACT_NAME)
@@ -144,8 +150,11 @@ test('已安装的独立 bundle 声明同一组稳定行：goal、compact、suba
   assert.deepEqual(apollo.inserted.filter(([id]) => id === COMPACT_NAME || id === 'dsh-better-compact-engine'), compactRows.inserted)
 
   const subagentRows = bundleRows(subagent)
-  assert.deepEqual(subagentRows.inserted, [SUBAGENT_ROW])
-  assert.deepEqual(apollo.inserted.filter(([id]) => id === 'dsh-better-subagent'), subagentRows.inserted)
+  assert.deepEqual(apollo.inserted.filter(([id]) => id === 'dsh-better-subagent'), [SUBAGENT_ROW])
+  if (subagentRows.inserted.some(([id]) => id === 'dsh-better-ptc')) {
+    assert.deepEqual(subagentRows.inserted, [PTC_ROW, SUBAGENT_ROW])
+    assert.deepEqual(apollo.inserted.filter(([id]) => id === 'dsh-better-ptc'), [PTC_ROW])
+  }
 })
 
 test('Apollo 预设与独立 compact 预设引用同一个 engine 稳定行', (t) => {

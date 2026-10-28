@@ -1,7 +1,7 @@
 {
   "name": "@menghuan1918/dsh-apollo",
-  "version": "0.5.3",
-  "description": "DSH plugin bundle: workflow skills, engineering presets, independent better-goal / better-subagent / better-compact integration, and a minimal job exit guard. Pure ESM, no build step.",
+  "version": "0.6.0",
+  "description": "DSH plugin bundle: workflow skills, engineering presets, independent better-goal / better-subagent / better-compact / better-ask-user integration, and a minimal job exit guard. Pure ESM, no build step.",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
@@ -54,9 +54,11 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "~3.18.4",
-    "@menghuan1918/dsh-better-subagent": "0.1.1",
+    "@menghuan1918/dsh-better-subagent": "0.2.0",
+    "dsh-better-ask-user": "0.1.0",
     "dsh-better-compact": "0.1.2",
-    "dsh-better-goal": "0.2.0"
+    "dsh-better-goal": "0.2.1",
+    "dsh-better-ptc": "0.1.0"
   },
   "peerDependencies": {
     "react": "^18.2.0"

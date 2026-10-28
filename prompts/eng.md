@@ -4,7 +4,7 @@
 
 Assembled by a headless DSH 0.2.1-rc.2 host for model `example-model`. Per-request runtime context (time, working directory) and tool schemas are omitted; web-only sections of the Web GUI host are not included. Sections in order: `harness:identity`, `deployment:persona-prefix`, `eng:mode-instructions`, `better-subagent:delegation`, `context:file-reference`, `tool:bash`, `tool:read`, `tool:write`, `tool:edit`, `tool:glob`, `tool:grep`, `tool:jobs`, `tool:web_search`, `tool:web_fetch`, `tool:goal`, `tool:workflow`, `tool:subagent`.
 
-Apollo / dsh-better-subagent settings used:
+Apollo / dsh-better-subagent / dsh-better-ask-user settings used:
 
 ```json
 {
@@ -24,6 +24,11 @@ Apollo / dsh-better-subagent settings used:
         "reasoningEffort": "<quality-effort>"
       }
     }
+  },
+  "dsh-better-ask-user": {
+    "questionTimeoutSeconds": 120,
+    "timeoutBehavior": "native",
+    "goalTimeoutBehavior": "native"
   }
 }
 ```

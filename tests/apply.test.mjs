@@ -44,7 +44,7 @@ test('apply：注册技能 provider，且不向 DSH_HOME 写 .agent-presets', as
   rmSync(home, { recursive: true, force: true })
 })
 
-test('apply：有 inject 时只装配 settings（行策略 + 迁移），不再注入 webServer', () => {
+test('apply：有 inject 时装配 settings / 迁移，不再注入 webServer', () => {
   const injections = []
   const ctx = {
     skills: { registerProvider: () => {} },
@@ -52,6 +52,6 @@ test('apply：有 inject 时只装配 settings（行策略 + 迁移），不再�
     logger: console,
   }
   apply(ctx, {})
-  assert.deepEqual(injections, [['settings'], ['settings']], '设置页策略与旧配置迁移各注入一次 settings')
+  assert.deepEqual(injections, [['settings'], ['settings']], '设置页策略与旧配置迁移各注入一次')
   assert.equal(injections.some((names) => names.includes('webServer')), false, 'Apollo 不注册能力路由/tap 以外的 web 面')
 })

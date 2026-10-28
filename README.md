@@ -24,13 +24,15 @@
 
 ## 这是什么
 
-Apollo 是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的**插件集合入口**：安装一次，同时得到流程技能、两套工程预设，并把三个各自独立发布、可单独使用的插件装配进同一个 profile：
+Apollo 是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的**插件集合入口**：安装一次，同时得到流程技能、两套工程预设，并把五个各自独立发布、可单独使用的插件装配进同一个 profile：
 
-- **[`dsh-better-goal`](https://github.com/Menghuan1918/dsh-better-goal)**：长期目标、暂停与提问超时；
+- **[`dsh-better-goal`](https://github.com/Menghuan1918/dsh-better-goal)**：长期目标、暂停与轮数策略；
 - **[`@menghuan1918/dsh-better-subagent`](https://github.com/Menghuan1918/dsh-better-subagent)**：Codex / Claude 可续接 CLI 子代理、`wait_subagent`、运行中子代理守卫、模型分档与子代理提示词；
-- **[`dsh-better-compact`](https://github.com/Menghuan1918/dsh-better-compact)**：native / goal / file-handoff 三种压缩模式与只读诊断。
+- **[`dsh-better-compact`](https://github.com/Menghuan1918/dsh-better-compact)**：native / goal / file-handoff 三种压缩模式与只读诊断；
+- **[`dsh-better-ask-user`](https://github.com/Menghuan1918/dsh-better-ask-user)**：提问等待、输入续期、Markdown/移动端卡片、超时行为与旧 goal 等待迁移；
+- **[`dsh-better-ptc`](https://github.com/Menghuan1918/dsh-better-ptc)**：ask-user 与 subagent 共享的 PTC deadline 豁免单例。
 
-> **0.5.0 的所有权变化**：Apollo 不再实现 CLI 协议/路由、`wait_subagent`、能力探针、子代理设置页、模型分档/委派提示词或运行中子代理守卫。这些代码只在独立插件里保留一份；Apollo 只做**装配、通用工程纪律、后台任务退出守卫、旧配置迁移**。Apollo 也不再注册 `/apollo/api/*` —— 该前缀由 better-subagent 作为只读兼容别名拥有。
+> **0.6.0 的所有权变化**：提问等待从 better-goal 拆到 better-ask-user；PTC deadline 豁免从 Apollo 主行拆到共享 better-ptc。Apollo 只做**装配、通用工程纪律、后台任务退出守卫、旧配置迁移**。Apollo 也不再注册 `/apollo/api/*` —— 该前缀由 better-subagent 作为只读兼容别名拥有。
 
 ```mermaid
 flowchart TB
@@ -76,6 +78,8 @@ flowchart TB
 | 工程模式 — `eng` | 编码 / 基础设施任务 | 原生工具调用；保留 workflow 工具 |
 | 工程(PTC)模式 — `eng-ptc` | 多步、循环、需要过滤汇总的任务 | 工具经 `run_code` 的 TypeScript SDK 调用；与官方 PTC 模式一致不提供 workflow |
 
+在 PTC 模式里，`wait_subagent` / `ask_user_question` 的等待不消耗 `run_code` 的 elapsed budget；普通嵌套工具仍按原预算计时。该豁免由单例 `dsh-better-ptc` 行提供，ask-user 与 subagent 各自向同一服务注册。提问等待由 dsh-better-ask-user 统一管理，默认 120 秒；在它的行设置里可改为 `-1`，普通会话与 goal active 可分别选原 pending 或超时默认选择。两套预设的 `tool-ask-user` 不再固定 `timeout: -1`。
+
 两套预设共用 Apollo 的通用工程纪律（KISS、证据先行、修复根因、防过度设计与过度防御、权限与依赖边界、命令与进程纪律）。**委派规则与模型分档不在 Apollo**：由 better-subagent 在 `agent/created` 时按预设与活配置注册自己的 prompt section。完整组装结果见 [prompts/eng.md](prompts/eng.md) 与 [prompts/eng-ptc.md](prompts/eng-ptc.md)。
 
 两套预设的压缩组里，原生 `compaction-basic` 被替换为 `dsh-better-compact/engine`（与独立 bundle 完全相同的稳定行），保留 `command-compact` 与 `tool-result-pruner`。工程模式不提供自动化任务工具；退出守卫默认关闭，只检查本会话仍运行的后台 job，不管理 pm2、systemd、nohup 等外部进程。
@@ -86,15 +90,15 @@ flowchart TB
 
 ```sh
 # npm 安装（发布后）
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.2
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.6.0
 
 # 或从 GitHub main 源码安装（备选）
 dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 ```
 
-> **发布状态（诚实说明）**：Apollo `0.5.0` 已发布，`dsh-better-subagent@0.1.0` / `dsh-better-compact@0.1.1` 作为其精确依赖已可从 npm 取得。当前版本 `0.5.2` 是 compact 0.1.1 的设置表单 schema 修复版；本仓库 0.5.1 的验证使用本地 tarball `npm install --no-save`，提交的 manifest 中**没有** `file:` / `link:` / Git 说明符。
+> **发布状态（诚实说明）**：Apollo `0.6.0` 及 `dsh-better-ask-user@0.1.0` / `dsh-better-ptc@0.1.0` 目前**尚未发布**；本轮在本地 worktrees 和临时 profile 中验证。提交的 manifest 使用精确 npm 版本，**没有** `file:` / `link:` / Git 说明符。发布顺序见[发布顺序](#发布顺序)。
 
-安装、升级或换包都会改变运行的代码，必须重启对应 profile 的 DSH 进程；只刷新网页不够。目标行、子代理行与压缩行由 Apollo 的 bundle patch 插入，不需要再单独 `add` 三个子包。
+安装、升级或换包都会改变运行的代码，必须重启对应 profile 的 DSH 进程；只刷新网页不够。目标行、子代理行、压缩行、共享 PTC 行与 ask-user 行由 Apollo 的 bundle patch 插入，不需要再单独 `add` 五个子包。
 
 > **不要重复添加**：已经显式选中 better-subagent / better-compact bundle 的 profile，再加 Apollo 会形成“双显式来源”。Loader 仍只激活一行，但 DSH 0.2.1-rc.2 会把同一 id 的配置写入拒绝为只读（见[独立使用与组合安装](#独立使用与组合安装)）。只保留一个显式入口。
 
@@ -102,14 +106,14 @@ dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 
 ```sh
 dsh plugin --profile <profile> remove dsh-apollo
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.2
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.6.0
 ```
 
 > `dsh-apollo` 只是旧入口名；unscoped 的 `dsh-apollo` 已被其他项目占用，不要从 npm 安装它。
 
 ## 从 0.4.x 升级
 
-0.5.0 把子代理与压缩能力移出 Apollo，0.5.1 修复旧 profile 行的 `name` guard 迁移缺口；0.5.2 依赖 compact 0.1.1，修复 Web 设置表单的 schema rehydrate。旧 profile 不需要手工重填配置：Apollo 启动后在 settings/loader 可用时运行一次**幂等迁移**（[src/migrate.js](src/migrate.js)）。
+0.6.0 把提问等待从 better-goal 移到独立的 dsh-better-ask-user，并把 PTC deadline 豁免移到共享 dsh-better-ptc；better-goal 的旧 `questionTimeoutSeconds` 仍可读取，ask-user 行会做一次性迁移。旧 profile 不需要手工重填配置：Apollo 启动后在 settings/loader 可用时运行一次**幂等迁移**（[src/migrate.js](src/migrate.js)）；ask-user 行的迁移会在其设置服务就绪后运行。
 
 > **0.5.1 迁移修复**：如果旧 profile patch 的 `apollo-skills` 覆盖还带历史名称 `name: dsh-apollo`，DSH 会把 `name` 当 guard 并跳过该覆盖，导致有效配置看起来仍是默认值。0.5.1 从 `configEditor.configuration().override` 恢复这些显式值（含 `false` / `0` / `""` / `[]`），再合并到迁移来源；被跳过的旧预设覆盖（`preset-eng` / `preset-eng-ptc`）同样处理。无需手工修改旧行；升级后重启 profile 即可。
 
@@ -145,9 +149,10 @@ flowchart LR
 | `apollo-skills` | Apollo | `exitGuard`（**只**拦运行中后台 job） | volatile，保存即生效 |
 | `dsh-better-subagent` | better-subagent | `childExitGuard`、`tiers.*`、两个 CLI 后端、`subagents.eng/global` | volatile，保存即生效 |
 | `dsh-better-compact` | better-compact | 模式、auto、阈值/headroom/保留、摘要模型、重试、模型策略 | volatile 保存；**引擎快照需重载 profile** |
-| `dsh-better-goal` | goal | 轮数策略、提问超时 | volatile，保存即生效 |
+| `dsh-better-goal` | goal | 轮数策略 | volatile，保存即生效 |
+| `dsh-better-ask-user` | ask-user | 等待时长、输入续期、普通/Goal 超时行为 | volatile，保存即生效；旧 goal 值一次性迁移 |
 
-- Apollo 的最小行页只保留后台任务退出守卫与迁移说明。
+- Apollo 的最小行页只保留后台任务退出守卫与迁移说明；PTC deadline 豁免由独立的 `dsh-better-ptc` 单例行拥有，没有设置页。
 - 子代理页、压缩页分别由两个独立包自己的浏览器半边注册；它们也注册 Apollo 集成槽别名（`@menghuan1918/dsh-apollo#<row>`、`dsh-apollo#<row>`），独立与集成共用同一份实现，不产生三份配置。
 - 运行中子代理的拦截与 Apollo 的后台 job 守卫是**两个独立开关**；任意一个关闭都不影响原生工具。
 - 原生 `subagent` / `subagent_fork` / `send_message` / `interrupt_agent` 注册表不变；better-subagent 只是在它上面加路由、等待工具与提示词，不拆第二套 registry。
@@ -159,6 +164,7 @@ flowchart LR
 | Apollo `exitGuard`、子代理行、goal 行设置 | 保存后即时生效 |
 | better-compact 设置 | 保存后写入 profile；重启 profile 后引擎采用新快照 |
 | 安装 / 升级 / 移除 bundle、修改预设或顶层 patch | 重启对应 profile 的 DSH 进程 |
+| 共享 PTC 行 / ask-user 行 / 预设内 `tool-ask-user` 行 | 重启对应 profile 的 DSH 进程（host 逻辑与预设不热更） |
 | 已有 CLI 子代理的模型 / effort / profile / 可执行文件 / 初始目录 | 创建时固定；改设置只影响新任务 |
 | 已有 CLI 子代理的权限 | 每轮读取最新设置 |
 
@@ -172,6 +178,9 @@ dsh plugin --profile <profile> add @menghuan1918/dsh-better-subagent@0.1.0
 
 # 只装压缩
 dsh plugin --profile <profile> add dsh-better-compact@0.1.1
+
+# 只装提问增强（同时需要共享 PTC 行）
+dash plugin --profile <profile> add dsh-better-ask-user@0.1.0 dsh-better-ptc@0.1.0
 ```
 
 独立安装时的行、页面和提示词与 Apollo 集成完全相同；行 id/name 也是同一组稳定值。区别只在**由谁插入这些行**：Apollo 的 bundle patch 自己携带同样的行，因为 DSH 不会自动应用传递依赖的 bundle patch。
@@ -226,20 +235,20 @@ dsh plugin --profile <profile> remove dsh-better-compact
 - `package.json` 的 `files` 只列入 `docs/DEVELOPMENT.md`，并额外用 [.npmignore](.npmignore) 排除 `docs/specs/`；
 - `tests/packaging.test.mjs` 直接运行 `npm pack --dry-run --json`，断言发布清单没有 Specs、测试、脚本、快照或 tarball。
 
-发布顺序：**先发布并验证两个独立包（`@menghuan1918/dsh-better-subagent@0.1.0`、`dsh-better-compact@0.1.1`），再发布 Apollo 0.5.2**。两个 0.1.0 已随 0.5.0 发布；0.5.1 可只发布本包。Apollo 的精确依赖指向尚不存在的版本时，`npm install` 会失败；不要用开发 `file:`/`link:` 依赖发布。两个子仓各自有 trusted publishing workflow；Apollo 的 [release workflow](.github/workflows/release.yml) 只发布本包。
+发布顺序：**先发布并验证五个独立包（`dsh-better-ask-user@0.1.0`、`dsh-better-ptc@0.1.0`、`@menghuan1918/dsh-better-subagent@0.2.0`、`dsh-better-goal@0.2.1`、`dsh-better-compact@0.1.2`），再发布 Apollo 0.6.0**。Apollo 的精确依赖指向尚不存在的版本时，`npm install` 会失败；不要用开发 `file:`/`link:` 依赖发布。各子仓各自有 trusted publishing workflow；Apollo 的 [release workflow](.github/workflows/release.yml) 只发布本包。
 
 ## 验证状态（诚实记录）
 
 在本实现提交时验证过（命令与结果见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)）：
 
 - `npm test`：配置/装配/漂移/迁移纯函数/settings/客户端/prompt/发布清单全部通过，含真实 temp-profile 迁移测试；
-- `npm run prompts`：用发布布局复制 Apollo + 三个独立包，由真实 headless 宿主重新生成两份快照；
+- `npm run prompts`：用发布布局复制 Apollo + 五个独立包，由真实 headless 宿主重新生成两份快照；
 - `npm pack --dry-run --json`：发布清单无 Specs/tests/scripts/prompts/tarball；
 - `node scripts/runtime-smoke.mjs apollo|standalone|both`：临时 profile + 脚本化 LLM 适配器（无凭据），覆盖单实例行、旧配置迁移、eng 回合、native subagent create/wait、手动 `/compact`、inspect、真实后台 job 退出守卫、保存→`requiresReload`→重启→`activeConfig`、独立组合与双显式 bundle 的只读限制。
 
 **未验证 / 明确限制**：
 
-- 子包 `@menghuan1918/dsh-better-subagent@0.1.0` 与 `dsh-better-compact@0.1.1` 已可从 npm 取得。
+- 五个独立包的 0.6.0 配套版本尚未发布；本轮只在本地 worktrees 与临时 profile 验证。
 - 未修改或重启用户当前运行的 profile，未验证当前 GUI（`http://127.0.0.1:3384`）的设置页/卡片；S3 视觉设置页的 GUI 验收归 S3/最终宿主验收。
 - 未运行真实 Codex/Claude CLI 的真实模型回合（那属于两个子包自己的验证；Apollo 侧本轮只用脚本化适配器）。
 - 真实模型摘要保真、缓存命中率与跨版本预设漂移仍需按实际环境复验。

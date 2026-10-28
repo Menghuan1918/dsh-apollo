@@ -147,7 +147,8 @@
           # domain is owned by the independent dsh-better-goal plugin row in the
           # top-level patch: it registers one `goal` tool and one `/goal` command
           # per Agent, hides any legacy goal tools a preset still carries, and has
-          # its own Plugins row for round limits and question timeouts. The two
+          # its own Plugins row for round limits. Question waits live in the
+          # independent dsh-better-ask-user row. The two
           # removed rows remain deliberate removals in tests/upstream-drift.test.mjs,
           # which asserts they still exist upstream before filtering them out.
 

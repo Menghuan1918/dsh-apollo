@@ -4,10 +4,11 @@
 # presets/ load after it); activate with
 # `dsh plugin --profile <name> add @menghuan1918/dsh-apollo`.
 #
-# Apollo 0.5.0 is an integration bundle. The subagent and compaction features
-# are owned by two independent plugins, and Apollo repeats their *same stable
-# rows* here because DSH does not auto-apply a transitive dependency's bundle
-# patch (`dsh plugin add` only selects directly installed bundles):
+# Apollo 0.6.0 is an integration bundle. The subagent, compaction, question-wait
+# and PTC-exemption features are owned by independent plugins, and Apollo
+# repeats their *same stable rows* here because DSH does not auto-apply a
+# transitive dependency's bundle patch (`dsh plugin add` only selects directly
+# installed bundles):
 #
 #   - `@menghuan1918/dsh-better-subagent` owns the Codex/Claude CLI subagents,
 #     `wait_subagent`, the running-child exit guard, the subagent settings page
@@ -16,7 +17,10 @@
 #     (engine row) own compaction; the native host-plane `compaction-basic` is
 #     disabled here exactly like the standalone bundle, and the eng/eng-ptc
 #     presets carry the engine row inside their own compaction realm;
-#   - `dsh-better-goal` keeps owning the goal domain.
+#   - `dsh-better-goal` keeps owning the goal domain;
+#   - `dsh-better-ask-user` owns the question wait, input extension, Web card
+#     and timeout behavior; `dsh-better-ptc` is the singleton PTC exemption
+#     service shared by the ask-user and subagent rows.
 #
 # Selecting both the standalone bundle and Apollo still loads one instance: the
 # Loader keys entries by row id. The same rule makes the double-explicit-bundle
@@ -69,6 +73,21 @@
     - id: dsh-better-subagent
       name: '@menghuan1918/dsh-better-subagent'
 
+# ── question wait + PTC exemption: independent rows ─────────────────────────
+# The official Web card is disabled by the ask-user bundle; repeat the disable
+# and the two stable rows here for the same transitive-dependency reason.
+# dsh-better-ptc is a singleton: ask-user and better-subagent both insert the
+# same row id, and the Loader keeps one service and one runtime wrapper.
+- id: ui-user-questions
+  disabled: true
+
+- insert:
+    - id: dsh-better-ptc
+      name: dsh-better-ptc
+
+    - id: dsh-better-ask-user
+      name: dsh-better-ask-user
+
 # ── Apollo host row ─────────────────────────────────────────────────────────
 # The apollo-skills row is one row on purpose. The row's module specifier must
 # be this package's npm name (`@menghuan1918/dsh-apollo`), not a short alias,
@@ -90,6 +109,8 @@
 #   3. the one-time legacy `exitGuard` import and the one-time old-config
 #      migration into dsh-better-subagent / dsh-better-compact (src/migrate.js);
 #   4. the `declareOwnsHost` index tap.
+# The PTC deadline exemption is now owned by the independent dsh-better-ptc
+# singleton row, not this package.
 # It no longer registers `/apollo/api/*` (dsh-better-subagent owns those read
 # aliases) and no longer implements CLI protocols, subagent routing, the wait
 # tool, tier/delegation prompt generation or the child exit guard.

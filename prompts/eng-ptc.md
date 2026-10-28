@@ -4,7 +4,7 @@
 
 Assembled by a headless DSH 0.2.1-rc.2 host for model `example-model`. Per-request runtime context (time, working directory) and tool schemas are omitted; web-only sections of the Web GUI host are not included. Sections in order: `harness:identity`, `deployment:persona-prefix`, `eng:mode-instructions`, `better-subagent:delegation`, `tools:ptc-only`, `context:file-reference`, `tool:bash`, `tool:read`, `tool:write`, `tool:edit`, `tool:glob`, `tool:grep`, `tool:jobs`, `tool:web_search`, `tool:web_fetch`, `tool:goal`, `tool:subagent`, `tools:sdk`.
 
-Apollo / dsh-better-subagent settings used:
+Apollo / dsh-better-subagent / dsh-better-ask-user settings used:
 
 ```json
 {
@@ -24,6 +24,11 @@ Apollo / dsh-better-subagent settings used:
         "reasoningEffort": "<quality-effort>"
       }
     }
+  },
+  "dsh-better-ask-user": {
+    "questionTimeoutSeconds": 120,
+    "timeoutBehavior": "native",
+    "goalTimeoutBehavior": "native"
   }
 }
 ```
@@ -136,7 +141,7 @@ Program-only SDK bindings:
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 
 interface ToolArgsMap {
-  /** Ask brief, direct, self-contained questions about missing information, preferences, or decisions. Use user-facing terms; assume no knowledge of background work or internal names. Use distinct stable question IDs. A submitted skipped question is an answer item with empty selected and no custom; pending instead means no answer batch arrived before the timeout and the user can still answer. While a goal is active and armed, the host controls the wait duration and ignores timeout arguments. Otherwise the existing question tool behavior is preserved. */
+  /** Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding. The host controls the wait duration and timeout behavior; the timeout argument is a compatibility field and is ignored. */
   ask_user_question: {
     /** Questions to ask the user before continuing. */
     questions: ({
@@ -156,7 +161,7 @@ interface ToolArgsMap {
       /** Whether the user may select more than one option. Defaults to false. */
       multi_select?: boolean;
     } & Record<string, JsonValue>)[];
-    /** Compatibility wait field. The host goal-question timeout controls every new wait; any value supplied here is ignored. */
+    /** Compatibility wait field. The host controls the wait duration and timeout behavior; any value supplied here is ignored. */
     timeout?: number;
   } & Record<string, JsonValue>;
   /** Execute a bash command (`bash -c`) and return its stdout/stderr. Each call runs in a fresh shell; pass `workdir` instead of using `cd`. Managed `$DSH_*` variables expose current harness environment facts. Long output is truncated to its tail; the full output is saved to a file whose path is reported when available. Provide `description` before `command` in the arguments. Before any delete or move, verify that the resolved absolute target path is the intended one; never run it against a computed path you have not checked. An unset variable expands to an empty string, so guard variables in such paths with `${VAR:?}`. Commands may run under a file sandbox; a blocked file operation is reported as `[sandbox: file access denied under <mode> mode]`, a policy denial: do not retry another way. */
@@ -358,22 +363,13 @@ interface ToolArgsMap {
 
 interface ToolOutputMap {
   ask_user_question: {
-    /** True when the foreground wait expired before the user submitted an answer batch. The questions remain answerable; this is not a skipped answer. */
-    pending: true;
-    /** Tool call whose unanswered questions remain pending. */
-    callId: string;
-    /** How to continue while the questions stay answerable. */
-    message: string;
-  } | {
-    /** Submitted answer batch with one item per question. A skipped question has empty selected and no custom; unlike pending, the user has completed the batch. */
     answers: {
-      /** Stable question id echoed from the request. */
       id: string;
-      /** Selected option labels. Empty with no custom means the user explicitly skipped this question. */
       selected: string[];
-      /** Optional free-form answer; omitted for a skipped question. */
       custom?: string;
     }[];
+    /** True when the host selected default options after the wait expired; this is not a user answer. */
+    autoSelected?: boolean;
   };
   bash: {
     kind: "background";
