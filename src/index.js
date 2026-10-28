@@ -14,6 +14,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mountMigration } from './migrate.js'
+import { mountMigrationAdmission } from './admission.js'
 import { mountSettings } from './settings.js'
 export { Config } from './config.js'
 
@@ -33,8 +34,9 @@ export const inject = ['skills']
 export function apply(ctx, config) {
   ctx.skills.registerProvider(() => createProvider(ctx))
   if (typeof ctx.inject === 'function') {
+    const onResult = typeof ctx.on === 'function' ? mountMigrationAdmission(ctx) : undefined
     const settings = mountSettings(ctx, config)
-    mountMigration(ctx, config, { legacyImport: settings.legacyImport })
+    mountMigration(ctx, config, { legacyImport: settings.legacyImport, onResult })
   }
 }
 

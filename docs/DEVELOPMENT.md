@@ -242,6 +242,8 @@ npm install --no-save /path/to/menghuan1918-dsh-better-subagent-0.1.0.tgz /path/
 
 原生默认值不会变成目标显式值：只有来源行里显式存在的键才会被携带。压缩配置是 volatile 保存、引擎载入时冻结快照；迁移后的设置需要重载 profile 才会被运行中引擎采用（inspect 的 `requiresReload` 可观察）。
 
+Apollo 在迁移挂载时先登记启动门禁：验证完成前，`agent/pre-step` 阻止任务步骤，`llm/stream` 同时阻止不经过 pre-step 的手动摘要调用。迁移 pending/blocked/error 不得按默认配置继续执行；应检查日志后修复来源或目标并重载。若本次迁移改变 compact 的载入快照，持久化验证完成后仍要求重载，重载后确认无差异才放行。普通后续设置保存不关闭已通过的启动门禁，仍按原有“当前快照继续、重载后应用新值”语义处理。
+
 ### 迁移测试
 
 - [tests/migrate.test.mjs](../tests/migrate.test.mjs)：纯函数与 fake host 编排。覆盖显式 false/空值、目标优先（分档整档、models 空列表、保留方式二选一）、缺失来源、ambiguity、trustedHosts、写入拒绝、幂等、重读验证、有界等待。
