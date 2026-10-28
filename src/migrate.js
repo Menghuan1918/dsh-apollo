@@ -611,7 +611,12 @@ export async function runMigration(ctx, options = {}) {
   const loader = loaderOf(ctx)
   if (loader !== undefined) await bounded(Promise.resolve(loader.await()).catch(() => undefined), timeoutMs)
   if (options.legacyImport !== undefined) await bounded(options.legacyImport, timeoutMs)
-  const descriptors = await waitForDescriptors(settings, [SUBAGENT_NS, COMPACT_NS], {
+  const configEditor = options.configEditor ?? serviceOf(ctx, 'configEditor')
+  // A deliberately disabled row is not an unloaded/failed active plugin. Keep
+  // its legacy source intact for a later re-enable instead of blocking native work.
+  const disabled = new Set([SUBAGENT_NS, COMPACT_NS].filter((ns) => targetEntryOf(configEditor, ns)?.options?.disabled === true))
+  const targets = [SUBAGENT_NS, COMPACT_NS].filter((ns) => !disabled.has(ns))
+  const descriptors = await waitForDescriptors(settings, targets, {
     timeoutMs,
     intervalMs: options.intervalMs,
   })
@@ -622,7 +627,6 @@ export async function runMigration(ctx, options = {}) {
     return { status: 'pending', error: message }
   }
   const sourceDescriptor = descriptors.find((row) => row?.ns === APOLLO_NS)
-  const configEditor = options.configEditor ?? serviceOf(ctx, 'configEditor')
   const agentPresets = options.agentPresets ?? serviceOf(ctx, 'agentPresets')
   // describe().value only projects the *volatile* form, so read the Apollo
   // row's raw config for non-volatile fields (trustedHosts) and overlay the
@@ -640,13 +644,19 @@ export async function runMigration(ctx, options = {}) {
     effectiveSource,
     configurationOverrideOf(configEditor, APOLLO_NS),
   ))
-  const subagent = await migrateSubagent({ settings, configEditor, descriptors, source, log })
+  const subagent = disabled.has(SUBAGENT_NS)
+    ? { status: 'disabled', fields: [] }
+    : await migrateSubagent({ settings, configEditor, descriptors, source, log })
   // A scoped job write would become the last override and hide the skipped
   // source from configuration().override. Wait until its child fields are safe.
-  const job = ['complete', 'no-change'].includes(subagent.status)
-    ? await migrateJobExitGuard({ settings, descriptors, source, rawSource })
-    : { status: 'pending', error: 'waiting for the subagent migration before restoring the job switch' }
-  const compact = await migrateCompact({ settings, configEditor, descriptors, agentPresets, log })
+  const job = subagent.status === 'disabled'
+    ? { status: 'deferred', reason: 'subagent is disabled; preserve the legacy source until it is re-enabled' }
+    : ['complete', 'no-change'].includes(subagent.status)
+      ? await migrateJobExitGuard({ settings, descriptors, source, rawSource })
+      : { status: 'pending', error: 'waiting for the subagent migration before restoring the job switch' }
+  const compact = disabled.has(COMPACT_NS)
+    ? { status: 'disabled', fields: [] }
+    : await migrateCompact({ settings, configEditor, descriptors, agentPresets, log })
   const status = [job.status, subagent.status, compact.status].some((value) => value === 'error')
     ? 'error'
     : [job.status, subagent.status, compact.status].some((value) => value === 'pending')
