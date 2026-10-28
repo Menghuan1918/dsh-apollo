@@ -2,7 +2,7 @@
 
 面向维护者、集成者和需要排查装配问题的用户。用户安装与配置请看 [README](../README.md)；本文保留 DSH 插件的实现细节、旧配置迁移、组合安装边界与验证方法。
 
-当前实现版本：`0.6.1`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
+当前实现版本：`0.6.2`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
 
 ## 目录
 
@@ -36,7 +36,7 @@
 | `dsh-better-goal` | `0.2.1` | 目标域（`questionTimeoutSeconds` 已弃用、仅保留读取） |
 | `@menghuan1918/dsh-better-subagent` | `0.2.0` | 子代理 CLI/等待/child guard/分档/设置页；注册 `wait_subagent` PTC 豁免 |
 | `dsh-better-compact` | `0.1.2` | 压缩 companion + engine + 设置页/诊断 |
-| `dsh-better-ask-user` | `0.1.3` | 官方 `ask_user_question` contract + 默认等待；注册 PTC 豁免；旧 goal 等待迁移 |
+| `dsh-better-ask-user` | `0.1.4` | 官方 `ask_user_question` 入参/返回 + 插件超时等待；注册 PTC 豁免；旧 goal 等待迁移 |
 | `dsh-better-ptc` | `0.1.0` | 单例 PTC deadline 豁免服务 |
 | `@deepseek-ai/schemastery` | `~3.18.4` | Apollo 行 Config |
 | `react` | peer | 宿主提供 |
@@ -318,10 +318,10 @@ DSH_PACKAGE_ROOT="/…/node_modules/@deepseek-ai/dsh" npm run prompts
 ### npm 安装
 
 ```sh
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.6.1
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.6.2
 ```
 
-包发布后即可用此命令安装，并带入五个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。0.6.1 与 ask-user 0.1.3 已发布，临时 profile 验证通过。
+包发布后即可用此命令安装，并带入五个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。0.6.2 与 ask-user 0.1.4 已发布，临时 profile 验证通过。
 
 ### GitHub 源码安装
 
@@ -376,9 +376,9 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 
 两个子仓和 Apollo 都用 GitHub Release 触发 `.github/workflows/release.yml`，通过 npm trusted publishing（OIDC）发布，仓库里不存 npm token。tag 必须是 `v<package.json 的 version>`，CI 会先校验再跑测试和 `npm publish --provenance`。
 
-1. 先发布 `dsh-better-ptc@0.1.0`、`dsh-better-ask-user@0.1.3`、`@menghuan1918/dsh-better-subagent@0.2.0`、`dsh-better-goal@0.2.1`、`dsh-better-compact@0.1.2`（各自仓库的 Release）；
+1. 先发布 `dsh-better-ptc@0.1.0`、`dsh-better-ask-user@0.1.4`、`@menghuan1918/dsh-better-subagent@0.2.0`、`dsh-better-goal@0.2.1`、`dsh-better-compact@0.1.2`（各自仓库的 Release）；
 2. 在官方 registry（`https://registry.npmjs.org/`）确认五个版本可取得、可安装；
-3. 再把 Apollo 的精确依赖指向已发布版本，推 main 并发布 Apollo Release（本轮为 `v0.6.1`）；
+3. 再把 Apollo 的精确依赖指向已发布版本，推 main 并发布 Apollo Release（本轮为 `v0.6.2`）；
 4. 子包版本可取得前，不要把指向它们的精确依赖推到 Apollo main，否则 `npm install` / GitHub 源码安装会 404。
 
 ## 测试与冒烟
