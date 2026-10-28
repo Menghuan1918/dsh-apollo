@@ -86,13 +86,13 @@ flowchart TB
 
 ```sh
 # npm 安装（发布后）
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.1
 
 # 或从 GitHub main 源码安装（备选）
 dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 ```
 
-> **发布状态（诚实说明）**：Apollo `0.5.0` 把 `dsh-better-subagent@0.1.0` 与 `dsh-better-compact@0.1.0` 声明为**精确 npm 依赖**，但截至本实现完成，这两个版本尚未发布到 npm。Apollo 0.5.0 必须在两个子包发布并按顺序验证后再发布；本仓库的验证使用本地 tarball `npm install --no-save`，提交的 manifest 中**没有** `file:` / `link:` / Git 说明符。
+> **发布状态（诚实说明）**：Apollo `0.5.0` 已发布，`dsh-better-subagent@0.1.0` / `dsh-better-compact@0.1.0` 作为其精确依赖已可从 npm 取得。当前版本 `0.5.1` 是旧 profile `name` guard 的迁移修复版；本仓库 0.5.1 的验证使用本地 tarball `npm install --no-save`，提交的 manifest 中**没有** `file:` / `link:` / Git 说明符。
 
 安装、升级或换包都会改变运行的代码，必须重启对应 profile 的 DSH 进程；只刷新网页不够。目标行、子代理行与压缩行由 Apollo 的 bundle patch 插入，不需要再单独 `add` 三个子包。
 
@@ -102,14 +102,16 @@ dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 
 ```sh
 dsh plugin --profile <profile> remove dsh-apollo
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.1
 ```
 
 > `dsh-apollo` 只是旧入口名；unscoped 的 `dsh-apollo` 已被其他项目占用，不要从 npm 安装它。
 
 ## 从 0.4.x 升级
 
-0.5.0 把子代理与压缩能力移出 Apollo。旧 profile 不需要手工重填配置：Apollo 启动后在 settings/loader 可用时运行一次**幂等迁移**（[src/migrate.js](src/migrate.js)）。
+0.5.0 把子代理与压缩能力移出 Apollo，0.5.1 修复旧 profile 行的 `name` guard 迁移缺口。旧 profile 不需要手工重填配置：Apollo 启动后在 settings/loader 可用时运行一次**幂等迁移**（[src/migrate.js](src/migrate.js)）。
+
+> **0.5.1 迁移修复**：如果旧 profile patch 的 `apollo-skills` 覆盖还带历史名称 `name: dsh-apollo`，DSH 会把 `name` 当 guard 并跳过该覆盖，导致有效配置看起来仍是默认值。0.5.1 从 `configEditor.configuration().override` 恢复这些显式值（含 `false` / `0` / `""` / `[]`），再合并到迁移来源；被跳过的旧预设覆盖（`preset-eng` / `preset-eng-ptc`）同样处理。无需手工修改旧行；升级后重启 profile 即可。
 
 ```mermaid
 flowchart LR
@@ -204,7 +206,7 @@ dsh plugin --profile <profile> remove dsh-better-compact
 - 彻底移除压缩增强：从 Apollo 组合中移除 Apollo，或把预设/组合改回原生压缩。**只禁用独立 compact bundle 不会恢复 Apollo 预设内的 engine 行**，因为该 engine 由 Apollo 自己的预设 patch 声明；需要移除 Apollo，或恢复一份使用原生 `compaction-basic` 的预设覆盖。
 - 彻底移除子代理增强：移除 Apollo（或至少禁用其 `dsh-better-subagent` 行）。原生 create/fork/message/interrupt 仍可用；CLI-only 旧会话需要重新安装 better-subagent 才能续接，其它原生会话不受影响。
 - 卸载不删除原生压缩事件、goal 日志或 CLI 身份 KV；handoff 临时文件不是必需依赖，删除后已压缩会话仍可从原生 checkpoint 恢复。
-- 回退到 0.4.x 前先备份 profile 的 `cordis.patch.yml`；旧字段仍能装载，但 0.5.0 写入的新行配置不会被 0.4.x 读取。
+- 回退到 0.4.x 前先备份 profile 的 `cordis.patch.yml`；旧字段仍能装载，但 0.5.x 写入的新行配置不会被 0.4.x 读取。
 
 ## 提示词归属
 
@@ -224,7 +226,7 @@ dsh plugin --profile <profile> remove dsh-better-compact
 - `package.json` 的 `files` 只列入 `docs/DEVELOPMENT.md`，并额外用 [.npmignore](.npmignore) 排除 `docs/specs/`；
 - `tests/packaging.test.mjs` 直接运行 `npm pack --dry-run --json`，断言发布清单没有 Specs、测试、脚本、快照或 tarball。
 
-发布顺序：**先发布并验证两个独立包（`@menghuan1918/dsh-better-subagent@0.1.0`、`dsh-better-compact@0.1.0`），再发布 Apollo 0.5.0**。Apollo 的精确依赖指向尚不存在的版本时，`npm install` 会失败；不要用开发 `file:`/`link:` 依赖发布。两个子仓各自有 trusted publishing workflow；Apollo 的 [release workflow](.github/workflows/release.yml) 只发布本包。
+发布顺序：**先发布并验证两个独立包（`@menghuan1918/dsh-better-subagent@0.1.0`、`dsh-better-compact@0.1.0`），再发布 Apollo 0.5.1**。两个 0.1.0 已随 0.5.0 发布；0.5.1 可只发布本包。Apollo 的精确依赖指向尚不存在的版本时，`npm install` 会失败；不要用开发 `file:`/`link:` 依赖发布。两个子仓各自有 trusted publishing workflow；Apollo 的 [release workflow](.github/workflows/release.yml) 只发布本包。
 
 ## 验证状态（诚实记录）
 

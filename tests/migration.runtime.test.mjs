@@ -1,7 +1,7 @@
 /**
  * 真实宿主 temp-profile 迁移测试。
  *
- * 用安装版 DSH 启动一个 headless profile：Apollo 0.5.0 装配两个独立插件的
+ * 用安装版 DSH 启动一个 headless profile：Apollo 0.5.x 装配两个独立插件的
  * 稳定行，profile patch 里保留 0.4.x 风格的旧 Apollo 行配置，以及一个仍带
  * 原生 compaction-basic 显式配置的旧 eng-ptc 预设覆盖。Apollo 启动后应：
  *   - 把子代理字段补进 dsh-better-subagent（目标显式值优先）；
@@ -166,6 +166,48 @@ test('真实 temp profile：旧 Apollo 子代理/压缩配置迁移到独立行'
       subagent.user,
       'second run must not change the target user values',
     )
+  } finally {
+    if (ctx) await ctx.fiber.dispose()
+    await rm(info.home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  }
+})
+
+const SKIPPED_GUARD_PATCH = [
+  { id: 'headless-startup', disabled: true },
+  { id: 'headless-runner', disabled: true },
+  { id: 'workflow-ptc', disabled: true },
+  { id: 'tool-workflow', disabled: true },
+  { id: 'credentials', disabled: false, config: { watch: false } },
+  // Historical unscoped row name: the Loader treats `name` as a guard and
+  // skips this override, but configEditor.configuration().override keeps it.
+  { id: 'apollo-skills', name: 'dsh-apollo', config: { subagents: { eng: false }, exitGuard: true } },
+  { insert: [
+    { id: 'agent-preset-registry', name: '@deepseek-ai/dsh-agent-preset-registry', config: { default: 'eng' } },
+    { id: 'workspace', name: '@deepseek-ai/dsh-workspace' },
+  ] },
+]
+
+test('真实 temp profile：旧 name: dsh-apollo 行被 Loader 跳过时仍迁移显式值', { skip: enabled ? false : 'DSH_PACKAGE_ROOT is not set' }, async () => {
+  const info = await prepareProfile({ bundles: ['@menghuan1918/dsh-apollo'], patch: SKIPPED_GUARD_PATCH, prefix: 'apollo-skipped-guard-' })
+  let ctx
+  try {
+    ctx = await bootProfile(info)
+    await waitUntil(async () => {
+      const rows = await ctx.settings.describe()
+      const subagent = rows.find((row) => row.ns === SUBAGENT_NS)
+      return subagent?.user?.childExitGuard === true && subagent?.user?.subagents?.eng === false
+    }, 'migration from the skipped legacy row', 15_000)
+
+    const rows = await ctx.settings.describe()
+    const subagent = rows.find((row) => row.ns === SUBAGENT_NS)
+    const apollo = rows.find((row) => row.ns === 'apollo-skills')
+    assert.equal(subagent.value.childExitGuard, true, 'explicit old exitGuard is recovered')
+    assert.equal(subagent.value.subagents.eng, false, 'explicit old false is recovered, not the effective default true')
+    assert.equal(apollo.value.exitGuard, false, 'the skipped row must still show the effective default')
+    assert.equal(apollo.value.subagents.eng, true, 'the skipped row must still show the effective default')
+
+    const configuration = ctx.configEditor.configuration().find((row) => row.entry.options.id === 'apollo-skills')
+    assert.deepEqual(configuration.override, { subagents: { eng: false }, exitGuard: true }, 'the raw override is the recovery source')
   } finally {
     if (ctx) await ctx.fiber.dispose()
     await rm(info.home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })

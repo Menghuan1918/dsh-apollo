@@ -100,10 +100,10 @@ test('顶层 patch 禁用原生 goal 域与原生 compaction-basic，并插入�
   }
 })
 
-test('npm manifest：scoped 名、0.5.0、repository、publishConfig 与 license', () => {
+test('npm manifest：scoped 名、0.5.1、repository、publishConfig 与 license', () => {
   const m = manifest()
   assert.equal(m.name, PACKAGE_NAME)
-  assert.equal(m.version, '0.5.0')
+  assert.equal(m.version, '0.5.1')
   assert.equal(m.license, 'GPL-3.0-or-later')
   assert.deepEqual(m.repository, {
     type: 'git',

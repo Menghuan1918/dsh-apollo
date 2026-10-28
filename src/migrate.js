@@ -70,6 +70,35 @@ function clone(value) {
   return value === undefined ? undefined : structuredClone(value)
 }
 
+/**
+ * Deep-merge an explicit profile override over an effective config.
+ *
+ * DSH applies a profile row's `name` as a guard: an old row whose name no
+ * longer matches the active row (for example the historical
+ * `name: dsh-apollo` on `apollo-skills`) is skipped by the Loader, yet
+ * `configEditor.configuration().override` still exposes its explicit config.
+ * Merging that override back over the effective config recovers the user's
+ * explicit values during migration.
+ *
+ * Plain objects merge recursively; arrays and every scalar - including
+ * explicit `false`, `0`, `""` and `[]` - replace the base value.
+ *
+ * @param base - effective config (defaults + applied layers).
+ * @param override - raw explicit profile override; undefined means "no override".
+ * @returns a detached merged value.
+ */
+export function mergeConfigOverride(base, override) {
+  if (override === undefined) return clone(base)
+  if (!isRecord(base) || !isRecord(override)) return clone(override)
+  const result = clone(base)
+  for (const [key, value] of Object.entries(override)) {
+    result[key] = isRecord(value) && isRecord(result[key])
+      ? mergeConfigOverride(result[key], value)
+      : clone(value)
+  }
+  return result
+}
+
 /** Assign a nested path into a patch object. */
 function setPatch(patch, keys, value) {
   let node = patch
@@ -383,7 +412,26 @@ function defaultPresetOf(agentPresets) {
   }
 }
 
-/** Top-level preset declarations visible to configEditor.entries(). */
+/** Read one row's raw profile override from configEditor.configuration(). */
+function configurationOverrideOf(configEditor, id) {
+  try {
+    const rows = configEditor?.configuration?.()
+    if (!Array.isArray(rows)) return undefined
+    const row = rows.find((candidate) => candidate?.entry?.options?.id === id)
+    return isRecord(row?.override) ? row.override : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Top-level preset declarations visible to configEditor.entries().
+ *
+ * A preset override whose `name` guard no longer matches is skipped by the
+ * Loader, so merge the configuration override back before reading its native
+ * `compaction-basic` config. Array values (the child `plugins` list) replace
+ * wholesale, matching DSH's preset-override semantics.
+ */
 function presetRowsOf(configEditor) {
   let entries
   try {
@@ -394,11 +442,16 @@ function presetRowsOf(configEditor) {
   if (!Array.isArray(entries)) return []
   return entries
     .filter((entry) => entry?.options?.name === '@deepseek-ai/dsh-agent-preset')
-    .map((entry) => ({
-      rowId: entry.options.id,
-      presetId: entry.options.config?.id,
-      config: entry.options.config,
-    }))
+    .map((entry) => {
+      const base = isRecord(entry.options.config) ? entry.options.config : {}
+      const override = configurationOverrideOf(configEditor, entry.options.id)
+      const config = override === undefined ? base : mergeConfigOverride(base, override)
+      return {
+        rowId: entry.options.id,
+        presetId: config.id,
+        config,
+      }
+    })
 }
 
 /** Find the target row entry (needed for the non-volatile trustedHosts write). */
@@ -550,13 +603,20 @@ export async function runMigration(ctx, options = {}) {
   const agentPresets = options.agentPresets ?? serviceOf(ctx, 'agentPresets')
   // describe().value only projects the *volatile* form, so read the Apollo
   // row's raw config for non-volatile fields (trustedHosts) and overlay the
-  // live volatile values on top.
+  // live volatile values on top. Finally merge the raw profile override:
+  // DSH skips a row whose old `name` guard no longer matches (historical
+  // `name: dsh-apollo`), and only configuration().override still carries the
+  // user's explicit values.
   const rawSource = targetEntryOf(configEditor, APOLLO_NS)?.options?.config
   const sourceBase = {
     ...(isRecord(options.config) ? options.config : {}),
     ...(isRecord(rawSource) ? rawSource : {}),
   }
-  const source = normalizeConfig({ ...sourceBase, ...(sourceDescriptor?.value ?? {}) })
+  const effectiveSource = { ...sourceBase, ...(sourceDescriptor?.value ?? {}) }
+  const source = normalizeConfig(mergeConfigOverride(
+    effectiveSource,
+    configurationOverrideOf(configEditor, APOLLO_NS),
+  ))
   const subagent = await migrateSubagent({ settings, configEditor, descriptors, source, log })
   const compact = await migrateCompact({ settings, configEditor, descriptors, agentPresets, log })
   const status = [subagent.status, compact.status].some((value) => value === 'error')

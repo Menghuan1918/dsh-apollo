@@ -1,5 +1,5 @@
 /**
- * Apollo 0.5.0 real-profile integration smoke.
+ * Apollo 0.5.x real-profile integration smoke.
  *
  * Boots an isolated headless DSH profile from the installed runtime
  * (DSH_PACKAGE_ROOT), Apollo's shipped files and the three independent plugin

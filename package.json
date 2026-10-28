@@ -1,6 +1,6 @@
 {
   "name": "@menghuan1918/dsh-apollo",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "DSH plugin bundle: workflow skills, engineering presets, independent better-goal / better-subagent / better-compact integration, and a minimal job exit guard. Pure ESM, no build step.",
   "license": "GPL-3.0-or-later",
   "repository": {

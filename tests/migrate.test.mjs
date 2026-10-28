@@ -12,6 +12,7 @@ import {
   COMPACT_NS,
   SUBAGENT_NS,
   compactionConfigOf,
+  mergeConfigOverride,
   migrateCompact,
   migrateSubagent,
   planCompactMigration,
@@ -164,6 +165,28 @@ test('planTrustedHostsMigration：目标未声明才写；空来源或目标显�
   assert.equal(planTrustedHostsMigration({ source: { trustedHosts: [] }, targetRaw: {} }), undefined)
 })
 
+test('mergeConfigOverride：嵌套对象递归合并，数组与显式空值覆盖', () => {
+  const base = {
+    subagents: { eng: true, global: false, codex: { enabled: true, models: ['a'] } },
+    tiers: { fast: { provider: 'p', model: 'm' } },
+    trustedHosts: ['old'],
+  }
+  const merged = mergeConfigOverride(base, {
+    subagents: { eng: false, codex: { models: [], enabled: false } },
+    trustedHosts: [],
+    tiers: { fast: { provider: '' } },
+  })
+  assert.deepEqual(merged, {
+    subagents: { eng: false, global: false, codex: { enabled: false, models: [] } },
+    tiers: { fast: { provider: '', model: 'm' } },
+    trustedHosts: [],
+  })
+  assert.deepEqual(base.subagents.eng, true, '不修改输入')
+  assert.deepEqual(mergeConfigOverride(undefined, { a: 1 }), { a: 1 })
+  assert.deepEqual(mergeConfigOverride({ a: [1] }, { a: [2] }), { a: [2] })
+  assert.deepEqual(mergeConfigOverride({ a: { b: 1 } }, { a: 0 }), { a: 0 })
+})
+
 test('verifySubagentMigration：数组/嵌套字段按目标生效值校验', () => {
   const patch = {
     childExitGuard: true,
@@ -297,7 +320,17 @@ test('verifyCompactMigration：按生效值校验并报告缺失键', () => {
  * update merges into both the effective value and the user override so the
  * second run sees target-explicit values (idempotence).
  */
-function fakeHost({ source = {}, presets = [], defaultId = 'eng', targetUser = {}, compactUser = {}, entriesExtra = [] } = {}) {
+function fakeHost({
+  source = {},
+  presets = [],
+  defaultId = 'eng',
+  targetUser = {},
+  compactUser = {},
+  entriesExtra = [],
+  apolloRaw = source,
+  apolloOverride = undefined,
+  presetOverrides = {},
+} = {}) {
   const descriptors = new Map([
     ['apollo-skills', { ns: 'apollo-skills', revision: 1, user: {}, value: deepMerge(APOLLO_DEFAULT, source), base: APOLLO_DEFAULT }],
     [SUBAGENT_NS, { ns: SUBAGENT_NS, revision: 1, user: deepMerge({}, targetUser), value: deepMerge(SUBAGENT_BASE, targetUser), base: SUBAGENT_BASE }],
@@ -307,6 +340,7 @@ function fakeHost({ source = {}, presets = [], defaultId = 'eng', targetUser = {
   const edits = []
   const entries = [
     { options: { id: SUBAGENT_NS, name: '@menghuan1918/dsh-better-subagent', config: {} } },
+    { options: { id: 'apollo-skills', name: '@menghuan1918/dsh-apollo', config: apolloRaw } },
     ...presets.map((preset) => ({ options: preset })),
     ...entriesExtra,
   ]
@@ -328,6 +362,13 @@ function fakeHost({ source = {}, presets = [], defaultId = 'eng', targetUser = {
   }
   const configEditor = {
     entries: () => entries,
+    configuration: () => entries.map((entry) => ({
+      entry,
+      inherited: {},
+      override: structuredClone(entry.options.id === 'apollo-skills'
+        ? (apolloOverride ?? {})
+        : (presetOverrides[entry.options.id] ?? {})),
+    })),
     async edit(entry, change) {
       edits.push({ id: entry.options.id })
       entry.options.config = change(structuredClone(entry.options.config))
@@ -391,6 +432,43 @@ test('runMigration：幂等——第二次运行不再写入', async () => {
   assert.equal(second.status, 'complete')
   assert.equal(host.updates.length, updatesAfterFirst, '目标已有显式值 → 不再写')
   assert.equal(host.edits.length, 1, 'trustedHosts 也只写一次')
+})
+
+test('runMigration：旧 profile 行被 name guard 跳过时，用 configuration().override 恢复显式值', async () => {
+  const host = fakeHost({
+    // The Loader skipped the old `name: dsh-apollo` row: the effective Apollo
+    // config is the default (eng=true, exitGuard=false), while the raw profile
+    // override still carries the user's explicit values.
+    source: {},
+    apolloRaw: {},
+    apolloOverride: { subagents: { eng: false }, exitGuard: true },
+  })
+  const ctx = { get: () => undefined, settings: host.settings, logger: host.log }
+  const result = await runMigration(ctx, { configEditor: host.configEditor, timeoutMs: 50, intervalMs: 5 })
+  assert.equal(result.status, 'complete', JSON.stringify(result))
+  assert.equal(host.updates[0].ns, SUBAGENT_NS)
+  assert.equal(host.updates[0].patch.childExitGuard, true, 'override exitGuard 必须迁移')
+  assert.equal(host.updates[0].patch.subagents.eng, false, '被跳过的显式 false 必须迁移，不能写 effective true')
+  assert.equal(host.descriptors.get(SUBAGENT_NS).value.subagents.eng, false)
+})
+
+test('runMigration：预设 override 被 name guard 跳过时仍读取其原生压缩配置', async () => {
+  const host = fakeHost({
+    presets: [PRESET('preset-eng')],
+    presetOverrides: {
+      'preset-eng': {
+        id: 'eng',
+        order: 10,
+        plugins: [COMPACTION_GROUP({ auto: false, thresholdRatio: 0.6 })],
+      },
+    },
+    defaultId: 'eng',
+  })
+  const ctx = { get: () => undefined, settings: host.settings, logger: host.log }
+  const result = await runMigration(ctx, { configEditor: host.configEditor, agentPresets: host.agentPresets, timeoutMs: 50, intervalMs: 5 })
+  assert.equal(result.status, 'complete', JSON.stringify(result))
+  const compactPatch = host.updates.find((entry) => entry.ns === COMPACT_NS)?.patch
+  assert.deepEqual(compactPatch, { auto: false, thresholdRatio: 0.6 })
 })
 
 test('runMigration：目标命名空间缺失 → pending，明确要求重载', async () => {

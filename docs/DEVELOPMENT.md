@@ -2,7 +2,7 @@
 
 面向维护者、集成者和需要排查装配问题的用户。用户安装与配置请看 [README](../README.md)；本文保留 DSH 插件的实现细节、旧配置迁移、组合安装边界与验证方法。
 
-当前实现版本：`0.5.0`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
+当前实现版本：`0.5.1`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
 
 ## 目录
 
@@ -203,6 +203,8 @@ npm install --no-save /path/to/menghuan1918-dsh-better-subagent-0.1.0.tgz /path/
 
 来源：`apollo-skills` 的**有效配置**。volatile 字段来自 `describe().value`；非 volatile 的 `trustedHosts` 来自旧行 raw config（`describe().value` 只投影 volatile 表单，不能用来判断 trustedHosts）。
 
+**0.5.1 修复**：DSH 把 profile 覆盖行的 `name` 当 guard。旧 profile 若保留历史 `name: dsh-apollo`，Loader 会跳过该覆盖，`describe().value` 只剩默认值（例如用户显式 `subagents.eng: false` 会被看成默认 `true`）。迁移现在额外读取 `configEditor.configuration()` 中该行的 `override`，递归合并到有效配置之上：普通对象逐键合并，数组与所有标量（含 `false`/`0`/`""`/`[]`）整体覆盖。这样被跳过的显式值仍会迁移。`preset-eng` / `preset-eng-ptc` 的预设覆盖也按同样方式合并（`plugins` 数组整体替换），再读取原生 `compaction-basic`。
+
 目标：`dsh-better-subagent` 的 `settings.describe()`：
 
 - `target.user` 的存在性表示显式值（含 false/0/""/[]）；
@@ -306,10 +308,10 @@ DSH_PACKAGE_ROOT="/…/node_modules/@deepseek-ai/dsh" npm run prompts
 ### npm 安装
 
 ```sh
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.1
 ```
 
-包发布后即可用此命令安装，并带入三个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。**首发完成前不要宣称 registry 已有 0.5.0**：两个子包的 0.1.0 必须先发布。
+包发布后即可用此命令安装，并带入三个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。0.5.0 已发布；0.5.1 是迁移修复版本，可只发布本包。
 
 ### GitHub 源码安装
 
@@ -344,7 +346,7 @@ dsh --profile <profile> --dump-config
 
 ### 升级
 
-- 升级包后重启 profile；0.4.x → 0.5.0 的迁移见 [旧配置迁移](#旧配置迁移)；
+- 升级包后重启 profile；0.4.x → 0.5.x 的迁移见 [旧配置迁移](#旧配置迁移)；
 - 迁移写入的 compact 设置需要再重载一次才会被运行中引擎采用；
 - 升级 DSH 后先跑 `npm test`，漂移测试会按目标 DSH 安装比较预设；
 - 版本范围声明：Node `^22.19.0 || >=24.0.0`，DSH `>=0.2.1-rc.2 <0.3.0`；声明范围接受预发布版，不等于逐版验证保证。
@@ -363,7 +365,7 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 
 1. 先发布 `@menghuan1918/dsh-better-subagent@0.1.0` 与 `dsh-better-compact@0.1.0`（各自仓库的 Release）；
 2. 在官方 registry（`https://registry.npmjs.org/`）确认两个版本可取得、可安装；
-3. 再把 Apollo 的精确依赖指向已发布版本，推 main 并发布 Apollo Release（`v0.5.0`）；
+3. 再把 Apollo 的精确依赖指向已发布版本，推 main 并发布 Apollo Release（0.5.0 已发布；本轮为 `v0.5.1`）；
 4. 子包版本可取得前，不要把指向它们的精确依赖推到 Apollo main，否则 `npm install` / GitHub 源码安装会 404。
 
 ## 测试与冒烟
@@ -390,7 +392,7 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh npm test
 | [tests/dsh-home.test.mjs](../tests/dsh-home.test.mjs) | `DSH_HOME` 的默认、绝对、`~`、相对与空白处理 |
 | [tests/exit-guard.test.mjs](../tests/exit-guard.test.mjs) | job-only 判断、终态过滤、source kind、SessionId 参数、fail-open、用户中断、无豁免 |
 | [tests/migrate.test.mjs](../tests/migrate.test.mjs) | 迁移纯函数与 fake host 编排（见上） |
-| [tests/migration.runtime.test.mjs](../tests/migration.runtime.test.mjs) | 真实 temp-profile 迁移（无宿主时跳过） |
+| [tests/migration.runtime.test.mjs](../tests/migration.runtime.test.mjs) | 真实 temp-profile 迁移；含旧 `name: dsh-apollo` 被 Loader 跳过时从 `configuration().override` 恢复显式值的回归（无宿主时跳过） |
 | [tests/mode-instructions.test.mjs](../tests/mode-instructions.test.mjs) | 只含通用纪律 + job 守卫；无委派/分档/CLI/PTC 文本；不依赖 tiers |
 | [tests/owns-host.test.mjs](../tests/owns-host.test.mjs) | `declareOwnsHost` tap 注入位置、开关、去重、零路由 |
 | [tests/packaging.test.mjs](../tests/packaging.test.mjs) | 真实 `npm pack --dry-run`：Specs/tests/scripts/prompts/tarball 不在清单 |
@@ -479,7 +481,7 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh node scripts/runtime-smo
 
 ### 发布
 
-release workflow 使用 npm trusted publishing：tag 必须等于 `package.json` 版本，先 `npm install` / `npm test` 再 `npm publish --provenance`。Apollo 0.5.0 的 release job 只有在两个子包 0.1.0 发布后才可能成功；不要硬编码 token、假发布或用开发 link 代替正式依赖。
+release workflow 使用 npm trusted publishing：tag 必须等于 `package.json` 版本，先 `npm install` / `npm test` 再 `npm publish --provenance`。Apollo 0.5.x 的 release job 只有在两个子包 0.1.0 可取得后才可能成功；不要硬编码 token、假发布或用开发 link 代替正式依赖。
 
 ## 许可与致谢
 
