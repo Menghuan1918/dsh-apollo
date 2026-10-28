@@ -100,10 +100,10 @@ test('顶层 patch 禁用原生 goal 域与原生 compaction-basic，并插入�
   }
 })
 
-test('npm manifest：scoped 名、0.5.1、repository、publishConfig 与 license', () => {
+test('npm manifest：scoped 名、0.5.2、repository、publishConfig 与 license', () => {
   const m = manifest()
   assert.equal(m.name, PACKAGE_NAME)
-  assert.equal(m.version, '0.5.1')
+  assert.equal(m.version, '0.5.2')
   assert.equal(m.license, 'GPL-3.0-or-later')
   assert.deepEqual(m.repository, {
     type: 'git',
@@ -119,7 +119,7 @@ test('package.json 把三个独立插件声明为精确 npm 版本', () => {
   const dependencies = manifest().dependencies ?? {}
   assert.equal(dependencies['dsh-better-goal'], '0.2.0', 'goal 依赖必须是精确 npm 版本')
   assert.equal(dependencies[SUBAGENT_NAME], '0.1.0', 'better-subagent 依赖必须是精确 npm 版本')
-  assert.equal(dependencies[COMPACT_NAME], '0.1.0', 'better-compact 依赖必须是精确 npm 版本')
+  assert.equal(dependencies[COMPACT_NAME], '0.1.1', 'better-compact 依赖必须是精确 npm 版本')
   for (const spec of [dependencies['dsh-better-goal'], dependencies[SUBAGENT_NAME], dependencies[COMPACT_NAME]]) {
     assert.doesNotMatch(spec, /^(?:github:|git\+|git:|file:|link:|workspace:|npm:|https?:)/)
   }

@@ -2,7 +2,7 @@
 
 面向维护者、集成者和需要排查装配问题的用户。用户安装与配置请看 [README](../README.md)；本文保留 DSH 插件的实现细节、旧配置迁移、组合安装边界与验证方法。
 
-当前实现版本：`0.5.1`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
+当前实现版本：`0.5.2`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
 
 ## 目录
 
@@ -35,7 +35,7 @@
 |---|---|---|
 | `dsh-better-goal` | `0.2.0` | 目标域 |
 | `@menghuan1918/dsh-better-subagent` | `0.1.0` | 子代理 CLI/等待/child guard/分档/设置页 |
-| `dsh-better-compact` | `0.1.0` | 压缩 companion + engine + 设置页/诊断 |
+| `dsh-better-compact` | `0.1.1` | 压缩 companion + engine + 设置页/诊断 |
 | `@deepseek-ai/schemastery` | `~3.18.4` | Apollo 行 Config |
 | `react` | peer | 宿主提供 |
 
@@ -308,10 +308,10 @@ DSH_PACKAGE_ROOT="/…/node_modules/@deepseek-ai/dsh" npm run prompts
 ### npm 安装
 
 ```sh
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.1
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.2
 ```
 
-包发布后即可用此命令安装，并带入三个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。0.5.0 已发布；0.5.1 是迁移修复版本，可只发布本包。
+包发布后即可用此命令安装，并带入三个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。0.5.0 已发布；0.5.1 是迁移修复版本；0.5.2 依赖 compact 0.1.1，修复 Web 设置表单的 schema rehydrate。
 
 ### GitHub 源码安装
 
@@ -319,7 +319,7 @@ dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.1
 dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 ```
 
-GitHub main 仍是源码安装选项。它同样按 `package.json` 解析精确依赖；两个子包 0.1.0 在 registry 可取得前，源码安装会因依赖 404 失败。
+GitHub main 仍是源码安装选项。它同样按 `package.json` 解析精确依赖；子包 0.1.0/0.1.1 在 registry 可取得前，源码安装会因依赖 404 失败。
 
 ### 本地 link 安装
 
@@ -363,9 +363,9 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 
 两个子仓和 Apollo 都用 GitHub Release 触发 `.github/workflows/release.yml`，通过 npm trusted publishing（OIDC）发布，仓库里不存 npm token。tag 必须是 `v<package.json 的 version>`，CI 会先校验再跑测试和 `npm publish --provenance`。
 
-1. 先发布 `@menghuan1918/dsh-better-subagent@0.1.0` 与 `dsh-better-compact@0.1.0`（各自仓库的 Release）；
+1. 先发布 `@menghuan1918/dsh-better-subagent@0.1.0` 与 `dsh-better-compact@0.1.1`（各自仓库的 Release）；
 2. 在官方 registry（`https://registry.npmjs.org/`）确认两个版本可取得、可安装；
-3. 再把 Apollo 的精确依赖指向已发布版本，推 main 并发布 Apollo Release（0.5.0 已发布；本轮为 `v0.5.1`）；
+3. 再把 Apollo 的精确依赖指向已发布版本，推 main 并发布 Apollo Release（0.5.0 已发布；本轮为 `v0.5.2`）；
 4. 子包版本可取得前，不要把指向它们的精确依赖推到 Apollo main，否则 `npm install` / GitHub 源码安装会 404。
 
 ## 测试与冒烟
@@ -424,7 +424,7 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh node scripts/runtime-smo
 - 本仓库不运行真实 Codex/Claude CLI；两个子包各自的 `cli-smoke` / runtime smoke 负责真实 CLI 生命周期。
 - 真实模型摘要保真、缓存命中率、S3 可视化页面的 GUI 验收不在 Apollo 侧冒烟内。
 - 未修改用户当前运行的 profile，未验证当前 GUI；当前 URL 以执行时 runtime context 为准。
-- 单元测试通过不等于 registry 发布/安装路径通过；两个 0.1.0 未发布前，`npm install` 的正式路径仍未验证。
+- 单元测试通过不等于 registry 发布/安装路径通过；子包 0.1.0/0.1.1 已发布；registry 安装路径已用 fresh cache 验证。
 
 ## 历史兼容
 

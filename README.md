@@ -86,13 +86,13 @@ flowchart TB
 
 ```sh
 # npm 安装（发布后）
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.1
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.2
 
 # 或从 GitHub main 源码安装（备选）
 dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 ```
 
-> **发布状态（诚实说明）**：Apollo `0.5.0` 已发布，`dsh-better-subagent@0.1.0` / `dsh-better-compact@0.1.0` 作为其精确依赖已可从 npm 取得。当前版本 `0.5.1` 是旧 profile `name` guard 的迁移修复版；本仓库 0.5.1 的验证使用本地 tarball `npm install --no-save`，提交的 manifest 中**没有** `file:` / `link:` / Git 说明符。
+> **发布状态（诚实说明）**：Apollo `0.5.0` 已发布，`dsh-better-subagent@0.1.0` / `dsh-better-compact@0.1.1` 作为其精确依赖已可从 npm 取得。当前版本 `0.5.2` 是 compact 0.1.1 的设置表单 schema 修复版；本仓库 0.5.1 的验证使用本地 tarball `npm install --no-save`，提交的 manifest 中**没有** `file:` / `link:` / Git 说明符。
 
 安装、升级或换包都会改变运行的代码，必须重启对应 profile 的 DSH 进程；只刷新网页不够。目标行、子代理行与压缩行由 Apollo 的 bundle patch 插入，不需要再单独 `add` 三个子包。
 
@@ -102,14 +102,14 @@ dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 
 ```sh
 dsh plugin --profile <profile> remove dsh-apollo
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.1
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.5.2
 ```
 
 > `dsh-apollo` 只是旧入口名；unscoped 的 `dsh-apollo` 已被其他项目占用，不要从 npm 安装它。
 
 ## 从 0.4.x 升级
 
-0.5.0 把子代理与压缩能力移出 Apollo，0.5.1 修复旧 profile 行的 `name` guard 迁移缺口。旧 profile 不需要手工重填配置：Apollo 启动后在 settings/loader 可用时运行一次**幂等迁移**（[src/migrate.js](src/migrate.js)）。
+0.5.0 把子代理与压缩能力移出 Apollo，0.5.1 修复旧 profile 行的 `name` guard 迁移缺口；0.5.2 依赖 compact 0.1.1，修复 Web 设置表单的 schema rehydrate。旧 profile 不需要手工重填配置：Apollo 启动后在 settings/loader 可用时运行一次**幂等迁移**（[src/migrate.js](src/migrate.js)）。
 
 > **0.5.1 迁移修复**：如果旧 profile patch 的 `apollo-skills` 覆盖还带历史名称 `name: dsh-apollo`，DSH 会把 `name` 当 guard 并跳过该覆盖，导致有效配置看起来仍是默认值。0.5.1 从 `configEditor.configuration().override` 恢复这些显式值（含 `false` / `0` / `""` / `[]`），再合并到迁移来源；被跳过的旧预设覆盖（`preset-eng` / `preset-eng-ptc`）同样处理。无需手工修改旧行；升级后重启 profile 即可。
 
@@ -171,7 +171,7 @@ flowchart LR
 dsh plugin --profile <profile> add @menghuan1918/dsh-better-subagent@0.1.0
 
 # 只装压缩
-dsh plugin --profile <profile> add dsh-better-compact@0.1.0
+dsh plugin --profile <profile> add dsh-better-compact@0.1.1
 ```
 
 独立安装时的行、页面和提示词与 Apollo 集成完全相同；行 id/name 也是同一组稳定值。区别只在**由谁插入这些行**：Apollo 的 bundle patch 自己携带同样的行，因为 DSH 不会自动应用传递依赖的 bundle patch。
@@ -226,7 +226,7 @@ dsh plugin --profile <profile> remove dsh-better-compact
 - `package.json` 的 `files` 只列入 `docs/DEVELOPMENT.md`，并额外用 [.npmignore](.npmignore) 排除 `docs/specs/`；
 - `tests/packaging.test.mjs` 直接运行 `npm pack --dry-run --json`，断言发布清单没有 Specs、测试、脚本、快照或 tarball。
 
-发布顺序：**先发布并验证两个独立包（`@menghuan1918/dsh-better-subagent@0.1.0`、`dsh-better-compact@0.1.0`），再发布 Apollo 0.5.1**。两个 0.1.0 已随 0.5.0 发布；0.5.1 可只发布本包。Apollo 的精确依赖指向尚不存在的版本时，`npm install` 会失败；不要用开发 `file:`/`link:` 依赖发布。两个子仓各自有 trusted publishing workflow；Apollo 的 [release workflow](.github/workflows/release.yml) 只发布本包。
+发布顺序：**先发布并验证两个独立包（`@menghuan1918/dsh-better-subagent@0.1.0`、`dsh-better-compact@0.1.1`），再发布 Apollo 0.5.2**。两个 0.1.0 已随 0.5.0 发布；0.5.1 可只发布本包。Apollo 的精确依赖指向尚不存在的版本时，`npm install` 会失败；不要用开发 `file:`/`link:` 依赖发布。两个子仓各自有 trusted publishing workflow；Apollo 的 [release workflow](.github/workflows/release.yml) 只发布本包。
 
 ## 验证状态（诚实记录）
 
@@ -239,7 +239,7 @@ dsh plugin --profile <profile> remove dsh-better-compact
 
 **未验证 / 明确限制**：
 
-- 两个子包的 `0.1.0` 尚未发布；本轮只用本地 tarball 验证，未验证 npm registry 安装路径。
+- 子包 `@menghuan1918/dsh-better-subagent@0.1.0` 与 `dsh-better-compact@0.1.1` 已可从 npm 取得。
 - 未修改或重启用户当前运行的 profile，未验证当前 GUI（`http://127.0.0.1:3384`）的设置页/卡片；S3 视觉设置页的 GUI 验收归 S3/最终宿主验收。
 - 未运行真实 Codex/Claude CLI 的真实模型回合（那属于两个子包自己的验证；Apollo 侧本轮只用脚本化适配器）。
 - 真实模型摘要保真、缓存命中率与跨版本预设漂移仍需按实际环境复验。
