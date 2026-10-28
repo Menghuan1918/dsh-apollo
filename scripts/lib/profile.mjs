@@ -50,8 +50,8 @@ export async function packageSources() {
     if (manifest.name !== name) throw new Error(`${dir} is not ${name}`)
   }
   const apolloManifest = apollo
-  if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.1.0'
-    || apolloManifest.dependencies[COMPACT_NAME] !== '0.1.1'
+  if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.1.1'
+    || apolloManifest.dependencies[COMPACT_NAME] !== '0.1.2'
     || apolloManifest.dependencies[GOAL_NAME] !== '0.2.0') {
     throw new Error('Apollo dependencies must pin the verification versions')
   }

@@ -2,7 +2,7 @@
 
 面向维护者、集成者和需要排查装配问题的用户。用户安装与配置请看 [README](../README.md)；本文保留 DSH 插件的实现细节、旧配置迁移、组合安装边界与验证方法。
 
-当前实现版本：`0.5.2`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
+当前实现版本：`0.5.3`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
 
 ## 目录
 
@@ -34,16 +34,15 @@
 | 依赖 | 版本 | 所有权 |
 |---|---|---|
 | `dsh-better-goal` | `0.2.0` | 目标域 |
-| `@menghuan1918/dsh-better-subagent` | `0.1.0` | 子代理 CLI/等待/child guard/分档/设置页 |
-| `dsh-better-compact` | `0.1.1` | 压缩 companion + engine + 设置页/诊断 |
+| `@menghuan1918/dsh-better-subagent` | `0.1.1` | 子代理 CLI/等待/child guard/分档/设置页 |
+| `dsh-better-compact` | `0.1.2` | 压缩 companion + engine + 设置页/诊断 |
 | `@deepseek-ai/schemastery` | `~3.18.4` | Apollo 行 Config |
 | `react` | peer | 宿主提供 |
 
-两个 0.1.0 版本在实现完成时尚未发布到 npm；验证使用本地 tarball：
+正式安装从 npm registry 获取上述精确版本，不需要本地 tarball 或 link：
 
 ```sh
 npm install
-npm install --no-save /path/to/menghuan1918-dsh-better-subagent-0.1.0.tgz /path/to/dsh-better-compact-0.1.0.tgz
 ```
 
 发布顺序必须是先两个子包、后 Apollo（见[发布](#实现入口打包与发布)）。

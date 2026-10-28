@@ -8,7 +8,7 @@
 #
 # Release order (Apollo 0.5.0+): publish and verify the exact dependency
 # versions in the two child repositories FIRST —
-# `@menghuan1918/dsh-better-subagent@0.1.0` and `dsh-better-compact@0.1.0` —
+# the exact better-subagent / better-compact versions in package.json —
 # then tag Apollo. This workflow's `npm install` cannot resolve unpublished
 # exact dependencies; it is not a place to substitute file:/link: specs.
 name: release
