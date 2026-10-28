@@ -180,7 +180,7 @@ dsh plugin --profile <profile> add @menghuan1918/dsh-better-subagent@0.1.0
 dsh plugin --profile <profile> add dsh-better-compact@0.1.1
 
 # 只装提问增强（同时需要共享 PTC 行）
-dash plugin --profile <profile> add dsh-better-ask-user@0.1.0 dsh-better-ptc@0.1.0
+dash plugin --profile <profile> add dsh-better-ask-user@0.1.1 dsh-better-ptc@0.1.0
 ```
 
 独立安装时的行、页面和提示词与 Apollo 集成完全相同；行 id/name 也是同一组稳定值。区别只在**由谁插入这些行**：Apollo 的 bundle patch 自己携带同样的行，因为 DSH 不会自动应用传递依赖的 bundle patch。
@@ -235,7 +235,7 @@ dsh plugin --profile <profile> remove dsh-better-compact
 - `package.json` 的 `files` 只列入 `docs/DEVELOPMENT.md`，并额外用 [.npmignore](.npmignore) 排除 `docs/specs/`；
 - `tests/packaging.test.mjs` 直接运行 `npm pack --dry-run --json`，断言发布清单没有 Specs、测试、脚本、快照或 tarball。
 
-发布顺序：**先发布并验证五个独立包（`dsh-better-ask-user@0.1.0`、`dsh-better-ptc@0.1.0`、`@menghuan1918/dsh-better-subagent@0.2.0`、`dsh-better-goal@0.2.1`、`dsh-better-compact@0.1.2`），再发布 Apollo 0.6.0**。Apollo 的精确依赖指向尚不存在的版本时，`npm install` 会失败；不要用开发 `file:`/`link:` 依赖发布。各子仓各自有 trusted publishing workflow；Apollo 的 [release workflow](.github/workflows/release.yml) 只发布本包。
+发布顺序：**先发布并验证五个独立包（`dsh-better-ask-user@0.1.1`、`dsh-better-ptc@0.1.0`、`@menghuan1918/dsh-better-subagent@0.2.0`、`dsh-better-goal@0.2.1`、`dsh-better-compact@0.1.2`），再发布 Apollo 0.6.0**。Apollo 的精确依赖指向尚不存在的版本时，`npm install` 会失败；不要用开发 `file:`/`link:` 依赖发布。各子仓各自有 trusted publishing workflow；Apollo 的 [release workflow](.github/workflows/release.yml) 只发布本包。
 
 ## 验证状态（诚实记录）
 

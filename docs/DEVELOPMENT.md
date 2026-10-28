@@ -36,7 +36,7 @@
 | `dsh-better-goal` | `0.2.1` | 目标域（`questionTimeoutSeconds` 已弃用、仅保留读取） |
 | `@menghuan1918/dsh-better-subagent` | `0.2.0` | 子代理 CLI/等待/child guard/分档/设置页；注册 `wait_subagent` PTC 豁免 |
 | `dsh-better-compact` | `0.1.2` | 压缩 companion + engine + 设置页/诊断 |
-| `dsh-better-ask-user` | `0.1.0` | 提问等待/输入续期/卡片/超时行为；注册 `ask_user_question` PTC 豁免；旧 goal 等待迁移 |
+| `dsh-better-ask-user` | `0.1.1` | 提问等待/输入续期/卡片/超时行为；注册 `ask_user_question` PTC 豁免；旧 goal 等待迁移 |
 | `dsh-better-ptc` | `0.1.0` | 单例 PTC deadline 豁免服务 |
 | `@deepseek-ai/schemastery` | `~3.18.4` | Apollo 行 Config |
 | `react` | peer | 宿主提供 |
@@ -376,7 +376,7 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 
 两个子仓和 Apollo 都用 GitHub Release 触发 `.github/workflows/release.yml`，通过 npm trusted publishing（OIDC）发布，仓库里不存 npm token。tag 必须是 `v<package.json 的 version>`，CI 会先校验再跑测试和 `npm publish --provenance`。
 
-1. 先发布 `dsh-better-ptc@0.1.0`、`dsh-better-ask-user@0.1.0`、`@menghuan1918/dsh-better-subagent@0.2.0`、`dsh-better-goal@0.2.1`、`dsh-better-compact@0.1.2`（各自仓库的 Release）；
+1. 先发布 `dsh-better-ptc@0.1.0`、`dsh-better-ask-user@0.1.1`、`@menghuan1918/dsh-better-subagent@0.2.0`、`dsh-better-goal@0.2.1`、`dsh-better-compact@0.1.2`（各自仓库的 Release）；
 2. 在官方 registry（`https://registry.npmjs.org/`）确认五个版本可取得、可安装；
 3. 再把 Apollo 的精确依赖指向已发布版本，推 main 并发布 Apollo Release（本轮为 `v0.6.0`）；
 4. 子包版本可取得前，不要把指向它们的精确依赖推到 Apollo main，否则 `npm install` / GitHub 源码安装会 404。

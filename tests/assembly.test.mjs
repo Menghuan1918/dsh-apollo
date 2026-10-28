@@ -124,7 +124,7 @@ test('package.json 把五个独立插件声明为精确 npm 版本', () => {
   assert.equal(dependencies['dsh-better-goal'], '0.2.1', 'goal 依赖必须是精确 npm 版本')
   assert.equal(dependencies[SUBAGENT_NAME], '0.2.0', 'better-subagent 依赖必须是精确 npm 版本')
   assert.equal(dependencies[COMPACT_NAME], '0.1.2', 'better-compact 依赖必须是精确 npm 版本')
-  assert.equal(dependencies['dsh-better-ask-user'], '0.1.0', 'ask-user 依赖必须是精确 npm 版本')
+  assert.equal(dependencies['dsh-better-ask-user'], '0.1.1', 'ask-user 依赖必须是精确 npm 版本')
   assert.equal(dependencies['dsh-better-ptc'], '0.1.0', 'ptc 依赖必须是精确 npm 版本')
   for (const spec of [dependencies['dsh-better-goal'], dependencies[SUBAGENT_NAME], dependencies[COMPACT_NAME], dependencies['dsh-better-ask-user'], dependencies['dsh-better-ptc']]) {
     assert.doesNotMatch(spec, /^(?:github:|git\+|git:|file:|link:|workspace:|npm:|https?:)/)
