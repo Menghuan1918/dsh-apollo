@@ -15,6 +15,7 @@ import {
   mergeConfigOverride,
   migrateCompact,
   migrateSubagent,
+  mountMigration,
   planCompactMigration,
   planSubagentMigration,
   planTrustedHostsMigration,
@@ -332,7 +333,7 @@ function fakeHost({
   presetOverrides = {},
 } = {}) {
   const descriptors = new Map([
-    ['apollo-skills', { ns: 'apollo-skills', revision: 1, user: {}, value: deepMerge(APOLLO_DEFAULT, source), base: APOLLO_DEFAULT }],
+    ['apollo-skills', { ns: 'apollo-skills', revision: 1, user: structuredClone(apolloOverride ?? {}), value: deepMerge(APOLLO_DEFAULT, source), base: APOLLO_DEFAULT }],
     [SUBAGENT_NS, { ns: SUBAGENT_NS, revision: 1, user: deepMerge({}, targetUser), value: deepMerge(SUBAGENT_BASE, targetUser), base: SUBAGENT_BASE }],
     [COMPACT_NS, { ns: COMPACT_NS, revision: 1, user: deepMerge({}, compactUser), value: deepMerge(COMPACT_BASE, compactUser), base: COMPACT_BASE }],
   ])
@@ -450,6 +451,49 @@ test('runMigration：旧 profile 行被 name guard 跳过时，用 configuration
   assert.equal(host.updates[0].patch.childExitGuard, true, 'override exitGuard 必须迁移')
   assert.equal(host.updates[0].patch.subagents.eng, false, '被跳过的显式 false 必须迁移，不能写 effective true')
   assert.equal(host.descriptors.get(SUBAGENT_NS).value.subagents.eng, false)
+  assert.equal(host.descriptors.get(SUBAGENT_NS).value.childExitGuard, true)
+  assert.equal(host.descriptors.get('apollo-skills').value.exitGuard, true, '同一旧初值也恢复 job 守卫')
+  assert.equal(result.job.status, 'complete')
+})
+
+test('runMigration：job 和 child 目标显式 false 各自优先，不覆盖或串扰', async () => {
+  for (const [jobFalse, childFalse] of [[true, false], [false, true], [true, true]]) {
+    const host = fakeHost({
+      apolloRaw: jobFalse ? { exitGuard: false } : {},
+      apolloOverride: { exitGuard: true },
+      targetUser: childFalse ? { childExitGuard: false } : {},
+    })
+    const ctx = { get: () => undefined, settings: host.settings, logger: host.log }
+    const result = await runMigration(ctx, { configEditor: host.configEditor, timeoutMs: 50, intervalMs: 5 })
+    assert.equal(result.status, 'complete', JSON.stringify(result))
+    assert.equal(host.descriptors.get('apollo-skills').value.exitGuard, !jobFalse)
+    assert.equal(host.descriptors.get(SUBAGENT_NS).value.childExitGuard, !childFalse)
+    assert.equal(host.updates.some((row) => row.ns === 'apollo-skills'), !jobFalse)
+    assert.equal(host.updates.some((row) => row.ns === SUBAGENT_NS), !childFalse)
+  }
+})
+
+test('runMigration：child 写入失败时不遮住旧来源，job 写入失败或未生效不宣告成功', async () => {
+  for (const failure of ['child-rejected', 'job-rejected', 'job-unverified']) {
+    const host = fakeHost({ apolloRaw: {}, apolloOverride: { exitGuard: true } })
+    const update = host.settings.update
+    host.settings.update = async (ns, patch, revision) => {
+      if (failure === 'child-rejected' && ns === SUBAGENT_NS) throw new Error('child write rejected')
+      if (failure === 'job-rejected' && ns === 'apollo-skills') throw new Error('job write rejected')
+      if (failure === 'job-unverified' && ns === 'apollo-skills') return
+      await update(ns, patch, revision)
+    }
+    const ctx = { get: () => undefined, settings: host.settings, logger: host.log }
+    const result = await runMigration(ctx, { configEditor: host.configEditor, timeoutMs: 50, intervalMs: 5 })
+    assert.equal(result.status, failure === 'job-unverified' ? 'error' : 'pending')
+    assert.equal(host.descriptors.get('apollo-skills').value.exitGuard, false)
+    if (failure === 'child-rejected') {
+      assert.equal(host.updates.length, 0, 'do not append a scoped job override that masks an unimported legacy source')
+    } else {
+      assert.equal(result.job.status, failure === 'job-unverified' ? 'error' : 'pending')
+      assert.match(result.job.error, failure === 'job-unverified' ? /unverified: exitGuard/ : /job write rejected/)
+    }
+  }
 })
 
 test('runMigration：预设 override 被 name guard 跳过时仍读取其原生压缩配置', async () => {
@@ -540,4 +584,19 @@ test('waitForDescriptors：目标出现后立即返回；超时返回 undefined'
   assert.equal(rows.length, 2)
   const missing = await waitForDescriptors({ describe: async () => [] }, [SUBAGENT_NS], { timeoutMs: 10, intervalMs: 2 })
   assert.equal(missing, undefined)
+})
+
+test('mountMigration：不阻塞 inject，通知正常结果与意外错误', async () => {
+  for (const throws of [false, true]) {
+    const results = []
+    let start
+    const ctx = { inject: (_names, callback) => { start = callback } }
+    mountMigration(ctx, {}, { onResult: (result) => { results.push(result) } })
+    const settings = throws ? { describe: async () => { throw new Error('describe failed') } } : undefined
+    assert.equal(start({ get: () => settings }), undefined, 'inject callback must not block Loader settlement')
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(results.length, 1)
+    assert.equal(results[0].status, throws ? 'error' : 'pending')
+    assert.match(results[0].error, throws ? /describe failed/ : /settings service is unavailable/)
+  }
 })

@@ -7,8 +7,8 @@
  *
  *   - `apollo-skills` 的 `tiers.fast/quality`、`subagents.{eng,global}`、
  *     `subagents.{codex,claude}.*`、`trustedHosts` → `dsh-better-subagent`
- *     相同路径；`exitGuard` → `childExitGuard`。旧 `exitGuard` 仍留在 Apollo
- *     作为 job/通用守卫开关，不被删除。
+ *     相同路径；`exitGuard` → `childExitGuard`。旧 `exitGuard` 同时保留/恢复到
+ *     Apollo 作为 job 守卫开关；两边目标显式配置（含 false）各自优先。
  *   - 旧 `eng` / `eng-ptc` 预设里原生 `compaction-basic` 的显式配置 →
  *     `dsh-better-compact` 同名原生键；目标缺失的 `mode` 采用默认 `goal`。
  *
@@ -524,6 +524,28 @@ export async function migrateSubagent({ settings, configEditor, descriptors, sou
   return { status: 'complete', fields }
 }
 
+/** Restore only the job switch lost to a historical Apollo name guard. */
+async function migrateJobExitGuard({ settings, descriptors, source, rawSource }) {
+  const target = descriptors.find((row) => row?.ns === APOLLO_NS)
+  // user also projects skipped overrides, so the active raw config is the
+  // authority for an already configured job switch (including explicit false).
+  if (hasOwn(rawSource, 'exitGuard')
+    || (hasOwn(target?.user, 'exitGuard') && target.user.exitGuard !== source.exitGuard)
+    || target?.value?.exitGuard === source.exitGuard) {
+    return { status: 'no-change' }
+  }
+  if (target === undefined) return { status: 'pending', error: 'Apollo namespace is not readable' }
+  try {
+    await settings.update(APOLLO_NS, { exitGuard: source.exitGuard }, target.revision)
+  } catch (error) {
+    return { status: 'pending', error: errorMessage(error) }
+  }
+  const after = (await settings.describe()).find((row) => row?.ns === APOLLO_NS)
+  return after?.value?.exitGuard === source.exitGuard
+    ? { status: 'complete' }
+    : { status: 'error', error: 'unverified: exitGuard' }
+}
+
 /**
  * Apply the compaction migration.
  *
@@ -570,7 +592,8 @@ function errorMessage(error) {
  * Run the one-time (idempotent) migration.
  *
  * Order: Loader settlement → legacy `eng.json` import → bounded wait for both
- * target namespaces → subagent plan/write/verify → compact plan/write/verify.
+ * target namespaces → subagent plan/write/verify → job switch recovery →
+ * compact plan/write/verify.
  * A missing target namespace yields `pending`; errors are reported, never
  * silently claimed as success, and no source value is deleted.
  *
@@ -618,22 +641,27 @@ export async function runMigration(ctx, options = {}) {
     configurationOverrideOf(configEditor, APOLLO_NS),
   ))
   const subagent = await migrateSubagent({ settings, configEditor, descriptors, source, log })
+  // A scoped job write would become the last override and hide the skipped
+  // source from configuration().override. Wait until its child fields are safe.
+  const job = ['complete', 'no-change'].includes(subagent.status)
+    ? await migrateJobExitGuard({ settings, descriptors, source, rawSource })
+    : { status: 'pending', error: 'waiting for the subagent migration before restoring the job switch' }
   const compact = await migrateCompact({ settings, configEditor, descriptors, agentPresets, log })
-  const status = [subagent.status, compact.status].some((value) => value === 'error')
+  const status = [job.status, subagent.status, compact.status].some((value) => value === 'error')
     ? 'error'
-    : [subagent.status, compact.status].some((value) => value === 'pending')
+    : [job.status, subagent.status, compact.status].some((value) => value === 'pending')
       ? 'pending'
       : ['ambiguous', 'invalid', 'source-missing'].includes(compact.status) ? 'blocked'
         : 'complete'
-  for (const [name, section] of [['subagent', subagent], ['compact', compact]]) {
+  for (const [name, section] of [['job', job], ['subagent', subagent], ['compact', compact]]) {
     if (section.error !== undefined) {
       log?.warn?.(`apollo-migration: ${name} is ${section.status}: ${section.error}`)
     }
   }
   log?.[status === 'complete' ? 'info' : 'warn']?.(
-    `apollo-migration: ${status} (subagent=${subagent.status}, compact=${compact.status})`,
+    `apollo-migration: ${status} (job=${job.status}, subagent=${subagent.status}, compact=${compact.status})`,
   )
-  return { status, source: sourceDescriptor === undefined ? 'apply-config' : 'settings', subagent, compact }
+  return { status, source: sourceDescriptor === undefined ? 'apply-config' : 'settings', job, subagent, compact }
 }
 
 /**
@@ -641,7 +669,8 @@ export async function runMigration(ctx, options = {}) {
  *
  * @param ctx - plugin context.
  * @param config - Apollo row config (fallback source when describe() is not ready).
- * @param options - `{ legacyImport, env, timeoutMs, intervalMs }`.
+ * @param options - `{ legacyImport, env, timeoutMs, intervalMs, onResult }`.
+ *   `onResult` receives the settled report without blocking the Loader callback.
  */
 export function mountMigration(ctx, config, options = {}) {
   let started = false
@@ -656,7 +685,8 @@ export function mountMigration(ctx, config, options = {}) {
       log: settingsCtx.logger ?? ctx.logger,
     }).catch((error) => {
       settingsCtx.logger?.warn?.(`apollo-migration: skipped: ${errorMessage(error)}`)
-    })
+      return { status: 'error', error: errorMessage(error) }
+    }).then((result) => options.onResult?.(result))
   }
   ctx.inject(['settings'], start)
 }

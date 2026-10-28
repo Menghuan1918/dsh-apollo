@@ -14,6 +14,7 @@
  */
 
 import { test } from 'node:test'
+import yaml from 'js-yaml'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { readdir, readFile, rm } from 'node:fs/promises'
@@ -195,7 +196,9 @@ test('真实 temp profile：旧 name: dsh-apollo 行被 Loader 跳过时仍迁�
     await waitUntil(async () => {
       const rows = await ctx.settings.describe()
       const subagent = rows.find((row) => row.ns === SUBAGENT_NS)
+      const apollo = rows.find((row) => row.ns === 'apollo-skills')
       return subagent?.user?.childExitGuard === true && subagent?.user?.subagents?.eng === false
+        && apollo?.value?.exitGuard === true
     }, 'migration from the skipped legacy row', 15_000)
 
     const rows = await ctx.settings.describe()
@@ -203,11 +206,45 @@ test('真实 temp profile：旧 name: dsh-apollo 行被 Loader 跳过时仍迁�
     const apollo = rows.find((row) => row.ns === 'apollo-skills')
     assert.equal(subagent.value.childExitGuard, true, 'explicit old exitGuard is recovered')
     assert.equal(subagent.value.subagents.eng, false, 'explicit old false is recovered, not the effective default true')
-    assert.equal(apollo.value.exitGuard, false, 'the skipped row must still show the effective default')
+    assert.equal(apollo.value.exitGuard, true, 'old exitGuard also restores the Apollo job guard')
     assert.equal(apollo.value.subagents.eng, true, 'the skipped row must still show the effective default')
 
+    const patch = yaml.load(await readFile(info.patchPath, 'utf8'))
+    const legacy = patch.find((row) => row.id === 'apollo-skills' && row.name === 'dsh-apollo')
+    assert.deepEqual(legacy.config, { subagents: { eng: false }, exitGuard: true }, 'the old source is preserved')
     const configuration = ctx.configEditor.configuration().find((row) => row.entry.options.id === 'apollo-skills')
-    assert.deepEqual(configuration.override, { subagents: { eng: false }, exitGuard: true }, 'the raw override is the recovery source')
+    assert.deepEqual(configuration.override, { exitGuard: true }, 'only the live job switch is restored')
+    const before = await readFile(info.patchPath, 'utf8')
+    const rerun = await runMigration(ctx, { timeoutMs: 200, intervalMs: 10 })
+    assert.equal(rerun.status, 'complete', JSON.stringify(rerun))
+    assert.equal(rerun.job.status, 'no-change')
+    assert.equal(await readFile(info.patchPath, 'utf8'), before, 'restoration is idempotent')
+  } finally {
+    if (ctx) await ctx.fiber.dispose()
+    await rm(info.home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  }
+})
+
+test('真实 temp profile：job/child 目标显式 false 优先于被跳过的旧 true', { skip: enabled ? false : 'DSH_PACKAGE_ROOT is not set' }, async () => {
+  const patch = SKIPPED_GUARD_PATCH.flatMap((row) => row.id === 'apollo-skills'
+    ? [{ id: 'apollo-skills', name: '@menghuan1918/dsh-apollo', config: { exitGuard: false } }, row]
+    : [row])
+  patch.push({ id: SUBAGENT_NS, config: { childExitGuard: false } })
+  const info = await prepareProfile({ bundles: ['@menghuan1918/dsh-apollo'], patch, prefix: 'apollo-explicit-guard-' })
+  let ctx
+  try {
+    ctx = await bootProfile(info)
+    await waitUntil(async () => (await ctx.settings.describe())
+      .find((row) => row.ns === SUBAGENT_NS)?.user?.subagents?.eng === false,
+    'migration with explicit guard targets', 15_000)
+    const result = await runMigration(ctx, { timeoutMs: 200, intervalMs: 10 })
+    assert.equal(result.status, 'complete', JSON.stringify(result))
+    const rows = await ctx.settings.describe()
+    assert.equal(rows.find((row) => row.ns === 'apollo-skills').value.exitGuard, false, 'current scoped job false wins')
+    assert.equal(rows.find((row) => row.ns === SUBAGENT_NS).value.childExitGuard, false, 'explicit child false wins')
+    const persisted = yaml.load(await readFile(info.patchPath, 'utf8'))
+    assert.deepEqual(persisted.find((row) => row.id === 'apollo-skills' && row.name === 'dsh-apollo').config,
+      { subagents: { eng: false }, exitGuard: true }, 'the skipped legacy source remains untouched')
   } finally {
     if (ctx) await ctx.fiber.dispose()
     await rm(info.home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })

@@ -192,7 +192,7 @@ npm install --no-save /path/to/menghuan1918-dsh-better-subagent-0.1.0.tgz /path/
 1. 有 Loader 时等待装配完成（`loader.await()`，有界）；
 2. 等待 `legacyImport`（旧 eng.json）完成；
 3. 有界轮询 `settings.describe()`，直到 `dsh-better-subagent` 与 `dsh-better-compact` 两个命名空间都出现（默认 5s，50ms 间隔）；
-4. 子代理迁移 → 压缩迁移，各自写入后重读验证；
+4. 子代理迁移 → 恢复 Apollo job 开关 → 压缩迁移，各自写入后重读验证；
 5. 返回状态并记录日志（complete / pending / blocked / error）。
 
 若目标命名空间一直不可读/不可写（例如双显式 bundle 导致写入被拒），日志明确要求重载 profile，迁移保持幂等，下次启动会再试；不宣告成功。迁移不删除旧值，也不创建迁移 sidecar。
@@ -204,6 +204,8 @@ npm install --no-save /path/to/menghuan1918-dsh-better-subagent-0.1.0.tgz /path/
 来源：`apollo-skills` 的**有效配置**。volatile 字段来自 `describe().value`；非 volatile 的 `trustedHosts` 来自旧行 raw config（`describe().value` 只投影 volatile 表单，不能用来判断 trustedHosts）。
 
 **0.5.1 修复**：DSH 把 profile 覆盖行的 `name` 当 guard。旧 profile 若保留历史 `name: dsh-apollo`，Loader 会跳过该覆盖，`describe().value` 只剩默认值（例如用户显式 `subagents.eng: false` 会被看成默认 `true`）。迁移现在额外读取 `configEditor.configuration()` 中该行的 `override`，递归合并到有效配置之上：普通对象逐键合并，数组与所有标量（含 `false`/`0`/`""`/`[]`）整体覆盖。这样被跳过的显式值仍会迁移。`preset-eng` / `preset-eng-ptc` 的预设覆盖也按同样方式合并（`plugins` 数组整体替换），再读取原生 `compaction-basic`。
+
+历史 name guard 同样会让仍活跃的 Apollo job `exitGuard` 静默回退到默认 false。现在迁移还会只把这个开关经 `settings.update` 恢复到 Apollo，并重读验证；不会激活其他已弃用字段。宿主 `describe().user` 会投影被跳过的旧覆盖，因此优先检查活动 Apollo entry 的 raw config：它已声明 `exitGuard` 时（尤其当前 scoped 行显式 false），不覆盖。child 目标仍按自己的 `user.childExitGuard` 存在性判断，不让两个开关互相覆盖。旧 unscoped 行保留，重复执行不重写。仅在子代理迁移完成/无需写入后恢复 job 开关，避免新 scoped 行遮蔽尚未导入的旧来源；写入拒绝为 pending，重读不一致为 error，均纳入顶层状态。
 
 目标：`dsh-better-subagent` 的 `settings.describe()`：
 
@@ -218,7 +220,7 @@ npm install --no-save /path/to/menghuan1918-dsh-better-subagent-0.1.0.tgz /path/
 | `tiers.fast` / `tiers.quality` | 同名 | 目标该档已有任一显式字段 → 整档不混写；否则来源档与目标默认不同才写 |
 | `subagents.eng` / `global` | 同名 | 目标缺字段且值不同才写；显式 false 是值 |
 | `subagents.codex/claude.*` | 同名 | 逐叶补齐：enabled、executable、profile（仅 codex）、permissionMode、defaultModel、models（含顺序/effort 元数据） |
-| `exitGuard` | `childExitGuard` | 只补目标缺失字段；Apollo 自己的 `exitGuard` 保留给 job 守卫 |
+| `exitGuard` | Apollo `exitGuard` + `childExitGuard` | 两份相同初值，随后独立配置；当前目标显式值（含 false）各自优先 |
 | `trustedHosts` | `trustedHosts` | 非 volatile；目标 raw config 未声明且来源非空时用 `configEditor.edit` 写 |
 
 写入：volatile 用 `settings.update(ns, patch, revision)`；非 volatile 用 target entry 的 `configEditor.edit`。`settings.update` 会触发 reconcile，可能替换目标 entry 对象，因此写 `trustedHosts` 前重新从 `entries()` 取目标 entry。写后重新 `describe()`/读 raw config 校验，任何字段不一致按 `error` 报告。
