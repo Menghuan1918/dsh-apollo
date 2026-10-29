@@ -20,3 +20,6 @@ atlas.json
 *.bak
 .plugin-manager/
 .DS_Store
+
+# 子插件源码仓库（各自独立 git 仓库）
+plugins/
