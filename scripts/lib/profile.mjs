@@ -57,7 +57,7 @@ export async function packageSources() {
   if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.2.0'
     || apolloManifest.dependencies[COMPACT_NAME] !== '0.1.2'
     || apolloManifest.dependencies[GOAL_NAME] !== '0.2.1'
-    || apolloManifest.dependencies[ASK_NAME] !== '0.1.6'
+    || apolloManifest.dependencies[ASK_NAME] !== '0.1.7'
     || apolloManifest.dependencies[PTC_NAME] !== '0.1.0') {
     throw new Error('Apollo dependencies must pin the verification versions')
   }
