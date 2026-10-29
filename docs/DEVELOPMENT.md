@@ -321,7 +321,7 @@ DSH_PACKAGE_ROOT="/…/node_modules/@deepseek-ai/dsh" npm run prompts
 dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.6.5
 ```
 
-包发布后即可用此命令安装，并带入五个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。0.6.5 与 ask-user 0.1.7 的本地修复及隔离安装验证通过；实际 npm 发布待确认。
+包发布后即可用此命令安装，并带入五个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。0.6.5 与 ask-user 0.1.7 已发布；registry 干净安装验证通过。
 
 ### GitHub 源码安装
 

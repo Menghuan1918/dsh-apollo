@@ -96,7 +96,7 @@ dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.6.5
 dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 ```
 
-> **发布状态**：Apollo `0.6.5` 与 `dsh-better-ask-user@0.1.7` 的本地修复与隔离安装验证已完成，npm 发布待确认；`dsh-better-ptc@0.1.0` 已发布。提交的 manifest 使用精确 npm 版本，**没有** `file:` / `link:` / Git 说明符。发布顺序见[发布顺序](#发布顺序)。
+> **发布状态**：Apollo `0.6.5` 与 `dsh-better-ask-user@0.1.7` 已发布并经 registry 干净安装验证；`dsh-better-ptc@0.1.0` 已发布。提交的 manifest 使用精确 npm 版本，**没有** `file:` / `link:` / Git 说明符。发布顺序见[发布顺序](#发布顺序)。
 
 安装、升级或换包都会改变运行的代码，必须重启对应 profile 的 DSH 进程；只刷新网页不够。目标行、子代理行、压缩行、共享 PTC 行与 ask-user 行由 Apollo 的 bundle patch 插入，不需要再单独 `add` 五个子包。
 
@@ -248,7 +248,7 @@ dsh plugin --profile <profile> remove dsh-better-compact
 
 **未验证 / 明确限制**：
 
-- 0.6.5 与 ask-user 0.1.7 的本地修复及隔离安装验证通过；实际 npm 发布待确认。
+- 0.6.5 与 ask-user 0.1.7 已发布；registry 干净安装验证通过（Web boot + 五 tab hub）。
 - 未修改或重启用户当前运行的 profile，未验证当前 GUI（`http://127.0.0.1:3384`）的设置页/卡片；S3 视觉设置页的 GUI 验收归 S3/最终宿主验收。
 - 未运行真实 Codex/Claude CLI 的真实模型回合（那属于两个子包自己的验证；Apollo 侧本轮只用脚本化适配器）。
 - 真实模型摘要保真、缓存命中率与跨版本预设漂移仍需按实际环境复验。
