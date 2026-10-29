@@ -70,7 +70,29 @@ function makeForm(options = {}) {
   }
 }
 
-/** keyed slot 生命周期假实现：声明后才回调 register，撤销即回收。 */
+/** configForms 假实现：describe 镜像 + 每命名空间一份 makeForm 形态的表单。 */
+function makeConfigForms(namespaces = ['apollo-skills', 'dsh-better-goal']) {
+  const forms = new Map()
+  const mirror = {
+    status: 'ready',
+    view: { namespaces: namespaces.map((ns) => ({ ns })), writable: true, hasDocument: true },
+    error: null,
+  }
+  return {
+    forms,
+    describe: () => ({
+      getSnapshot: () => mirror,
+      subscribe: () => () => {},
+      ensure: async () => {},
+    }),
+    get(ns) {
+      if (!forms.has(ns)) forms.set(ns, makeForm())
+      return forms.get(ns)
+    },
+  }
+}
+
+/** keyed/list slot 生命周期假实现：声明后才回调 register，撤销即回收。 */
 function makeSlots() {
   const watchers = new Map()
   const registrations = []
@@ -91,6 +113,18 @@ function makeSlots() {
         const at = registrations.indexOf(record)
         if (at >= 0) registrations.splice(at, 1)
       }
+    },
+    entries(name) {
+      return registrations.filter((record) => record.options.name === name)
+    },
+    entriesOfSlot(name) {
+      return this.entries(name)
+    },
+    subscribe() {
+      return () => {}
+    },
+    getVersion() {
+      return 0
     },
     declare(name) {
       const disposers = []
@@ -126,18 +160,26 @@ function install() {
   const effects = []
   const dicts = []
   const loaded = loadClient()
-  loaded.exports.apply({
+  const configForms = makeConfigForms()
+  const ctx = {
     fiber: {},
-    inject() {},
+    inject(keys, callback) {
+      if (Array.isArray(keys) && keys.includes('configForms')) return callback(ctx)
+      return undefined
+    },
     effect(factory, label) { const dispose = factory(); effects.push({ label, dispose }); return dispose },
     locale: { register: (ns, dictionaries) => { dicts.push({ ns, dictionaries }); return () => {} }, bind: () => t },
     slots,
-  })
+    configForms,
+  }
+  loaded.exports.apply(ctx)
   return {
+    ctx,
     slots,
     effects,
     dicts,
     loaded,
+    configForms,
     declare() {
       const disposers = slots.declare('plugins.row.config')
       assert.equal(slots.registrations.length, 2)
@@ -190,9 +232,9 @@ test('装载与 slot 注册：声明才注册、新键与旧键并排、塌缩�
   assert.equal(SOURCE.includes('document.'), false)
   assert.equal(SOURCE.includes('/apollo/api/'), false, 'Apollo 不再读取或注册 /apollo/api/*')
 
-  assert.deepEqual(slots.injected, ['plugins.row.config'])
+  assert.deepEqual(slots.injected, ['plugins.row.config', 'plugins.detail.actions'])
   assert.equal(slots.registrations.length, 0)
-  assert.deepEqual(effects.map((effect) => effect.label), ['@menghuan1918/dsh-apollo: dictionaries', '@menghuan1918/dsh-apollo: row config page'])
+  assert.deepEqual(effects.map((effect) => effect.label), ['@menghuan1918/dsh-apollo: dictionaries', '@menghuan1918/dsh-apollo: row config page', '@menghuan1918/dsh-apollo: settings hub'])
   assert.deepEqual(dicts.map((entry) => entry.ns), [NS])
   assert.deepEqual(Object.keys(dicts[0].dictionaries.zh).sort(), Object.keys(dicts[0].dictionaries.en).sort())
 
@@ -221,7 +263,7 @@ test('ready：只渲染 exitGuard 开关、样式表与迁移说明；不再有�
   const styles = byType(renderer, 'style')
   assert.equal(styles.length, 1)
   assert.match(styles[0].children[0], /\.apollo-switch/)
-  assert.match(styles[0].children[0], /--dsw-alias-button-primary-fill/)
+  assert.match(styles[0].children[0], /--cfg-accent:#3388BB/)
   assert.equal(renderer.root.findAll((node) => String(node.props.className ?? '').includes('apollo-root')).length, 1)
 
   assert.equal(byId(renderer, 'apollo-exit-guard').props['aria-checked'], false)
@@ -336,4 +378,48 @@ test('没有对外部服务的隐式依赖：client.js 不引用新插件的页�
   assert.equal(SOURCE.includes("'@menghuan1918/dsh-better-subagent#"), false)
   assert.equal(SOURCE.includes("'dsh-better-compact#"), false)
   assert.equal(SOURCE.includes('fetch('), false)
+})
+
+test('集成设置：detail.actions 注册、仅 Apollo bundle 渲染按钮、弹窗聚合子插件页', async () => {
+  const setup = install()
+  const { slots } = setup
+  // Apollo 自己的两个 row.config entry 先落账（声明即注册）。
+  setup.declare()
+  // 模拟一个子插件的 row.config entry（键以 #dsh-better-goal 结尾）。
+  const goalFormStates = []
+  slots.registrations.push({
+    options: { name: 'plugins.row.config', key: '@menghuan1918/dsh-apollo#dsh-better-goal', locale: 'better-goal' },
+    component: (props) => {
+      goalFormStates.push(props.form?.state?.status ?? 'noform')
+      return createElement('div', { 'data-goal-pane': true }, 'goal-pane')
+    },
+  })
+  const disposers = slots.declare('plugins.detail.actions')
+  assert.equal(disposers.length, 1)
+  const hub = slots.registrations.find((r) => r.options.name === 'plugins.detail.actions')
+  assert.ok(hub)
+  assert.equal(hub.options.id, 'apollo-settings-hub')
+
+  // 非 Apollo bundle subject → null
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(createElement(hub.component, { subject: { kind: 'bundle', pkg: { name: 'other-pkg' } }, t }))
+  })
+  assert.equal(renderer.toJSON(), null)
+
+  // Apollo bundle subject → 按钮
+  await act(async () => {
+    renderer.update(createElement(hub.component, { subject: { kind: 'bundle', pkg: { name: '@menghuan1918/dsh-apollo' } }, t }))
+  })
+  const trigger = renderer.root.findAll((node) => host(node) && node.props['data-apollo-hub'] === 'trigger')[0]
+  assert.ok(trigger)
+  // 开弹窗（ui-primitives 在测试里缺席 → 走 FallbackModal）
+  await act(async () => { trigger.props.onClick() })
+  assert.match(pageText(renderer), /hubTitle|Apollo 集成设置/)
+  const navItems = renderer.root.findAll((node) => host(node) && node.props.className === 'apollo-hubNavItem')
+  assert.ok(navItems.length >= 2, 'nav 含 Apollo 核心 + 模拟子插件')
+  // goal 面板以合成 form（fake configForms describe 含该 ns → ready）渲染
+  assert.match(pageText(renderer), /goal-pane/)
+  assert.deepEqual(goalFormStates, ['ready'])
+  await act(async () => { renderer.unmount() })
 })
