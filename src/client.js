@@ -153,8 +153,8 @@ window.__ModuleLoader__.load({
 		const CSS = [
 			/* Apollo accent is scoped to these settings; host surfaces follow the active theme. */
 			'.apollo-cfg,.apollo-root,.apollo-hub,.apollo-modal,.apollo-modalCard,.apollo-button[data-apollo-hub=trigger]{--cfg-accent:#3388BB;--cfg-accent-fill:color-mix(in srgb,var(--cfg-accent) 85%,black);--cfg-accent-hover:color-mix(in srgb,var(--cfg-accent) 72%,black);--cfg-accent-fg:#fff;--cfg-accent-ink:color-mix(in srgb,var(--cfg-accent) 72%,var(--dsw-alias-label-primary));--cfg-accent-soft:color-mix(in srgb,var(--cfg-accent) 9%,transparent);--cfg-border:var(--dsw-alias-border-l2,color-mix(in srgb, currentColor 14%, transparent));--cfg-border-strong:var(--dsw-alias-border-l3,color-mix(in srgb, currentColor 22%, transparent));--cfg-surface:var(--dsw-alias-bg-layer-1,transparent);--cfg-surface-2:var(--dsw-alias-bg-layer-3,color-mix(in srgb, currentColor 4%, transparent));--cfg-ink:var(--dsw-alias-label-primary,currentColor);--cfg-ink-2:var(--dsw-alias-label-secondary,color-mix(in srgb, currentColor 74%, transparent));--cfg-ink-3:var(--dsw-alias-label-tertiary,color-mix(in srgb, currentColor 56%, transparent));--cfg-hover:var(--dsw-alias-interactive-bg-hover,color-mix(in srgb, currentColor 6%, transparent));--cfg-mono:var(--dsw-font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:14px;line-height:22px;color:var(--cfg-ink)}',
-			'.apollo-cfg{display:flex;flex-direction:column;gap:24px;max-width:960px;min-width:0}',
-			'.apollo-pageTitle{margin:0;font-size:18px;font-weight:500;line-height:26px;color:var(--cfg-ink)}',
+			'.apollo-cfg{display:flex;flex-direction:column;gap:24px;max-width:1040px;min-width:0}',
+			'.apollo-pageTitle{margin:0;font-size:20px;font-weight:600;line-height:28px;letter-spacing:-.01em;color:var(--cfg-ink)}',
 			'.apollo-note{margin:0;padding:8px 10px;border-radius:6px;font-size:12px;line-height:17px;background:var(--cfg-surface-2);color:var(--cfg-ink-2)}',
 			'.apollo-note[data-tone=error]{background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);color:var(--dsw-alias-state-error-primary)}',
 			'.apollo-note[data-tone=warn]{background:var(--dsw-alias-state-warn-tertiary)}',
@@ -172,6 +172,15 @@ window.__ModuleLoader__.load({
 			'.apollo-rowText{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}',
 			'.apollo-rowTitle{font-size:14px;line-height:22px;font-weight:500;color:var(--cfg-ink)}',
 			'.apollo-rowDesc{max-width:560px;font-size:13px;line-height:20px;color:var(--cfg-ink-3)}',
+			'.apollo-pageHead{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}',
+			'.apollo-badge{display:inline-flex;align-items:center;padding:2px 8px;border:1px solid var(--cfg-border);border-radius:999px;background:var(--cfg-surface-2);font-size:11px;line-height:18px;color:var(--cfg-ink-3);white-space:nowrap}',
+			'.apollo-card{display:flex;flex-direction:column;gap:16px;min-width:0;padding:16px;border:1px solid var(--cfg-border);border-radius:12px;background:color-mix(in srgb,var(--cfg-ink) 2%,var(--cfg-surface))}',
+			'.apollo-rowLabel{display:flex;align-items:center;gap:6px;min-width:0}',
+			'.apollo-help{position:relative;flex:none;font-size:12px}',
+			'.apollo-help>summary{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;color:var(--cfg-ink-3);cursor:pointer;list-style:none}',
+			'.apollo-help>summary::-webkit-details-marker{display:none}',
+			'.apollo-help>summary:hover,.apollo-help[open]>summary{background:var(--cfg-hover);color:var(--cfg-ink)}',
+			'.apollo-help>p{position:absolute;right:0;top:26px;z-index:5;width:320px;max-width:min(320px,70vw);margin:0;padding:10px 12px;border:1px solid var(--cfg-border-strong);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:var(--cfg-ink-2);font-size:12px;line-height:18px;font-weight:400}',
 			/* Switch：36x20 track，accent 实心 + 白点滑动。 */
 			'.apollo-switch{box-sizing:border-box;position:relative;flex:none;width:36px;height:20px;margin:2px 0 0;padding:2px;border:1px solid var(--cfg-border-strong);border-radius:10px;background:var(--cfg-surface-2);cursor:pointer;appearance:none;transition:background 140ms ease,border-color 140ms ease}',
 			'.apollo-switch:hover:not(:disabled){border-color:var(--cfg-ink-3)}',
@@ -204,19 +213,19 @@ window.__ModuleLoader__.load({
 			/* ── 集成设置弹窗：中性侧栏 + 独立滚动内容区。 */
 			'.apollo-hubGlyph{flex:none;color:var(--cfg-ink-3)}',
 			/* ui-primitives Modal 加宽（双类提升优先级，同 better-sidebar 做法）。 */
-			'.apollo-modal.apollo-modal{width:min(1040px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding-bottom:0;border:1px solid var(--cfg-border);border-radius:12px}.apollo-hubModalContent>:first-child{margin:0;padding:16px 20px;border-bottom:1px solid var(--cfg-border)}.apollo-hubModalContent>:first-child h2{font-size:16px;line-height:24px;font-weight:500}.apollo-hubModalContent>:last-child{margin:0;padding:0}',
-			'.apollo-hub{display:flex;gap:0;height:min(680px,76dvh);min-height:280px;width:100%;overflow:hidden}',
-			'.apollo-hubNav{box-sizing:border-box;flex:none;width:176px;display:flex;flex-direction:column;gap:2px;padding:16px 8px;border-right:1px solid var(--cfg-border);background:color-mix(in srgb,var(--cfg-ink) 2%,var(--cfg-surface));overflow-y:auto;scrollbar-width:thin}',
+			'.apollo-modal.apollo-modal{width:min(1180px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding-bottom:0;border:1px solid var(--cfg-border);border-radius:12px}.apollo-hubModalContent>:first-child{margin:0;padding:16px 20px;border-bottom:1px solid var(--cfg-border)}.apollo-hubModalContent>:first-child h2{font-size:16px;line-height:24px;font-weight:500}.apollo-hubModalContent>:last-child{margin:0;padding:0}',
+			'.apollo-hub{display:flex;gap:0;height:min(760px,calc(100dvh - 96px));min-height:320px;width:100%;overflow:hidden}',
+			'.apollo-hubNav{box-sizing:border-box;flex:none;width:188px;display:flex;flex-direction:column;gap:2px;padding:16px 8px;border-right:1px solid var(--cfg-border);background:color-mix(in srgb,var(--cfg-ink) 2%,var(--cfg-surface));overflow-y:auto;scrollbar-width:thin}',
 			'.apollo-hubNavItem{display:flex;align-items:center;gap:8px;flex-shrink:0;min-height:36px;padding:8px 12px;border:0;border-radius:6px;background:transparent;font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer;color:var(--cfg-ink-2);transition:background 140ms ease,color 140ms ease;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
 			'.apollo-hubNavItem:hover{background:var(--cfg-hover);color:var(--cfg-ink)}',
-			'.apollo-hubNavItem[data-active]{background:var(--cfg-hover);color:var(--cfg-ink);font-weight:500}.apollo-hubNavItem svg{flex:none;opacity:.72}.apollo-hubNavItem[data-active] svg{opacity:1;color:var(--cfg-accent-ink)}',
+			'.apollo-hubNavItem[data-active]{background:linear-gradient(90deg,var(--cfg-accent) 0 2px,var(--cfg-accent-soft) 2px);color:var(--cfg-accent-ink);font-weight:500}.apollo-hubNavItem svg{flex:none;opacity:.72}.apollo-hubNavItem[data-active] svg{opacity:1;color:var(--cfg-accent-ink)}',
 			'.apollo-hubNavItem:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:1px}',
-			'.apollo-hubContent{flex:1;min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:28px 32px 0;scrollbar-width:thin;scrollbar-gutter:stable}.apollo-hubContent .apollo-footer{position:sticky;bottom:0;background:var(--cfg-surface);padding-bottom:24px;z-index:1}.apollo-hubModalContent{padding:0!important;overflow:hidden}.apollo-hubPane{min-width:0;overflow-wrap:anywhere}',
+			'.apollo-hubContent{flex:1;min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:28px 36px 0;scrollbar-width:thin;scrollbar-gutter:stable}.apollo-hubContent .apollo-footer{position:sticky;bottom:0;background:var(--cfg-surface);padding-bottom:24px;z-index:1}.apollo-hubModalContent{padding:0!important;overflow:hidden}.apollo-hubPane{min-width:0;overflow-wrap:anywhere}',
 			'.apollo-hubPane[hidden]{display:none}',
-			'@media (max-width:800px){.apollo-hub{flex-direction:column;height:80dvh}.apollo-hubNav{width:auto;flex-direction:row;gap:4px;padding:8px;border-right:0;border-bottom:1px solid var(--cfg-border);overflow-x:auto}.apollo-hubNavItem{min-height:44px}.apollo-hubContent{padding:24px 20px 0}.apollo-cfg{gap:24px}.apollo-pageTitle{font-size:18px}.apollo-hubContent .apollo-footer{bottom:0}.apollo-mask{padding:12px}.apollo-modalCard{max-height:calc(100dvh - 24px)}}',
+			'@media (max-width:800px){.apollo-help>p{position:static;width:auto;max-width:none;margin-top:6px}.apollo-hub{flex-direction:column;height:80dvh}.apollo-hubNav{width:auto;flex-direction:row;gap:4px;padding:8px;border-right:0;border-bottom:1px solid var(--cfg-border);overflow-x:auto}.apollo-hubNavItem{min-height:44px}.apollo-hubContent{padding:24px 20px 0}.apollo-cfg{gap:24px}.apollo-pageTitle{font-size:18px}.apollo-hubContent .apollo-footer{bottom:0}.apollo-mask{padding:12px}.apollo-modalCard{max-height:calc(100dvh - 24px)}}',
 			/* 自绘 overlay（ui-primitives 缺失时的兜底弹窗）。 */
 			'.apollo-mask{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:rgba(0,0,0,.4)}',
-			'.apollo-modalCard{display:flex;flex-direction:column;width:min(1040px,100%);max-height:calc(100vh - 64px);box-sizing:border-box;border:1px solid var(--cfg-border);border-radius:12px;background:var(--dsw-alias-bg-layer-1);box-shadow:0 12px 48px rgba(0,0,0,.22)}',
+			'.apollo-modalCard{display:flex;flex-direction:column;width:min(1180px,100%);max-height:calc(100vh - 64px);box-sizing:border-box;border:1px solid var(--cfg-border);border-radius:12px;background:var(--dsw-alias-bg-layer-1);box-shadow:0 12px 48px rgba(0,0,0,.22)}',
 			'.apollo-sectionTitle{margin:0;font-size:14px;line-height:20px;font-weight:500}.apollo-connectionSection{border-top:.5px solid var(--cfg-border);padding-top:24px}.apollo-guardSection{padding-bottom:0}.apollo-guardFlow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px;padding:16px 12px;border:.5px solid var(--cfg-border);border-radius:8px;background:color-mix(in srgb,var(--cfg-ink) 1.5%,var(--cfg-surface))}',
 			'.apollo-flowStep{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;text-align:center;color:var(--cfg-ink-2)}.apollo-flowStep svg{box-sizing:content-box;display:block;padding:6px;border:.5px solid var(--cfg-border);border-radius:8px;background:var(--cfg-surface)}.apollo-flowLabel{font-size:12px;line-height:18px;max-width:130px;overflow-wrap:normal}',
 			'.apollo-flowStep:not(:last-child):after{content:"";position:absolute;left:calc(50% + 24px);top:15px;width:calc(100% - 40px);border-top:1px solid var(--cfg-border)}',
@@ -237,12 +246,21 @@ window.__ModuleLoader__.load({
 			return { exitGuard: source.exitGuard === true, declareOwnsHost: source.declareOwnsHost === true };
 		}
 
+		function Help({ label, id, children }) {
+			return h('details', { className: 'apollo-help' },
+				h('summary', { 'aria-label': label + ' 说明', title: label },
+					h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, 'aria-hidden': true },
+						h('circle', { cx: 12, cy: 12, r: 9 }), h('path', { d: 'M9.7 9.2a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1.1.9-1.1 1.7v.3M12 17h.01' }))),
+				h('p', { id }, children));
+		}
+
 		function SwitchRow({ id, label, hint, checked, disabled, onChange }) {
 			const hintId = hint === undefined ? undefined : id + '-hint';
 			return h('div', { className: 'apollo-row' },
 				h('div', { className: 'apollo-rowText' },
-					h('label', { className: 'apollo-rowTitle', htmlFor: id }, label),
-					hint === undefined ? null : h('span', { className: 'apollo-rowDesc', id: hintId }, hint)),
+					h('div', { className: 'apollo-rowLabel' },
+						h('label', { className: 'apollo-rowTitle', htmlFor: id }, label),
+						hint === undefined ? null : h(Help, { label, id: hintId }, hint))),
 				h('button', {
 					type: 'button',
 					id,
@@ -309,9 +327,11 @@ window.__ModuleLoader__.load({
 				: h('span', { className: 'apollo-status', role: 'status' }, writable ? '' : translate('readonlyNote'));
 
 			return h('div', { className: 'apollo-cfg' },
-				h('h2', { className: 'apollo-pageTitle' }, translate('title')),
+				h('div', { className: 'apollo-pageHead' },
+					h('h2', { className: 'apollo-pageTitle' }, translate('title')),
+					writable ? null : h('span', { className: 'apollo-badge' }, translate('readonlyNote'))),
 				writable ? null : h('p', { className: 'apollo-note', 'data-tone': 'warn' }, translate('readonly')),
-				h('section', { className: 'apollo-guardSection' },
+				h('section', { className: 'apollo-card' },
 					h(SwitchRow, {
 						id: 'apollo-exit-guard',
 						label: translate('exitGuardLabel'),
@@ -325,12 +345,16 @@ window.__ModuleLoader__.load({
 							h('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' },
 								h('path', { d: ['M5 12h14m-6-6 6 6-6 6', 'M4 5h16v14H4ZM8 9l3 3-3 3m6 0h3', live.exitGuard ? 'M12 8v4l3 2M5 4 2 7m20 0-3-3M12 4a8 8 0 1 0 8 8' : 'M5 12l4 4L19 6'][index] })),
 							h('span', { className: 'apollo-flowLabel' }, translate(key)))))),
-				h('section', { className: 'apollo-connectionSection' },
+				h('section', { className: 'apollo-card' },
 					h('h3', { className: 'apollo-sectionTitle' }, translate('connectionTitle')),
-					h('div', { className: 'apollo-detailsBody' },
-						h(SwitchRow, { id: 'apollo-owns-host', label: translate('ownsHostLabel'), hint: translate('ownsHostHint'),
-							checked: live.declareOwnsHost, disabled: !writable || busy, onChange: (next) => edit({ declareOwnsHost: next }) }),
-						h('p', { className: 'apollo-hint' }, translate('ownsHostReload')))),
+					h(SwitchRow, {
+						id: 'apollo-owns-host',
+						label: translate('ownsHostLabel'),
+						hint: translate('ownsHostHint') + ' ' + translate('ownsHostReload'),
+						checked: live.declareOwnsHost,
+						disabled: !writable || busy,
+						onChange: (next) => edit({ declareOwnsHost: next }),
+					})),
 				h('details', { className: 'apollo-details' },
 					h('summary', null, translate('compatTitle')),
 					h('div', { className: 'apollo-detailsBody' },
