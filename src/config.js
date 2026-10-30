@@ -8,12 +8,13 @@
  *     运行中 fiber 的稳定引用（`createVolatile` 协议 + `loader/volatile-update`），
  *     消费方每次读取都拿到最新值。退出守卫按回合读取、CLI 子代理路由按次读取，
  *     因此这些开关无需重启或重挂即可即时生效。
- *   - 普通字段（`trustedHosts`、`declareOwnsHost`）是**部署标志**：只在行配置里
- *     声明，改动会让 Loader 正常重挂本行（重挂才需要重新读）。
+ *   - `declareOwnsHost` 可在表单保存，但 index tap 在装配时读取，需重载
+ *     profile 并刷新页面才应用；`trustedHosts` 仅为旧 profile 装载保留。
  *
  * 0.5.0 的所有权边界：
  *   - **仍在运行时使用**：`exitGuard`（只控制运行中后台 job 的退出守卫）与
- *     `declareOwnsHost`（宿主部署标志）。最小行配置页只展示 `exitGuard`。
+ *     `declareOwnsHost`（宿主部署标志）。行配置页展示 `exitGuard`，并把
+ *     `declareOwnsHost` 收在「连接与访问」折叠组。
  *   - **deprecated、运行时不再读取**：`tiers.*`、`subagents.*`、`trustedHosts`。
  *     它们只保留旧默认值，让 0.4.x 的 profile 能正常装载；`src/migrate.js`
  *     在启动后把用户值一次性补进 dsh-better-subagent 的同名路径
@@ -22,7 +23,7 @@
  *
  * 可编辑范围（volatile，即 dsh-settings 投影出的行配置表单字段）：
  * `exitGuard`、以及 deprecated 的 `tiers.*` / `subagents.*`。表单写入只能落在
- * volatile 路径上（dsh-settings 会拒绝其他路径），所以部署标志不会从网页上被改写。
+ * volatile 路径上（dsh-settings 会拒绝其他路径）；`declareOwnsHost` 也可编辑。
  *
  * 持久化：DSH 的 configEditor 把表单写入落到活动 profile 的 cordis.patch.yml
  * （本行 id 的 `config` 覆盖层），不再有 `<dshHome>/eng.json` 写入路径；旧文件
@@ -152,7 +153,7 @@ export const Config = z.object({
    */
   trustedHosts: z.array(z.string()).default([]),
   /** 注入 `__DSH_TRANSPORT__.ownsHost` 让官方 client 把反代页面当 loopback（默认关闭）。 */
-  declareOwnsHost: z.boolean().default(false),
+  declareOwnsHost: z.boolean().default(false).volatile(),
 })
 
 // ── 规整（volatile 引用 → 普通 JSON）────────────────────────────────────────

@@ -12,6 +12,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
@@ -104,11 +105,13 @@ test('顶层 patch 禁用原生 goal 域与原生 compaction-basic，并插入�
   }
 })
 
-test('npm manifest：scoped 名、0.6.5、repository、publishConfig 与 license', () => {
+test('npm manifest：scoped 名、0.7.0、repository、publishConfig 与 license', () => {
   const m = manifest()
   assert.equal(m.name, PACKAGE_NAME)
-  assert.equal(m.version, '0.6.5')
-  assert.equal(m.license, 'GPL-3.0-or-later')
+  assert.equal(m.version, '0.7.0')
+  assert.equal(m.license, 'Apache-2.0')
+  const license = readFileSync(join(ROOT, 'LICENSE'), 'utf8')
+  assert.equal(createHash('sha256').update(license).digest('hex'), 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30')
   assert.deepEqual(m.repository, {
     type: 'git',
     url: 'git+https://github.com/Menghuan1918/dsh-apollo.git',
@@ -121,11 +124,11 @@ test('npm manifest：scoped 名、0.6.5、repository、publishConfig 与 license
 
 test('package.json 把五个独立插件声明为精确 npm 版本', () => {
   const dependencies = manifest().dependencies ?? {}
-  assert.equal(dependencies['dsh-better-goal'], '0.2.1', 'goal 依赖必须是精确 npm 版本')
-  assert.equal(dependencies[SUBAGENT_NAME], '0.2.0', 'better-subagent 依赖必须是精确 npm 版本')
-  assert.equal(dependencies[COMPACT_NAME], '0.1.2', 'better-compact 依赖必须是精确 npm 版本')
-  assert.equal(dependencies['dsh-better-ask-user'], '0.1.7', 'ask-user 依赖必须是精确 npm 版本')
-  assert.equal(dependencies['dsh-better-ptc'], '0.1.0', 'ptc 依赖必须是精确 npm 版本')
+  assert.equal(dependencies['dsh-better-goal'], '0.3.0', 'goal 依赖必须是精确 npm 版本')
+  assert.equal(dependencies[SUBAGENT_NAME], '0.3.0', 'better-subagent 依赖必须是精确 npm 版本')
+  assert.equal(dependencies[COMPACT_NAME], '0.2.0', 'better-compact 依赖必须是精确 npm 版本')
+  assert.equal(dependencies['dsh-better-ask-user'], '0.2.0', 'ask-user 依赖必须是精确 npm 版本')
+  assert.equal(dependencies['dsh-better-ptc'], '0.1.1', 'ptc 依赖必须是精确 npm 版本')
   for (const spec of [dependencies['dsh-better-goal'], dependencies[SUBAGENT_NAME], dependencies[COMPACT_NAME], dependencies['dsh-better-ask-user'], dependencies['dsh-better-ptc']]) {
     assert.doesNotMatch(spec, /^(?:github:|git\+|git:|file:|link:|workspace:|npm:|https?:)/)
   }

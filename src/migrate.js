@@ -17,8 +17,8 @@
  *     来源只补目标缺失字段；
  *   - 显式 false / 0 / '' / [] 是值，不是缺失；来源只携带**显式配置**，不把
  *     原生默认值搬成目标显式值（与目标生效默认相同就跳过）；
- *   - volatile 字段用 `settings.update(ns, patch, revision)`；非 volatile 的
- *     `trustedHosts` 用 `configEditor.edit`（不绕过宿主字段限制）；
+ *   - volatile 字段用 `settings.update(ns, patch, revision)`；`trustedHosts`
+ *     走 `configEditor.edit` 写目标 raw config（不绕过宿主字段限制）；
  *   - 写入后重读验证；验证失败不宣告成功，也不删除任何旧值；
  *   - 目标命名空间尚未出现/不可写时（例如双 bundle 同时显式选中导致
  *     unaddressable）报告 pending，要求重载 profile；
@@ -161,8 +161,8 @@ export function planSubagentMigration({ source, targetUser, targetBase }) {
 }
 
 /**
- * Plan the non-volatile `trustedHosts` write (separate because it goes through
- * `configEditor.edit`, not `settings.update`).
+ * Plan the `trustedHosts` write (separate because it goes through
+ * `configEditor.edit` on the target raw config, not `settings.update`).
  *
  * @param source - Apollo effective config.
  * @param targetRaw - target row's raw composed config (`entry.options.config`).
@@ -454,7 +454,7 @@ function presetRowsOf(configEditor) {
     })
 }
 
-/** Find the target row entry (needed for the non-volatile trustedHosts write). */
+/** Find the target row entry (needed for the raw-config trustedHosts write). */
 function targetEntryOf(configEditor, ns) {
   try {
     return configEditor?.entries?.().find((entry) => entry?.options?.id === ns)
@@ -479,8 +479,8 @@ export async function migrateSubagent({ settings, configEditor, descriptors, sou
   const entry = targetEntryOf(configEditor, SUBAGENT_NS)
   const wantedHosts = normalizeConfig(source).trustedHosts
   const targetDeclaresHosts = hasOwn(entry?.options?.config, 'trustedHosts')
-  // A target row that cannot be addressed cannot receive the non-volatile
-  // deployment field; report it instead of silently dropping the old value.
+  // A target row that cannot be addressed cannot receive the raw-config
+  // trustedHosts write; report it instead of silently dropping the old value.
   const trustedHostsBlocked = wantedHosts.length > 0 && !targetDeclaresHosts
     && (entry === undefined || configEditor === undefined || typeof configEditor.edit !== 'function')
   const trustedHosts = entry === undefined || targetDeclaresHosts
@@ -498,7 +498,7 @@ export async function migrateSubagent({ settings, configEditor, descriptors, sou
     if (fields.length > 0) await settings.update(SUBAGENT_NS, patch, target.revision)
     if (trustedHosts !== undefined) {
       // settings.update reconciles profile patches, which may replace the
-      // target row's Loader entry; re-read it before the non-volatile write.
+      // target row's Loader entry; re-read it before the raw-config write.
       const fresh = targetEntryOf(configEditor, SUBAGENT_NS)
       if (configEditor === undefined || fresh === undefined) {
         return { status: 'pending', fields, error: 'trustedHosts needs the config editor, which is unavailable' }

@@ -6,7 +6,7 @@
  * 原生 compaction-basic 显式配置的旧 eng-ptc 预设覆盖。Apollo 启动后应：
  *   - 把子代理字段补进 dsh-better-subagent（目标显式值优先）；
  *   - 把旧原生压缩配置补进 dsh-better-compact；
- *   - 用 configEditor 写非 volatile 的 trustedHosts；
+ *   - 用 configEditor 把 trustedHosts 写进目标行 raw config；
  *   - 重读验证、不删旧来源、重复执行不再写入。
  *
  * 没有 DSH_PACKAGE_ROOT 或未安装三个独立包时跳过（与 upstream-drift 一致），
@@ -125,9 +125,10 @@ test('真实 temp profile：旧 Apollo 子代理/压缩配置迁移到独立行'
     assert.equal(subagent.value.subagents.codex.profile, 'legacy')
     assert.equal(subagent.value.subagents.codex.defaultModel, 'gpt-old')
     assert.deepEqual(subagent.value.subagents.codex.models, [], 'target explicit empty model list wins')
-    assert.equal('trustedHosts' in subagent.value, false, 'trustedHosts stays a deployment field outside the editable form')
+    assert.deepEqual(subagent.value.trustedHosts, ['proxy.local'], 'volatile trustedHosts is projected into the editable form')
 
-    // trustedHosts is non-volatile: written through configEditor, not settings.update.
+    // trustedHosts is written through configEditor on the target raw config,
+    // not settings.update; the raw entry must carry the same value.
     const entry = ctx.configEditor.entries().find((candidate) => candidate.options.id === SUBAGENT_NS)
     assert.ok(entry, 'the target row must be addressable')
     assert.deepEqual(entry.options.config.trustedHosts, ['proxy.local'])

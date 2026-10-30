@@ -35,6 +35,7 @@ function makeForm(options = {}) {
     mode: options.mode ?? 'host',
   }
   const calls = []
+  const listeners = new Set()
   let settle = null
   const accept = (ops) => {
     const value = structuredClone(snapshot.value)
@@ -44,12 +45,17 @@ function makeForm(options = {}) {
       cursor[op.path[op.path.length - 1]] = structuredClone(op.value)
     }
     snapshot = { ...snapshot, value, revision: snapshot.revision + 1 }
+    for (const listener of listeners) listener()
     return true
   }
   return {
     calls,
     getSnapshot: () => snapshot,
-    subscribe: () => () => {},
+    subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener) },
+    update(value) {
+      snapshot = { ...snapshot, value, revision: snapshot.revision + 1 }
+      for (const listener of listeners) listener()
+    },
     set: async () => true,
     unset: async () => true,
     async mutate(ops, expectedRevision) {
@@ -214,7 +220,7 @@ const host = (node) => typeof node.type === 'string'
 const byId = (renderer, id) => renderer.root.findAll((node) => host(node) && node.props?.id === id)[0]
 const byType = (renderer, type) => renderer.root.findAllByType(type)
 const saveButton = (renderer) => byType(renderer, 'button').find((node) => node.props['data-variant'] === 'primary')
-const resetButton = (renderer) => byType(renderer, 'button').find((node) => node.props['data-variant'] === 'outline')
+const resetButton = (renderer) => byType(renderer, 'button').find((node) => node.children.includes(t('reset')))
 
 function textOf(node) {
   if (node === null || node === undefined) return ''
@@ -270,7 +276,7 @@ test('ready：只渲染 exitGuard 开关、样式表与迁移说明；不再有�
   assert.equal(byType(renderer, 'select').length, 0, 'CLI 权限/模型控件已迁移')
   assert.equal(byType(renderer, 'input').length, 0, '可执行文件/模型输入已迁移')
   assert.equal(renderer.root.findAll((node) => String(node.props.id ?? '').startsWith('apollo-codex')).length, 0)
-  assert.match(pageText(renderer), /migratedTitle/)
+  assert.match(pageText(renderer), /migratedBody/)
   assert.match(pageText(renderer), /deprecatedBody/)
   assert.equal(saveButton(renderer).props.disabled, true, '无改动时保存不可用')
   assert.equal(resetButton(renderer).props.disabled, true)
@@ -380,6 +386,33 @@ test('没有对外部服务的隐式依赖：client.js 不引用新插件的页�
   assert.equal(SOURCE.includes('fetch('), false)
 })
 
+
+
+test('集成设置订阅共享表单：保存与外部更新后数值和 revision 即时同步', async () => {
+  const setup = install()
+  setup.declare()
+  setup.slots.declare('plugins.detail.actions')
+  const hub = setup.slots.registrations.find((entry) => entry.options.name === 'plugins.detail.actions')
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(createElement(hub.component, { subject: { kind: 'bundle', pkg: { name: '@menghuan1918/dsh-apollo' } }, t }))
+  })
+  const trigger = renderer.root.findAll((node) => host(node) && node.props['data-apollo-hub'] === 'trigger')[0]
+  await act(async () => { trigger.props.onClick() })
+  const controller = setup.configForms.get('apollo-skills')
+  await act(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
+  await act(async () => { saveButton(renderer).props.onClick() })
+  assert.equal(controller.getSnapshot().value.exitGuard, true)
+  assert.equal(saveButton(renderer).props.disabled, true, '保存成功后无需手动刷新也会清除 dirty')
+  assert.equal(byId(renderer, 'apollo-exit-guard').props['aria-checked'], true)
+  await act(async () => { controller.update({ exitGuard: false }) })
+  assert.equal(byId(renderer, 'apollo-exit-guard').props['aria-checked'], false, '外部更改会推送到面板')
+  await act(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
+  await act(async () => { saveButton(renderer).props.onClick() })
+  assert.deepEqual(controller.calls.map((call) => call.revision), [1, 3], '下一次保存使用新的 revision')
+  await act(async () => { renderer.unmount() })
+})
+
 test('集成设置：detail.actions 注册、仅 Apollo bundle 渲染按钮、弹窗聚合子插件页', async () => {
   const setup = install()
   const { slots } = setup
@@ -415,11 +448,100 @@ test('集成设置：detail.actions 注册、仅 Apollo bundle 渲染按钮、�
   assert.ok(trigger)
   // 开弹窗（ui-primitives 在测试里缺席 → 走 FallbackModal）
   await act(async () => { trigger.props.onClick() })
-  assert.match(pageText(renderer), /hubTitle|Apollo 集成设置/)
+  assert.match(pageText(renderer), /hubTitle|Apollo 设置/)
   const navItems = renderer.root.findAll((node) => host(node) && node.props.className === 'apollo-hubNavItem')
   assert.ok(navItems.length >= 2, 'nav 含 Apollo 核心 + 模拟子插件')
   // goal 面板以合成 form（fake configForms describe 含该 ns → ready）渲染
   assert.match(pageText(renderer), /goal-pane/)
   assert.deepEqual(goalFormStates, ['ready'])
+  await act(async () => { renderer.unmount() })
+})
+
+test('行配置页：单一标题、退出守卫行、兼容性细节默认折叠', async () => {
+  const page = await mountPage()
+  const renderer = page.renderer
+
+  const titles = renderer.root.findAll((node) => host(node) && node.props.className === 'apollo-pageTitle')
+  assert.equal(titles.length, 1)
+  assert.equal(textOf(titles[0].props.children), 'title')
+  assert.doesNotMatch(pageText(renderer), /hubIntro|intro\(|migratedTitle/)
+
+  const compat = renderer.root.findAll((node) => host(node) && node.type === 'details')[0]
+  assert.ok(compat)
+  assert.equal(compat.props.open, undefined, '兼容性说明默认折叠')
+  assert.match(pageText(renderer), /compatTitle|migratedBody|deprecatedBody|reloadBody/)
+  await act(async () => { renderer.unmount() })
+})
+
+test('集成设置弹窗：tab 语义、漫游焦点、面板全挂载保草稿、无包 id', async () => {
+  const setup = install()
+  const { slots } = setup
+  setup.declare()
+  const edited = []
+  for (const rowId of ['dsh-better-subagent', 'dsh-better-compact', 'dsh-better-goal', 'dsh-better-ask-user']) {
+    slots.registrations.push({
+      options: { name: 'plugins.row.config', key: '@menghuan1918/dsh-apollo#' + rowId, locale: 'fake' },
+      component: (props) => {
+        if (rowId === 'dsh-better-goal') edited.push(props.form?.state?.status ?? 'noform')
+        return createElement('div', { 'data-fake-pane': rowId }, rowId + '-pane')
+      },
+    })
+  }
+  slots.declare('plugins.detail.actions')
+  const hub = slots.registrations.find((r) => r.options.name === 'plugins.detail.actions')
+  let renderer
+  await act(async () => {
+    renderer = TestRenderer.create(createElement(hub.component, { subject: { kind: 'bundle', pkg: { name: '@menghuan1918/dsh-apollo' } }, t }))
+  })
+  const trigger = renderer.root.findAll((node) => host(node) && node.props['data-apollo-hub'] === 'trigger')[0]
+  await act(async () => { trigger.props.onClick() })
+
+  const dialog = renderer.root.findAll((node) => host(node) && node.props.role === 'dialog')[0]
+  assert.ok(dialog)
+  assert.equal(dialog.props['aria-modal'], 'true')
+  assert.equal(typeof dialog.props['aria-labelledby'], 'string')
+  assert.match(pageText(renderer), /hubTitle/)
+  assert.doesNotMatch(pageText(renderer), /hubIntro|done/)
+
+  const tablist = renderer.root.findAll((node) => host(node) && node.props.role === 'tablist')[0]
+  assert.ok(tablist)
+  const tabs = renderer.root.findAll((node) => host(node) && node.props.role === 'tab')
+  assert.equal(tabs.length, 5, '五个行各有一个 tab')
+  assert.equal(tabs.filter((tab) => tab.props.tabIndex === 0).length, 1, '漫游焦点：只有一个 tab 可 Tab 到')
+  assert.match(String(tabs[0].props['aria-controls']), /apollo-hub-.*-panel-apollo-skills$/)
+  assert.equal(tabs[0].props['aria-controls'].replace('-panel-', '-tab-'), tabs[0].props.id)
+  for (const tab of tabs) {
+    assert.equal(textOf(tab.props.children).includes('apollo-skills'), false)
+    assert.equal(textOf(tab.props.children).includes('dsh-better'), false, 'nav 不再重复包名/行 id')
+  }
+  const panels = renderer.root.findAll((node) => host(node) && node.props.role === 'tabpanel')
+  assert.equal(panels.length, 5, '面板全部挂载以保住草稿')
+  assert.equal(panels.filter((panel) => panel.props.hidden === true).length, 4)
+  assert.match(String(panels[0].props['aria-labelledby']), /apollo-hub-.*-tab-apollo-skills$/)
+  assert.match(pageText(renderer), /dsh-better-goal-pane/)
+
+  // 键盘：Down/Up 环绕、Home/End、左右同义。
+  const keydown = (key) => act(async () => { tablist.props.onKeyDown({ key, preventDefault() {} }) })
+  await keydown('ArrowDown')
+  let selected = renderer.root.findAll((node) => host(node) && node.props.role === 'tab' && node.props['aria-selected'] === true)
+  assert.equal(selected.length, 1)
+  assert.match(String(selected[0].props.id), /-tab-dsh-better-subagent$/)
+  await keydown('ArrowUp')
+  await keydown('ArrowLeft')
+  selected = renderer.root.findAll((node) => host(node) && node.props.role === 'tab' && node.props['aria-selected'] === true)
+  assert.match(String(selected[0].props.id), /-tab-dsh-better-ask-user$/)
+  await keydown('Home')
+  await keydown('End')
+  selected = renderer.root.findAll((node) => host(node) && node.props.role === 'tab' && node.props['aria-selected'] === true)
+  assert.match(String(selected[0].props.id), /-tab-dsh-better-ask-user$/)
+  const visible = renderer.root.findAll((node) => host(node) && node.props.role === 'tabpanel' && !node.props.hidden)
+  assert.equal(visible.length, 1)
+  assert.match(String(visible[0].props.id), /-panel-dsh-better-ask-user$/)
+  assert.ok(edited.length >= 1)
+  assert.ok(edited.every((status) => status === 'ready'))
+
+  // Esc 关闭弹窗（dialog 自己的 keydown 路径；document 监听在真实 DOM 生效）。
+  await act(async () => { dialog.props.onKeyDown({ key: 'Escape', stopPropagation() {} }) })
+  assert.equal(renderer.root.findAll((node) => host(node) && node.props.role === 'dialog').length, 0)
   await act(async () => { renderer.unmount() })
 })

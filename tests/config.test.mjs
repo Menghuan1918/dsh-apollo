@@ -2,14 +2,15 @@
  * 正式配置（src/config.js）单元测试。
  *
  * 覆盖四件事：
- *   1. `Config` schema 的**形状契约**（默认值、volatile 位置、部署标志不 volatile）；
+ *   1. `Config` schema 的**形状契约**（默认值、volatile 位置——`declareOwnsHost`
+ *      可编辑但装配时读取，`trustedHosts` 仍是表单外的装载兼容字段）；
  *   2. `normalizeConfig` 的 EXACT 默认形状、volatile 引用展开、非法值回退、
  *      去重/裁剪规则，以及「返回全新普通对象」；
  *   3. `currentConfig` / `liveConfigEntry` 经 configEditor 读活 fiber 配置；
  *   4. 与 dsh-settings 的投影契约（本地复刻其 volatileForm/projectForm/
  *      isVolatilePath 三个纯函数，按参考运行时 0.2.0-rc.2 的
  *      `@deepseek-ai/dsh-settings/lib/index.js` 抄写）：可编辑字段集合必须恰好是
- *      volatile 集合，`trustedHosts`/`declareOwnsHost` 必须落在表单之外。
+ *      volatile 集合，`trustedHosts` 落在表单之外。
  */
 
 import { test } from 'node:test'
@@ -155,7 +156,7 @@ test('Config 解析空配置即默认形状，且 volatile 字段是引用', () 
   assert.deepEqual(resolved.subagents.codex.get(), EXPECTED_DEFAULT.subagents.codex)
   assert.deepEqual(resolved.subagents.claude.get(), EXPECTED_DEFAULT.subagents.claude)
   assert.deepEqual(resolved.trustedHosts, [])
-  assert.equal(resolved.declareOwnsHost, false)
+  assert.equal(resolved.declareOwnsHost.get(), false)
 })
 
 test('Config 拒绝非法权限档（union 校验）', () => {
@@ -174,6 +175,7 @@ test('volatile 路径恰好是设置页可编辑集合（deprecated 字段为旧
   }
   walk(liveSchema, [])
   assert.deepEqual(paths.sort(), [
+    'declareOwnsHost',
     'exitGuard',
     'subagents.claude',
     'subagents.codex',
@@ -182,9 +184,10 @@ test('volatile 路径恰好是设置页可编辑集合（deprecated 字段为旧
     'tiers.fast',
     'tiers.quality',
   ])
-  // 部署标志是普通字段：改它们应当重挂本行，而不是走 volatile 快路径。
+  // `trustedHosts` 是普通字段（仅为旧 profile 装载保留，不在表单内）；
+  // `declareOwnsHost` 可编辑——值经 volatile 快路径落盘，装配时读取，需重载生效。
   assert.equal(isVolatilePath(liveSchema, ['trustedHosts']), false)
-  assert.equal(isVolatilePath(liveSchema, ['declareOwnsHost']), false)
+  assert.equal(isVolatilePath(liveSchema, ['declareOwnsHost']), true)
 })
 
 // ── normalizeConfig ────────────────────────────────────────────────────────
@@ -339,10 +342,10 @@ test('normalizeConfig：返回全新普通对象（可安全改写、两次调�
 
 // ── 与 dsh-settings 的投影契约 ──────────────────────────────────────────────
 
-test('dsh-settings 投影：表单字段恰好是 volatile 集合，值不含部署标志', () => {
+test('dsh-settings 投影：表单字段恰好是 volatile 集合，值不含装载兼容字段', () => {
   const form = volatileForm(liveSchema)
   assert.equal(form?.type, 'object')
-  assert.deepEqual(Object.keys(form.dict).sort(), ['exitGuard', 'subagents', 'tiers'])
+  assert.deepEqual(Object.keys(form.dict).sort(), ['declareOwnsHost', 'exitGuard', 'subagents', 'tiers'])
   const resolved = Config({
     exitGuard: true,
     trustedHosts: ['dsh.example.com'],
@@ -351,6 +354,7 @@ test('dsh-settings 投影：表单字段恰好是 volatile 集合，值不含部
   })
   const value = projectForm(form, plainConfig(resolved))
   assert.deepEqual(value, {
+    declareOwnsHost: true,
     exitGuard: true,
     tiers: { fast: EMPTY_TIER, quality: EMPTY_TIER },
     subagents: {
@@ -367,10 +371,11 @@ test('dsh-settings 投影：表单字段恰好是 volatile 集合，值不含部
       claude: { enabled: false, executable: 'claude', permissionMode: 'plan', defaultModel: '', models: [] },
     },
   })
-  // 表单写入只允许落在 volatile 路径上：部署标志必须被拒绝。
+  // 表单写入只允许落在 volatile 路径上：装载兼容字段必须被拒绝。
   assert.equal(isVolatilePath(liveSchema, ['subagents', 'codex', 'models', '0', 'id']), true)
   assert.equal(isVolatilePath(liveSchema, ['subagents', 'eng']), true)
   assert.equal(isVolatilePath(liveSchema, ['tiers', 'fast']), true)
+  assert.equal(isVolatilePath(liveSchema, ['declareOwnsHost']), true)
   assert.equal(isVolatilePath(liveSchema, ['trustedHosts', '0']), false)
 })
 

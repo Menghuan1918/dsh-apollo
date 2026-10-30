@@ -2,7 +2,7 @@
 
 面向维护者、集成者和需要排查装配问题的用户。用户安装与配置请看 [README](../README.md)；本文保留 DSH 插件的实现细节、旧配置迁移、组合安装边界与验证方法。
 
-当前实现版本：`0.6.5`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
+当前实现版本：`0.7.0`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
 
 ## 目录
 
@@ -33,11 +33,11 @@
 
 | 依赖 | 版本 | 所有权 |
 |---|---|---|
-| `dsh-better-goal` | `0.2.1` | 目标域（`questionTimeoutSeconds` 已弃用、仅保留读取） |
-| `@menghuan1918/dsh-better-subagent` | `0.2.0` | 子代理 CLI/等待/child guard/分档/设置页；注册 `wait_subagent` PTC 豁免 |
-| `dsh-better-compact` | `0.1.2` | 压缩 companion + engine + 设置页/诊断 |
-| `dsh-better-ask-user` | `0.1.7` | 官方 `ask_user_question` 入参/返回 + 插件超时等待 + 历史预览行；注册 PTC 豁免；旧 goal 等待迁移 |
-| `dsh-better-ptc` | `0.1.0` | 单例 PTC deadline 豁免服务 |
+| `dsh-better-goal` | `0.3.0` | 目标域（`questionTimeoutSeconds` 已弃用、仅保留读取） |
+| `@menghuan1918/dsh-better-subagent` | `0.3.0` | 子代理 CLI/等待/child guard/分档/设置页；注册 `wait_subagent` PTC 豁免 |
+| `dsh-better-compact` | `0.2.0` | 压缩 companion + engine + 设置页/诊断 |
+| `dsh-better-ask-user` | `0.2.0` | 官方 `ask_user_question` 入参/返回 + 插件超时等待 + 历史预览行；注册 PTC 豁免；旧 goal 等待迁移 |
+| `dsh-better-ptc` | `0.1.1` | 单例 PTC deadline 豁免服务 |
 | `@deepseek-ai/schemastery` | `~3.18.4` | Apollo 行 Config |
 | `react` | peer | 宿主提供 |
 
@@ -47,7 +47,7 @@
 npm install
 ```
 
-发布顺序必须是先两个子包、后 Apollo（见[发布](#实现入口打包与发布)）。
+发布顺序必须是先 PTC、再依赖它的子包及其余子包、最后 Apollo（见[发布](#实现入口打包与发布)）。
 
 ### 顶层 patch 与稳定行
 
@@ -101,28 +101,29 @@ PTC deadline 豁免由独立的 `dsh-better-ptc` 单例行提供（无浏览器�
   tiers: { fast: {...}, quality: {...} }, // deprecated，仅旧 profile 装载/迁移
   subagents: { eng: true, global: false, codex: {...}, claude: {...} }, // deprecated
   trustedHosts: [],                       // deprecated（新插件拥有自己的）
-  declareOwnsHost: false,                 // 活跃部署标志
+  declareOwnsHost: false,                 // 活跃部署标志（可编辑；装配时读取）
 }
 ```
 
-- `exitGuard`、`tiers.*`、`subagents.*` 仍是 volatile：旧 profile 能保存/装载，不需要重挂。
-- `trustedHosts`、`declareOwnsHost` 是非 volatile 部署字段。
-- deprecated 字段在运行时**没有消费方**：job 守卫只读 `exitGuard`，工程提示词只读 `exitGuard`，客户端只展示 `exitGuard`。它们存在只为旧 profile 的 schema 兼容与迁移读取。保留旧默认值：
+- `exitGuard`、`tiers.*`、`subagents.*`、`declareOwnsHost` 是 volatile：旧 profile 能保存/装载，不需要重挂。
+- `trustedHosts` 是非 volatile 部署字段，仅为旧 profile 装载保留。
+- `declareOwnsHost` 虽走 volatile 写入路径，但 index tap 只在装配时读取：保存后需重载 profile 并刷新页面才应用（页面对此有明确提示）。
+- deprecated 字段在运行时**没有消费方**：job 守卫只读 `exitGuard`，工程提示词只读 `exitGuard`，客户端只展示 `exitGuard` 与 `declareOwnsHost`。它们存在只为旧 profile 的 schema 兼容与迁移读取。保留旧默认值：
   - `subagents.eng = true`、`subagents.global = false`；
   - 两个 CLI `enabled = false`，Codex `permissionMode = read-only`、Claude `plan`；
   - 模型列表 `[]`、`defaultModel = ""`；
   - `trustedHosts = []`。
 - 模型条目的旧形状 `{ id, efforts[], defaultEffort }` 仍被 `normalizeConfig` 规整，迁移时保留顺序与元数据。
 
-`normalizeConfig(value)` 对任意来源（volatile 引用、旧 JSON、残缺对象）回退默认且不抛错；`currentConfig(ctx)` 经 configEditor 读取活 fiber 配置，找不到时用调用方 fallback（job 守卫、mode-instructions 使用）。`tests/config.test.mjs` 复刻宿主的 `volatileForm` / `projectForm` / `isVolatilePath` 纯函数锁定投影契约：deprecated 字段仍可编辑但不再被运行时消费，`trustedHosts` / `declareOwnsHost` 在表单之外。
+`normalizeConfig(value)` 对任意来源（volatile 引用、旧 JSON、残缺对象）回退默认且不抛错；`currentConfig(ctx)` 经 configEditor 读取活 fiber 配置，找不到时用调用方 fallback（job 守卫、mode-instructions 使用）。`tests/config.test.mjs` 复刻宿主的 `volatileForm` / `projectForm` / `isVolatilePath` 纯函数锁定投影契约：deprecated 字段仍可编辑但不再被运行时消费，`declareOwnsHost` 在表单内（装配时生效），`trustedHosts` 在表单之外。
 
 ### 最小行页
 
 [src/client.js](../src/client.js) 只注册 `<包名>#apollo-skills` 与旧名 `<旧包名>#apollo-skills` 两个 `plugins.row.config` 键，closure id 必须是 npm 包名。页面：
 
 - `summary` 只回一行；
-- `page` 渲染 `exitGuard` 开关、保存/放弃、只读/不可用状态与迁移说明；
-- 保存只提交 `{op:'set', path:['exitGuard'], value}`，带宿主 revision；
+- `page` 渲染 `exitGuard` 开关、「连接与访问」折叠组里的 `declareOwnsHost` 开关、保存/放弃、只读/不可用状态与迁移说明；
+- 保存只提交实际改动的 `{op:'set', path:[...], value}`，带宿主 revision；`declareOwnsHost` 变更后提示重载 profile；
 - 不 fetch 任何 `/apollo/api/*`，不注册新插件的页面键。
 
 `exitGuard` 是 volatile：保存后不重挂本行；job 守卫下一次 `agent/turn-stopping` 即读取新值。
@@ -225,9 +226,9 @@ PTC deadline 豁免由独立的 `dsh-better-ptc` 单例行提供（无浏览器�
 | `subagents.eng` / `global` | 同名 | 目标缺字段且值不同才写；显式 false 是值 |
 | `subagents.codex/claude.*` | 同名 | 逐叶补齐：enabled、executable、profile（仅 codex）、permissionMode、defaultModel、models（含顺序/effort 元数据） |
 | `exitGuard` | Apollo `exitGuard` + `childExitGuard` | 两份相同初值，随后独立配置；当前目标显式值（含 false）各自优先 |
-| `trustedHosts` | `trustedHosts` | 非 volatile；目标 raw config 未声明且来源非空时用 `configEditor.edit` 写 |
+| `trustedHosts` | `trustedHosts` | 目标字段为 volatile；迁移仍走 `configEditor.edit` 写 raw config（目标未声明且来源非空才写） |
 
-写入：volatile 用 `settings.update(ns, patch, revision)`；非 volatile 用 target entry 的 `configEditor.edit`。`settings.update` 会触发 reconcile，可能替换目标 entry 对象，因此写 `trustedHosts` 前重新从 `entries()` 取目标 entry。写后重新 `describe()`/读 raw config 校验，任何字段不一致按 `error` 报告。
+写入：volatile 用 `settings.update(ns, patch, revision)`；`trustedHosts` 例外地走 target entry 的 `configEditor.edit` raw-config 路径。`settings.update` 会触发 reconcile，可能替换目标 entry 对象，因此写 `trustedHosts` 前重新从 `entries()` 取目标 entry。写后重新 `describe()`/读 raw config 校验，任何字段不一致按 `error` 报告。
 
 ### 压缩迁移
 
@@ -318,10 +319,10 @@ DSH_PACKAGE_ROOT="/…/node_modules/@deepseek-ai/dsh" npm run prompts
 ### npm 安装
 
 ```sh
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.6.5
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.7.0
 ```
 
-包发布后即可用此命令安装，并带入五个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。0.6.5 与 ask-user 0.1.7 已发布；registry 干净安装验证通过。
+包发布后即可用此命令安装，并带入五个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。本轮版本与精确依赖见上述包清单；发布后需重新验证 registry 干净安装。
 
 ### GitHub 源码安装
 
@@ -374,11 +375,11 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 
 ### npm 发布顺序
 
-两个子仓和 Apollo 都用 GitHub Release 触发 `.github/workflows/release.yml`，通过 npm trusted publishing（OIDC）发布，仓库里不存 npm token。tag 必须是 `v<package.json 的 version>`，CI 会先校验再跑测试和 `npm publish --provenance`。
+五个子仓和 Apollo 都用 GitHub Release 触发 `.github/workflows/release.yml`，通过 npm trusted publishing（OIDC）发布，仓库里不存 npm token。tag 必须是 `v<package.json 的 version>`，CI 会先校验再跑测试和 `npm publish --provenance`。
 
-1. 先发布 `dsh-better-ptc@0.1.0`、`dsh-better-ask-user@0.1.7`、`@menghuan1918/dsh-better-subagent@0.2.0`、`dsh-better-goal@0.2.1`、`dsh-better-compact@0.1.2`（各自仓库的 Release）；
+1. 先发布 `dsh-better-ptc@0.1.1`、`dsh-better-ask-user@0.2.0`、`@menghuan1918/dsh-better-subagent@0.3.0`、`dsh-better-goal@0.3.0`、`dsh-better-compact@0.2.0`（各自仓库的 Release）；
 2. 在官方 registry（`https://registry.npmjs.org/`）确认五个版本可取得、可安装；
-3. 再把 Apollo 的精确依赖指向已发布版本，推 main 并发布 Apollo Release（本轮为 `v0.6.5`）；
+3. 再把 Apollo 的精确依赖指向已发布版本，推已验证的发布提交及 tag 并发布 Apollo Release（本轮为 `v0.7.0`）；
 4. 子包版本可取得前，不要把指向它们的精确依赖推到 Apollo main，否则 `npm install` / GitHub 源码安装会 404。
 
 ## 测试与冒烟
@@ -400,7 +401,7 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh npm test
 | [tests/apply.test.mjs](../tests/apply.test.mjs) | 插件导出契约；技能 provider；只注入 settings（不再注入 webServer） |
 | [tests/assembly.test.mjs](../tests/assembly.test.mjs) | 顶层 patch 的禁用/插入行；精确依赖；与已安装独立 bundle 的跨包稳定行/engine 行比对；预设无第二份 registry/wait |
 | [tests/bundled-skills.test.mjs](../tests/bundled-skills.test.mjs) | 技能目录集合、frontmatter、相对资源、NOTICE 与引用完整性 |
-| [tests/client.test.mjs](../tests/client.test.mjs) | 最小行页：键注册、summary、exitGuard 保存/冲突/失败、只读/加载态、无网络/新插件页面键 |
+| [tests/client.test.mjs](../tests/client.test.mjs) | 行页保存/冲突/只读；集成设置 tab 漫游与草稿保留、共享表单订阅、外部更新及连续保存 revision |
 | [tests/config.test.mjs](../tests/config.test.mjs) | 常量、默认值与权限枚举、volatile 投影、normalize 规则、活配置读取 |
 | [tests/dsh-home.test.mjs](../tests/dsh-home.test.mjs) | `DSH_HOME` 的默认、绝对、`~`、相对与空白处理 |
 | [tests/exit-guard.test.mjs](../tests/exit-guard.test.mjs) | job-only 判断、终态过滤、source kind、SessionId 参数、fail-open、用户中断、无豁免 |
@@ -430,14 +431,23 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh node scripts/runtime-smo
 | `standalone` | 只选两个独立 bundle；无 Apollo 行/预设；global 范围渲染 delegation；`wait_subagent`/host-plane engine/手动压缩/inspect |
 | `both` | Apollo + 两个独立 bundle 同时显式选中；每行一个实例；行可读但写入被拒（rc.2 只读限制）；单实例工具/提示词仍工作 |
 
-通过标准：输出 `APOLLO_INTEGRATION_SMOKE_PASSED` 且进程退出码为 0。脚本不会修改用户当前 profile，也不会启动 Web GUI。
+通过标准：输出 `APOLLO_INTEGRATION_SMOKE_PASSED` 且进程退出码为 0。脚本不会修改用户当前 profile，也不会启动 Web GUI。默认复制 `node_modules` 中的安装包；联合验证尚未发布的子插件时，可设置 `APOLLO_PLUGIN_SOURCE_ROOT=/path/to/dsh-apollo/plugins`，按包名从本地子仓库复制同样的发布文件布局。registry 安装验证应不设该变量。
+
+### PTC 阻塞等待验证
+
+```sh
+DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh \
+APOLLO_PLUGIN_SOURCE_ROOT=/path/to/Code node scripts/ptc-smoke.mjs
+```
+
+脚本启动真实临时 `eng-ptc` profile，由确定性模型适配器发出 `run_code`，经真实工具注册表调用子代理与提问。1 秒程序预算下验证 2.5 秒子代理等待和提问不会提前超时，普通计算/普通嵌套工具仍会超时，阻塞调用结束后恢复剩余计时，用户取消传播到问题 carrier，后台 job 可被收集。它不调用付费模型或重启当前 GUI。PTC 包另有真实 Node worker 回归，覆盖并发等待、嵌套预算和合法特殊工具名。
 
 ### 真实验证边界
 
 - 本仓库不运行真实 Codex/Claude CLI；两个子包各自的 `cli-smoke` / runtime smoke 负责真实 CLI 生命周期。
 - 真实模型摘要保真、缓存命中率、S3 可视化页面的 GUI 验收不在 Apollo 侧冒烟内。
-- 未修改用户当前运行的 profile，未验证当前 GUI；当前 URL 以执行时 runtime context 为准。
-- 单元测试通过不等于 registry 发布/安装路径通过；五个子包的目标版本尚未发布，registry 安装路径未验证。
+- 当前 GUI 已验证深浅主题、窄屏、集成与独立入口和真实对话组件；测试不保存用户配置、不修改真实会话。
+- 单元测试通过不等于 registry 发布/安装路径通过；每次 Release 后均需核对 registry 和干净安装。
 
 ## 历史兼容
 
@@ -478,7 +488,7 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh node scripts/runtime-smo
 | [src/settings.js](../src/settings.js) | 行页面策略、旧文件导入、legacyImport 就绪 Promise |
 | [src/owns-host.js](../src/owns-host.js) | `declareOwnsHost` index tap（唯一 web helper） |
 | [src/migrate.js](../src/migrate.js) | 子代理/压缩迁移、有界等待、重读验证、pending/ambiguity |
-| [src/client.js](../src/client.js) | 最小行页（exitGuard + 迁移说明），无构建闭包工厂 |
+| [src/client.js](../src/client.js) | 通用行设置与集成设置工作台；宿主主题令牌、响应式图标导航、共享表单订阅，无构建闭包工厂 |
 | [scripts/render-prompts.mjs](../scripts/render-prompts.mjs) / [prompts/](../prompts/) | 真实装配的系统提示词快照及生成脚本 |
 | [scripts/runtime-smoke.mjs](../scripts/runtime-smoke.mjs) | 三组合真实宿主集成冒烟 |
 | [scripts/lib/profile.mjs](../scripts/lib/profile.mjs) | 临时 profile、发布布局复制、鉴权与行计数 helper |
@@ -498,7 +508,7 @@ release workflow 使用 npm trusted publishing：tag 必须等于 `package.json`
 
 ## 许可与致谢
 
-本包采用 **GPL-3.0-or-later**，全文见 [LICENSE](../LICENSE)。
+本包采用 **Apache-2.0**，全文见 [LICENSE](../LICENSE)。
 
 | 内容 | 来源 | 许可 |
 |---|---|---|

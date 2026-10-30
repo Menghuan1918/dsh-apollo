@@ -43,7 +43,11 @@ export function installed(name) {
 /** All four package sources used by the integration scenarios. */
 export async function packageSources() {
   const apollo = JSON.parse(await readFile(join(APOLLO_ROOT, 'package.json'), 'utf8'))
-  const source = (name) => installed(name)
+  // Local plugin checkouts are independent repositories. Opt in when validating
+  // unreleased changes together; registry verification keeps the installed defaults.
+  const source = (name) => process.env.APOLLO_PLUGIN_SOURCE_ROOT
+    ? resolve(process.env.APOLLO_PLUGIN_SOURCE_ROOT, name.split('/').at(-1))
+    : installed(name)
   const goal = source(GOAL_NAME)
   const subagent = source(SUBAGENT_NAME)
   const compact = source(COMPACT_NAME)
@@ -54,11 +58,11 @@ export async function packageSources() {
     if (manifest.name !== name) throw new Error(`${dir} is not ${name}`)
   }
   const apolloManifest = apollo
-  if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.2.0'
-    || apolloManifest.dependencies[COMPACT_NAME] !== '0.1.2'
-    || apolloManifest.dependencies[GOAL_NAME] !== '0.2.1'
-    || apolloManifest.dependencies[ASK_NAME] !== '0.1.7'
-    || apolloManifest.dependencies[PTC_NAME] !== '0.1.0') {
+  if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.3.0'
+    || apolloManifest.dependencies[COMPACT_NAME] !== '0.2.0'
+    || apolloManifest.dependencies[GOAL_NAME] !== '0.3.0'
+    || apolloManifest.dependencies[ASK_NAME] !== '0.2.0'
+    || apolloManifest.dependencies[PTC_NAME] !== '0.1.1') {
     throw new Error('Apollo dependencies must pin the verification versions')
   }
   return {

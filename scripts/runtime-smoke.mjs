@@ -365,6 +365,19 @@ async function scenarioApollo() {
         && event.data?.source?.kind === 'better-apollo-job-exit-guard'), 'the guard notice is durably logged with its producer kind')
       await waitUntil(() => ctx.get('jobs').list(guardAgent.id)
         .every((job) => ['completed', 'killed', 'failed'].includes(job.status)), 'background job to settle', 5_000)
+    } catch (error) {
+      const { currentConfig } = await import('../src/config.js')
+      results.jobGuard = {
+        state: state.jobGuard,
+        exitGuard: currentConfig(ctx).exitGuard,
+        jobs: ctx.get('jobs').list(guardAgent.id).map((job) => ({
+          ...job, output: ctx.get('jobs').readAt(job.id, 0, guardAgent.id),
+        })),
+        events: guardRecorder.events.filter((event) => ['tool/call', 'tool/result', 'turn/end'].includes(event.type)
+          || (event.type === 'user/message' && event.data?.source?.kind === 'better-apollo-job-exit-guard')),
+        eventTypes: guardRecorder.events.map((event) => event.type),
+      }
+      throw error
     } finally {
       state.jobGuard = undefined
       const again = (await ctx.settings.describe()).find((entry) => entry.ns === 'apollo-skills')
