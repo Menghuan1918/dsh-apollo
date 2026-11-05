@@ -75,8 +75,10 @@ flowchart TB
 
 | 预设（ID） | 适合 | 关键差异 |
 |---|---|---|
-| 工程模式 — `eng` | 编码 / 基础设施任务 | 原生工具调用；保留 workflow 工具 |
+| 工程模式(旧版，不建议使用) — `eng` | 旧会话兼容 | 原生工具调用；保留 workflow 工具 |
 | 工程(PTC)模式 — `eng-ptc` | 多步、循环、需要过滤汇总的任务 | 工具经 `run_code` 的 TypeScript SDK 调用；与官方 PTC 模式一致不提供 workflow |
+
+普通工程模式仅调整显示名，仍保留 `eng` 预设以恢复已有会话，不自动切换或迁移；`eng-ptc` 的名称与 ID 不变。
 
 在 PTC 模式里，`wait_subagent` / `ask_user_question` 的等待不消耗 `run_code` 的 elapsed budget；普通嵌套工具仍按原预算计时。该豁免由单例 `dsh-better-ptc` 行提供，ask-user 与 subagent 各自向同一服务注册。提问等待由 dsh-better-ask-user 统一管理，默认 120 秒；在它的行设置里可改为 `-1`，普通会话与 goal active 可分别选原 pending 或超时默认选择。两套预设的 `tool-ask-user` 不再固定 `timeout: -1`。
 

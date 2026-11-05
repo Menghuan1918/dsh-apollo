@@ -78,7 +78,7 @@ npm install
 
 ### 预设 ID 与历史会话
 
-`presets/eng.patch.yml` 和 `presets/eng-ptc.patch.yml` 是预设行清单的唯一事实源。`config.id` 必须保持 `eng` / `eng-ptc`，因为历史会话按预设 ID 恢复；`config.order` 分别是 10 和 11。`eng-noask` 已在 0.4.0 删除。`presets/eng/` 只承载两套预设共用的本地插件模块（exit-guard、mode-instructions），不承载第二份行清单。
+`presets/eng.patch.yml` 和 `presets/eng-ptc.patch.yml` 是预设行清单的唯一事实源。`config.id` 必须保持 `eng` / `eng-ptc`，因为历史会话按预设 ID 恢复；`config.order` 分别是 10 和 11。普通工程模式显示为“工程模式(旧版，不建议使用)”，仅改显示名，保留原行与插件构成以兼容已有会话；`eng-ptc` 仍显示为“工程(PTC)模式”，不自动迁移或切换会话。`eng-noask` 已在 0.4.0 删除。`presets/eng/` 只承载两套预设共用的本地插件模块（exit-guard、mode-instructions），不承载第二份行清单。
 
 ## Apollo 行：保留与弃用
 

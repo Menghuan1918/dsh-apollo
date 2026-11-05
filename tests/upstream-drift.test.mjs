@@ -120,12 +120,17 @@ function assertStandard(eng, standard) {
 }
 
 test('两份预设 patch 结构合法：身份稳定、bundle 引用唯一、无第二份行清单', () => {
-  for (const [file, id, order] of [[ENG, 'eng', 10], [PTC, 'eng-ptc', 11]]) {
+  for (const [file, id, name, order] of [
+    [ENG, 'eng', '工程模式(旧版，不建议使用)', 10],
+    [PTC, 'eng-ptc', '工程(PTC)模式', 11],
+  ]) {
     const patches = document(file)
     assert.equal(patches.length, 1)
     assert.equal(patches[0].insert.length, 1)
     const preset = declaration(file)
+    assert.equal(preset.id, `preset-${id}`)
     assert.equal(preset.config.id, id)
+    assert.equal(preset.config.name, name)
     assert.equal(preset.config.order, order)
     assert.ok(Array.isArray(preset.config.plugins) && preset.config.plugins.length)
     for (const legacy of ['agent.cordis.yml', 'preset.yml']) assert.equal(existsSync(join(ROOT, 'presets', id, legacy)), false)
