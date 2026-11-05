@@ -105,10 +105,10 @@ test('顶层 patch 禁用原生 goal 域与原生 compaction-basic，并插入�
   }
 })
 
-test('npm manifest：scoped 名、0.7.0、repository、publishConfig 与 license', () => {
+test('npm manifest：scoped 名、0.8.0、repository、publishConfig 与 license', () => {
   const m = manifest()
   assert.equal(m.name, PACKAGE_NAME)
-  assert.equal(m.version, '0.7.0')
+  assert.equal(m.version, '0.8.0')
   assert.equal(m.license, 'Apache-2.0')
   const license = readFileSync(join(ROOT, 'LICENSE'), 'utf8')
   assert.equal(createHash('sha256').update(license).digest('hex'), 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30')
@@ -125,7 +125,7 @@ test('npm manifest：scoped 名、0.7.0、repository、publishConfig 与 license
 test('package.json 把五个独立插件声明为精确 npm 版本', () => {
   const dependencies = manifest().dependencies ?? {}
   assert.equal(dependencies['dsh-better-goal'], '0.3.0', 'goal 依赖必须是精确 npm 版本')
-  assert.equal(dependencies[SUBAGENT_NAME], '0.3.0', 'better-subagent 依赖必须是精确 npm 版本')
+  assert.equal(dependencies[SUBAGENT_NAME], '0.3.1', 'better-subagent 依赖必须是精确 npm 版本')
   assert.equal(dependencies[COMPACT_NAME], '0.2.0', 'better-compact 依赖必须是精确 npm 版本')
   assert.equal(dependencies['dsh-better-ask-user'], '0.2.0', 'ask-user 依赖必须是精确 npm 版本')
   assert.equal(dependencies['dsh-better-ptc'], '0.1.1', 'ptc 依赖必须是精确 npm 版本')

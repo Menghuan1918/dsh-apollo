@@ -75,8 +75,10 @@ flowchart TB
 
 | 预设（ID） | 适合 | 关键差异 |
 |---|---|---|
-| 工程模式 — `eng` | 编码 / 基础设施任务 | 原生工具调用；保留 workflow 工具 |
+| 工程模式(旧版，不建议使用) — `eng` | 旧会话兼容 | 原生工具调用；保留 workflow 工具 |
 | 工程(PTC)模式 — `eng-ptc` | 多步、循环、需要过滤汇总的任务 | 工具经 `run_code` 的 TypeScript SDK 调用；与官方 PTC 模式一致不提供 workflow |
+
+普通工程模式仅调整显示名，仍保留 `eng` 预设以恢复已有会话，不自动切换或迁移；`eng-ptc` 的名称与 ID 不变。
 
 在 PTC 模式里，`wait_subagent` / `ask_user_question` 的等待不消耗 `run_code` 的 elapsed budget；普通嵌套工具仍按原预算计时。该豁免由单例 `dsh-better-ptc` 行提供，ask-user 与 subagent 各自向同一服务注册。提问等待由 dsh-better-ask-user 统一管理，默认 120 秒；在它的行设置里可改为 `-1`，普通会话与 goal active 可分别选原 pending 或超时默认选择。两套预设的 `tool-ask-user` 不再固定 `timeout: -1`。
 
@@ -90,13 +92,13 @@ flowchart TB
 
 ```sh
 # npm 安装（发布后）
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.7.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.8.0
 
 # 或从 GitHub main 源码安装（备选）
 dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 ```
 
-> **本轮版本**：Apollo `0.7.0`，搭配 PTC `0.1.1`、ask-user `0.2.0`、subagent `0.3.0`、goal `0.3.0`、compact `0.2.0`，统一 Apache-2.0 与新版界面。manifest 使用精确 npm 版本；发布顺序见[发布顺序](#发布顺序)。
+> **本轮版本**：Apollo `0.8.0`，搭配 PTC `0.1.1`、ask-user `0.2.0`、subagent `0.3.1`、goal `0.3.0`、compact `0.2.0`；普通工程模式标记旧版但保留旧会话，强化子代理耐心等待纪律。manifest 使用精确 npm 版本；发布顺序见[发布顺序](#发布顺序)。
 
 安装、升级或换包都会改变运行的代码，必须重启对应 profile 的 DSH 进程；只刷新网页不够。目标行、子代理行、压缩行、共享 PTC 行与 ask-user 行由 Apollo 的 bundle patch 插入，不需要再单独 `add` 五个子包。
 
@@ -106,7 +108,7 @@ dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
 
 ```sh
 dsh plugin --profile <profile> remove dsh-apollo
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.7.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.8.0
 ```
 
 > `dsh-apollo` 只是旧入口名；unscoped 的 `dsh-apollo` 已被其他项目占用，不要从 npm 安装它。
@@ -177,7 +179,7 @@ Apollo 包详情里的「集成设置」按通用、子代理、上下文压缩�
 
 ```sh
 # 只装子代理增强
-dsh plugin --profile <profile> add @menghuan1918/dsh-better-subagent@0.3.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-better-subagent@0.3.1
 
 # 只装压缩
 dsh plugin --profile <profile> add dsh-better-compact@0.2.0
@@ -238,7 +240,7 @@ dsh plugin --profile <profile> remove dsh-better-compact
 - `package.json` 的 `files` 只列入 `docs/DEVELOPMENT.md`，并额外用 [.npmignore](.npmignore) 排除 `docs/specs/`；
 - `tests/packaging.test.mjs` 直接运行 `npm pack --dry-run --json`，断言发布清单没有 Specs、测试、脚本、快照或 tarball。
 
-发布顺序：**先发布并验证五个独立包（先 `dsh-better-ptc@0.1.1`，再 `dsh-better-ask-user@0.2.0`、`@menghuan1918/dsh-better-subagent@0.3.0`、`dsh-better-goal@0.3.0`、`dsh-better-compact@0.2.0`），再发布 Apollo 0.7.0**。Apollo 的精确依赖指向尚不存在的版本时，`npm install` 会失败；不要用开发 `file:`/`link:` 依赖发布。各子仓各自有 trusted publishing workflow；Apollo 的 [release workflow](.github/workflows/release.yml) 只发布本包。
+发布顺序：**先发布并验证五个独立包（先 `dsh-better-ptc@0.1.1`，再 `dsh-better-ask-user@0.2.0`、`@menghuan1918/dsh-better-subagent@0.3.1`、`dsh-better-goal@0.3.0`、`dsh-better-compact@0.2.0`），再发布 Apollo 0.8.0**。Apollo 的精确依赖指向尚不存在的版本时，`npm install` 会失败；不要用开发 `file:`/`link:` 依赖发布。各子仓各自有 trusted publishing workflow；Apollo 的 [release workflow](.github/workflows/release.yml) 只发布本包。
 
 ## 验证状态（诚实记录）
 

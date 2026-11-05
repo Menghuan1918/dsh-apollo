@@ -2,7 +2,7 @@
 
 面向维护者、集成者和需要排查装配问题的用户。用户安装与配置请看 [README](../README.md)；本文保留 DSH 插件的实现细节、旧配置迁移、组合安装边界与验证方法。
 
-当前实现版本：`0.7.0`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
+当前实现版本：`0.8.0`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
 
 ## 目录
 
@@ -34,7 +34,7 @@
 | 依赖 | 版本 | 所有权 |
 |---|---|---|
 | `dsh-better-goal` | `0.3.0` | 目标域（`questionTimeoutSeconds` 已弃用、仅保留读取） |
-| `@menghuan1918/dsh-better-subagent` | `0.3.0` | 子代理 CLI/等待/child guard/分档/设置页；注册 `wait_subagent` PTC 豁免 |
+| `@menghuan1918/dsh-better-subagent` | `0.3.1` | 子代理 CLI/等待/child guard/分档/设置页；注册 `wait_subagent` PTC 豁免 |
 | `dsh-better-compact` | `0.2.0` | 压缩 companion + engine + 设置页/诊断 |
 | `dsh-better-ask-user` | `0.2.0` | 官方 `ask_user_question` 入参/返回 + 插件超时等待 + 历史预览行；注册 PTC 豁免；旧 goal 等待迁移 |
 | `dsh-better-ptc` | `0.1.1` | 单例 PTC deadline 豁免服务 |
@@ -78,7 +78,7 @@ npm install
 
 ### 预设 ID 与历史会话
 
-`presets/eng.patch.yml` 和 `presets/eng-ptc.patch.yml` 是预设行清单的唯一事实源。`config.id` 必须保持 `eng` / `eng-ptc`，因为历史会话按预设 ID 恢复；`config.order` 分别是 10 和 11。`eng-noask` 已在 0.4.0 删除。`presets/eng/` 只承载两套预设共用的本地插件模块（exit-guard、mode-instructions），不承载第二份行清单。
+`presets/eng.patch.yml` 和 `presets/eng-ptc.patch.yml` 是预设行清单的唯一事实源。`config.id` 必须保持 `eng` / `eng-ptc`，因为历史会话按预设 ID 恢复；`config.order` 分别是 10 和 11。普通工程模式显示为“工程模式(旧版，不建议使用)”，仅改显示名，保留原行与插件构成以兼容已有会话；`eng-ptc` 仍显示为“工程(PTC)模式”，不自动迁移或切换会话。`eng-noask` 已在 0.4.0 删除。`presets/eng/` 只承载两套预设共用的本地插件模块（exit-guard、mode-instructions），不承载第二份行清单。
 
 ## Apollo 行：保留与弃用
 
@@ -319,7 +319,7 @@ DSH_PACKAGE_ROOT="/…/node_modules/@deepseek-ai/dsh" npm run prompts
 ### npm 安装
 
 ```sh
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.7.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.8.0
 ```
 
 包发布后即可用此命令安装，并带入五个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。本轮版本与精确依赖见上述包清单；发布后需重新验证 registry 干净安装。
@@ -377,9 +377,9 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 
 五个子仓和 Apollo 都用 GitHub Release 触发 `.github/workflows/release.yml`，通过 npm trusted publishing（OIDC）发布，仓库里不存 npm token。tag 必须是 `v<package.json 的 version>`，CI 会先校验再跑测试和 `npm publish --provenance`。
 
-1. 先发布 `dsh-better-ptc@0.1.1`、`dsh-better-ask-user@0.2.0`、`@menghuan1918/dsh-better-subagent@0.3.0`、`dsh-better-goal@0.3.0`、`dsh-better-compact@0.2.0`（各自仓库的 Release）；
+1. 先发布 `dsh-better-ptc@0.1.1`、`dsh-better-ask-user@0.2.0`、`@menghuan1918/dsh-better-subagent@0.3.1`、`dsh-better-goal@0.3.0`、`dsh-better-compact@0.2.0`（各自仓库的 Release）；
 2. 在官方 registry（`https://registry.npmjs.org/`）确认五个版本可取得、可安装；
-3. 再把 Apollo 的精确依赖指向已发布版本，推已验证的发布提交及 tag 并发布 Apollo Release（本轮为 `v0.7.0`）；
+3. 再把 Apollo 的精确依赖指向已发布版本，推已验证的发布提交及 tag 并发布 Apollo Release（本轮为 `v0.8.0`）；
 4. 子包版本可取得前，不要把指向它们的精确依赖推到 Apollo main，否则 `npm install` / GitHub 源码安装会 404。
 
 ## 测试与冒烟

@@ -58,7 +58,7 @@ export async function packageSources() {
     if (manifest.name !== name) throw new Error(`${dir} is not ${name}`)
   }
   const apolloManifest = apollo
-  if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.3.0'
+  if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.3.1'
     || apolloManifest.dependencies[COMPACT_NAME] !== '0.2.0'
     || apolloManifest.dependencies[GOAL_NAME] !== '0.3.0'
     || apolloManifest.dependencies[ASK_NAME] !== '0.2.0'
