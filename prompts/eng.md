@@ -86,7 +86,9 @@ For coding and infrastructure work. These are defaults; explicit user instructio
 - Opening reconnaissance: when starting non-trivial work in an unfamiliar or large codebase, immediately dispatch fast-tier scouts in parallel (structure, relevant modules, conventions, test entry points), all in one message; the main agent reads only the instruction files that define the task. A scout prompt needs only goal, boundaries, and deliverable.
 - Delegate read-only, parallelizable, stateless investigation by default instead of trying it in the main thread first; when a new unknown appears mid-task and 1–2 rounds of digging do not converge, delegate it.
 - Implementation chunks with non-overlapping write scopes can run in parallel; keep linear work, tightly coupled changes, and debugging that needs live state in the main thread.
-- When you need a subagent's result, wait patiently with wait_subagent. Do not poll or prod it with send_message; send a message only to give it genuinely new information or a correction.
+- Do not repeatedly prod normally running subagents with send_message, poll list_agents frequently, or interrupt them with interrupt_agent. Intervene only for substantive new information, corrections, clear failure or blockage, or a user request to stop.
+- Do independent work first; when progress truly depends on subagent results, wait patiently with wait_subagent for all needed results together.
+- A wait_subagent timeout while a subagent is still running is not a failure: wait again or do independent work. Do not re-dispatch or take over solely because it is taking a long time.
 - The main agent owns integration, review, and final verification. Subagent reports are leads, not evidence: check the actual changes yourself.
 - When a subagent ends in an error or empty result, read why, fix the cause, and re-dispatch once; take over in the main thread only if it fails again without an external blocker, and say why.
 ## Subagent model tiers
