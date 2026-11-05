@@ -1,5 +1,5 @@
 /**
- * Apollo 0.5.x real-profile integration smoke.
+ * Apollo 0.9.0 / DSH 0.2.2-rc.1 real-profile integration smoke.
  *
  * Boots an isolated headless DSH profile from the installed runtime
  * (DSH_PACKAGE_ROOT), Apollo's shipped files and the three independent plugin
@@ -13,7 +13,7 @@
  *   standalone — the two independent bundles without Apollo.
  *   both       — Apollo and the standalone bundles selected explicitly:
  *                Loader still activates one row each, but configEditor/
- *                settings cannot address the duplicated rows (DSH 0.2.1-rc.2
+ *                settings cannot address the duplicated rows (DSH 0.2.2-rc.1
  *                unaddressable/read-only limitation).
  *
  * Run: DSH_PACKAGE_ROOT=… node scripts/runtime-smoke.mjs <apollo|standalone|both|all>
@@ -199,9 +199,17 @@ async function runTurn(agent, recorder, text) {
 }
 
 async function call(ctx, agent, name, args) {
-  const result = await ctx.tools.execute({ callId: randomUUID(), name, arguments: args, agent, signal: new AbortController().signal })
-  assert.equal(result.isError, false, `${name}: ${JSON.stringify(result)}`)
-  return result.value
+  const signal = new AbortController().signal
+  const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'it-noop', model: 'noop' }, signal })
+  try {
+    const batch = await ctx.tools.execute({
+      calls: [{ type: 'tool-call', id: randomUUID(), name, arguments: JSON.stringify(args) }],
+      agent, signal, toolSet,
+    })
+    const result = batch.results[0].result
+    assert.equal(result.isError, false, `${name}: ${JSON.stringify(result)}`)
+    return result.value
+  } finally { toolSet.dispose() }
 }
 
 async function inspectHttp(ctx, cookie, sessionId) {
@@ -476,7 +484,7 @@ async function scenarioBoth() {
     for (const id of ['dsh-better-compact', 'dsh-better-compact-engine', 'dsh-better-subagent', 'apollo-skills']) assertOneRow(counts, id)
     check('both-one-row-each')
 
-    // DSH 0.2.1-rc.2 keeps the rows readable but cannot write a profile
+    // DSH 0.2.2-rc.1 keeps the rows readable but cannot write a profile
     // override for an id inserted by two explicit bundle sources: configEditor
     // rejects the write as overridden. That is the documented unaddressable /
     // read-only limitation (the Web row manager label itself is UI-only and is

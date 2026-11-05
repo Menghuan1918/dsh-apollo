@@ -101,7 +101,17 @@ function track(promise) {
   return promise
 }
 async function execute(code, signal = new AbortController().signal, timeoutMs = BUDGET) {
-  return track(ctx.tools.execute({ callId: randomUUID(), name: 'run_code', arguments: { code, description: 'PTC smoke registry invocation', timeoutMs }, agent, signal }))
+  return track((async () => {
+    const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: PROVIDER, model: MODEL }, signal })
+    try {
+      const batch = await ctx.tools.execute({
+        calls: [{ type: 'tool-call', id: randomUUID(), name: 'run_code', arguments: JSON.stringify({ code, description: 'PTC smoke registry invocation', timeoutMs }) }],
+        agent, signal, toolSet,
+      })
+      assert.equal(batch.results.length, 1)
+      return batch.results[0].result
+    } finally { toolSet.dispose() }
+  })())
 }
 async function modelRun(name, code, expectError = false) {
   const prompt = 'PTC_SMOKE_SCENARIO ' + randomUUID()
@@ -134,7 +144,10 @@ try {
   assert.equal(ctx.ptcRuntime.programFormat, 'function-body')
   assert.ok(ctx.betterPtc, 'singleton exemption service is mounted')
   assert.equal(rowCounts(ctx).get('dsh-better-ptc'), 1)
-  assert.ok(ctx.tools.get('run_code', agent))
+  // run_code is executor-owned transport, not a registered capability in next.
+  const probe = await execute('return "ptc-executor-ready";')
+  assert.equal(probe.isError, false, JSON.stringify(probe))
+  assert.equal(probe.value.result, 'ptc-executor-ready')
   pass('real-eng-ptc-node-runtime-and-singleton')
 
   offQuestion = agent.ctx.on('user-questions/request', (request, next) => {

@@ -20,7 +20,7 @@
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: eng
-        name: 工程模式
+        name: 工程模式(旧版，不建议使用)
         description: >-
           面向编码与基础设施任务的工程 Agent：内置工程纪律、后台任务与子代理约定、由独立 goal 插件提供的长期目标续跑。
         order: 10
@@ -94,6 +94,8 @@
           # they need no realm. The `fs` service and its policy stay in the host.
           - id: tool-fs
             name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              applyPatch: false
 
           - id: tool-fs-search
             name: '@deepseek-ai/dsh-tool-fs-search'
@@ -242,15 +244,13 @@
               - id: tool-subagent-control
                 name: '@deepseek-ai/dsh-tool-subagent-control'
 
-              - id: tool-subagent-list-agents
-                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
-
               - id: tool-subagent
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: subagent
-                  modelSelectionSettings: true
+                  modelSelection: true
+                  modelDiscovery: true
 
               # Fork omits model selection so provider/model stay equal to the parent and
               # the inherited history remains eligible for KV Cache reuse.

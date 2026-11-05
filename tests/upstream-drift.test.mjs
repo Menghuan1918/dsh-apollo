@@ -116,16 +116,27 @@ function normalizedEng(rows) {
 
 function assertStandard(eng, standard) {
   const upstream = structuredClone(standard).filter((row) => !isDropped(row))
+  for (const row of flatten(upstream)) {
+    if (row.id === 'tool-plugin-manager' && row.disabled !== true) {
+      assert.deepEqual(row.disabled, { javascript: "!ctx.get('profileContext')" })
+      row.disabled = true
+    }
+  }
   assert.deepEqual(normalizedEng(eng), upstream, '预设存在白名单外差异（含嵌套配置、scope、disabled 和行序）')
 }
 
 test('两份预设 patch 结构合法：身份稳定、bundle 引用唯一、无第二份行清单', () => {
-  for (const [file, id, order] of [[ENG, 'eng', 10], [PTC, 'eng-ptc', 11]]) {
+  for (const [file, id, name, order] of [
+    [ENG, 'eng', '工程模式(旧版，不建议使用)', 10],
+    [PTC, 'eng-ptc', '工程(PTC)模式', 11],
+  ]) {
     const patches = document(file)
     assert.equal(patches.length, 1)
     assert.equal(patches[0].insert.length, 1)
     const preset = declaration(file)
+    assert.equal(preset.id, `preset-${id}`)
     assert.equal(preset.config.id, id)
+    assert.equal(preset.config.name, name)
     assert.equal(preset.config.order, order)
     assert.ok(Array.isArray(preset.config.plugins) && preset.config.plugins.length)
     for (const legacy of ['agent.cordis.yml', 'preset.yml']) assert.equal(existsSync(join(ROOT, 'presets', id, legacy)), false)
@@ -183,7 +194,7 @@ test('eng-ptc 恰为 eng + PTC 呈现 + 禁用 workflow', () => {
     if (row.id === 'workflow-ptc' || row.id === 'tool-workflow') row.disabled = true
   }
   expected.splice(expected.findIndex((row) => row.id === 'present'), 0, {
-    id: 'tool-presentation', name: '@deepseek-ai/dsh-agent-tool-presentation', config: { mode: 'ptc' },
+    id: 'tool-executor-ptc', name: '@deepseek-ai/dsh-tool-executor-ptc',
   })
   assert.deepEqual(rowsOf(PTC), expected)
 })
@@ -198,11 +209,11 @@ test('两份 patch 的完整模块导出子路径在目标 DSH 安装中均可�
   }
 })
 
-test('engines.dsh 覆盖新 RC 与正式版，拒绝旧接口及相邻主版本', (t) => {
+test('engines.dsh 只声明已验证的 next 候选版', (t) => {
   const layout = dshLayout(t)
   if (!layout) return
   const range = manifest().engines.dsh
   assert.equal(layout.semver.satisfies(layout.version, range), true)
-  for (const version of ['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1', '0.2.2']) assert.equal(layout.semver.satisfies(version, range), true, version)
-  for (const version of ['0.1.7-rc.2', '0.2.0-rc.2', '0.2.0', '0.2.1-alpha.5', '0.2.1-rc.1', '0.3.0']) assert.equal(layout.semver.satisfies(version, range), false, version)
+  assert.equal(range, '0.2.2-rc.1')
+  for (const version of ['0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-alpha.3', '0.2.2', '0.3.0']) assert.equal(layout.semver.satisfies(version, range), false, version)
 })

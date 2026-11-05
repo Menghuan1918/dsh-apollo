@@ -2,7 +2,7 @@
 
 面向维护者、集成者和需要排查装配问题的用户。用户安装与配置请看 [README](../README.md)；本文保留 DSH 插件的实现细节、旧配置迁移、组合安装边界与验证方法。
 
-当前实现版本：`0.7.0`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
+当前实现版本：`0.9.0`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
 
 ## 目录
 
@@ -33,15 +33,15 @@
 
 | 依赖 | 版本 | 所有权 |
 |---|---|---|
-| `dsh-better-goal` | `0.3.0` | 目标域（`questionTimeoutSeconds` 已弃用、仅保留读取） |
-| `@menghuan1918/dsh-better-subagent` | `0.3.0` | 子代理 CLI/等待/child guard/分档/设置页；注册 `wait_subagent` PTC 豁免 |
-| `dsh-better-compact` | `0.2.0` | 压缩 companion + engine + 设置页/诊断 |
-| `dsh-better-ask-user` | `0.2.0` | 官方 `ask_user_question` 入参/返回 + 插件超时等待 + 历史预览行；注册 PTC 豁免；旧 goal 等待迁移 |
-| `dsh-better-ptc` | `0.1.1` | 单例 PTC deadline 豁免服务 |
-| `@deepseek-ai/schemastery` | `~3.18.4` | Apollo 行 Config |
+| `dsh-better-goal` | `0.4.0` | 目标域（`questionTimeoutSeconds` 已弃用、仅保留读取） |
+| `@menghuan1918/dsh-better-subagent` | `0.4.0` | 子代理 CLI/等待/child guard/分档/设置页；注册 `wait_subagent` PTC 豁免 |
+| `dsh-better-compact` | `0.3.0` | 压缩 companion + engine + 设置页/诊断 |
+| `dsh-better-ask-user` | `0.3.0` | 官方 `ask_user_question` 入参/返回 + 插件超时等待 + 历史预览行；注册 PTC 豁免；旧 goal 等待迁移 |
+| `dsh-better-ptc` | `0.2.0` | 单例 PTC deadline 豁免服务 |
+| `@deepseek-ai/schemastery` | `~3.19.0` | Apollo 行 Config |
 | `react` | peer | 宿主提供 |
 
-正式安装从 npm registry 获取上述精确版本，不需要本地 tarball 或 link：
+发布前隔离验证使用本地 tarball；发布顺序中每个依赖在官方 registry 可取得后，再用 npm 重新生成真实 registry lock，并干净安装验证。manifest 始终保留精确 npm 版本，不伪造 registry URL。正式发布提交可直接运行：
 
 ```sh
 npm install
@@ -78,7 +78,7 @@ npm install
 
 ### 预设 ID 与历史会话
 
-`presets/eng.patch.yml` 和 `presets/eng-ptc.patch.yml` 是预设行清单的唯一事实源。`config.id` 必须保持 `eng` / `eng-ptc`，因为历史会话按预设 ID 恢复；`config.order` 分别是 10 和 11。`eng-noask` 已在 0.4.0 删除。`presets/eng/` 只承载两套预设共用的本地插件模块（exit-guard、mode-instructions），不承载第二份行清单。
+`presets/eng.patch.yml` 和 `presets/eng-ptc.patch.yml` 是预设行清单的唯一事实源。`config.id` 必须保持 `eng` / `eng-ptc`，因为历史会话按预设 ID 恢复；`config.order` 分别是 10 和 11。`eng` 显示为“工程模式(旧版，不建议使用)”，`eng-ptc` 仍为“工程(PTC)模式”；仅改显示名，不自动迁移或切换历史会话。`eng-noask` 已在 0.4.0 删除。`presets/eng/` 只承载两套预设共用的本地插件模块（exit-guard、mode-instructions），不承载第二份行清单。
 
 ## Apollo 行：保留与弃用
 
@@ -91,7 +91,7 @@ npm install
 
 **不再负责**：CLI 协议/适配/身份 KV、`wait_subagent`、能力/模型/路由 HTTP 探针、子代理设置页、模型分档与委派提示词生成、运行中子代理退出判断。Apollo 不注册任何 HTTP 路由；`/apollo/api/*` 由 better-subagent 作为只读兼容别名拥有，重复注册同一 `(kind, path)` 会被 webServer 拒绝。
 
-PTC deadline 豁免由独立的 `dsh-better-ptc` 单例行提供（无浏览器半边、无设置页）：它包裹挂载的 PTC runtime 的 prototype `run`，在已注册工具（`wait_subagent` / `ask_user_question`）在途时暂停 `run_code` 的 elapsed budget，返回后继续剩余预算；普通嵌套工具仍消耗预算。ask-user 与 subagent 都只插入同一个稳定行并调用 `ctx.betterPtc.register(...)`，Loader 去重保证只有一份服务和一层包装。没有 `ptcRuntime` 或 runtime 不提供 numeric timeout 时注册为 no-op。
+PTC deadline 豁免由独立的 `dsh-better-ptc` 单例行提供（无浏览器半边、无设置页）：它包裹挂载的 PTC runtime 的 prototype `run`，在已注册工具（`wait_subagent` / `ask_user_question` / `exit_plan_mode`）在途时暂停 `run_code` 的 elapsed budget，返回后继续剩余预算；普通嵌套工具仍消耗预算。ask-user 与 subagent 都只插入同一个稳定行并调用 `ctx.betterPtc.register(...)`，Loader 去重保证只有一份服务和一层包装。服务自身默认注册 `exit_plan_mode`，其计划审批不设置超时、不自动批准，且不受普通问题的超时默认选择影响；取消和卸载仍能中止等待。保留宿主 `run(spec)` 与 numeric/null timeout 契约，不增加另一层包装。
 
 ### 配置分类
 
@@ -293,7 +293,7 @@ DSH_PACKAGE_ROOT="/…/node_modules/@deepseek-ai/dsh" npm run prompts
 - 独立安装不需要 Apollo 的 `eng` / `eng-ptc` 预设；better-subagent 在无这些预设时用 `subagents.global` 决定是否渲染/路由；
 - 不复制 CLI 身份 KV：命名空间仍是 `apollo_cli_<sha256(profile.dir)[:16]>`，包名变化不重命名、不复制、不清空。
 
-### 双显式 bundle 限制（DSH 0.2.1-rc.2）
+### 双显式 bundle 限制（DSH 0.2.2-rc.1）
 
 同一 profile 同时显式选择 Apollo 与独立 better-subagent / better-compact 时：
 
@@ -319,7 +319,7 @@ DSH_PACKAGE_ROOT="/…/node_modules/@deepseek-ai/dsh" npm run prompts
 ### npm 安装
 
 ```sh
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.7.0
+dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.9.0
 ```
 
 包发布后即可用此命令安装，并带入五个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。本轮版本与精确依赖见上述包清单；发布后需重新验证 registry 干净安装。
@@ -363,7 +363,7 @@ dsh --profile <profile> --dump-config
 - 升级包后重启 profile；0.4.x → 0.5.x 的迁移见 [旧配置迁移](#旧配置迁移)；
 - 迁移写入的 compact 设置需要再重载一次才会被运行中引擎采用；
 - 升级 DSH 后先跑 `npm test`，漂移测试会按目标 DSH 安装比较预设；
-- 版本范围声明：Node `^22.19.0 || >=24.0.0`，DSH `>=0.2.1-rc.2 <0.3.0`；声明范围接受预发布版，不等于逐版验证保证。
+- 版本契约：Node `>=24.9.0`，DSH 精确 `0.2.2-rc.1`；只针对该 next 发布包验收，不实现旧 RC 兼容层。
 
 ### 卸载
 
@@ -375,14 +375,27 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 
 ### npm 发布顺序
 
+本轮按以下顺序通过 GitHub Release 发布 npm；仅推送隔离发布分支与 tag，不修改共享 main，不升级/重启现有 3384 GUI。
+
 五个子仓和 Apollo 都用 GitHub Release 触发 `.github/workflows/release.yml`，通过 npm trusted publishing（OIDC）发布，仓库里不存 npm token。tag 必须是 `v<package.json 的 version>`，CI 会先校验再跑测试和 `npm publish --provenance`。
 
-1. 先发布 `dsh-better-ptc@0.1.1`、`dsh-better-ask-user@0.2.0`、`@menghuan1918/dsh-better-subagent@0.3.0`、`dsh-better-goal@0.3.0`、`dsh-better-compact@0.2.0`（各自仓库的 Release）；
+1. 先发布 `dsh-better-ptc@0.2.0`、`dsh-better-ask-user@0.3.0`、`@menghuan1918/dsh-better-subagent@0.4.0`、`dsh-better-goal@0.4.0`、`dsh-better-compact@0.3.0`（各自仓库的 Release）；
 2. 在官方 registry（`https://registry.npmjs.org/`）确认五个版本可取得、可安装；
-3. 再把 Apollo 的精确依赖指向已发布版本，推已验证的发布提交及 tag 并发布 Apollo Release（本轮为 `v0.7.0`）；
+3. 再把 Apollo 的精确依赖指向已发布版本，推已验证的发布提交及 tag 并发布 Apollo Release（本轮为 `v0.9.0`；`v0.8.0` 已被旧宿主版本占用，不移动该 tag）；
 4. 子包版本可取得前，不要把指向它们的精确依赖推到 Apollo main，否则 `npm install` / GitHub 源码安装会 404。
 
 ## 测试与冒烟
+
+### 0.2.2-rc.1 验证契约
+
+- 精确 npm 宿主：`@deepseek-ai/dsh@0.2.2-rc.1`，Node `>=24.9.0`。`PROFILE_TEMPLATES` 从 `dsh-official-bundles` 导入，不再从 `dsh-app-boot` 导入。
+- 工具准入：先 `tools.resolve({ agent, modelSelection, signal })`，再将同一 `toolSet` 传入 prompt assemble 与 batch `tools.execute({ calls, agent, signal, toolSet })`；结束后 dispose。presentation waterfall 不得改写工具定义。
+- projection 注册必须等待完成再读取；turn boundary 改走 AgentRegistry 的公开接口。compact 不通过覆盖宿主私有 `compactPressure` 扩展行为。
+- 两套预设对齐新版 planning、`tool-fs.applyPatch:false`、`modelSelection/modelDiscovery`；PTC 使用 `tool-executor-ptc`。`list_agents` 由原生 control 提供，不再挂已删除的额外子路径。
+- 临时 profile 禁用 headless parser 后，需显式替换 `sandbox-policy` 的 `inject` 与配置，否则新版 headless bundle 引入的 `headlessStartup` 依赖会让 fs/shell/PTC 一直 pending。
+- 解析锚点必须是临时 profile 的 manifest，并通过 `runProfile.resolvedProfile` 传入；不得从宿主安装目录的祖先误加载旧插件。helper 对自有 bundle 的实际 `packageDir` 作断言。共享 host 的依赖保持只读。
+- `tests/plan-review.runtime.test.mjs` 覆盖真实 plan-mode → userQuestions → PTC Node runtime，等待超过 elapsed budget 和普通提问超时后仍需明确决策，且验证取消与剩余预算恢复。
+- 当前 GUI 不作为 next 运行环境；模块/DOM 验证与真实浏览器、WebSocket、桌面实机验收分开记录。
 
 ### 单元、组件与契约测试
 
@@ -394,7 +407,14 @@ npm test
 DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh npm test
 ```
 
-测试栈使用 Node 内置 `node:test`。额外依赖只有 `js-yaml`、React 和 React TestRenderer；不需要构建或启动 Web 服务。测试文件：
+测试栈使用 Node 内置 `node:test`。普通测试依赖 `js-yaml`、React 和 React TestRenderer；启用真实 next 客户端专项时，还须安装独立支持环境（不进入发布包、不修改宿主依赖）：
+
+```sh
+npm ci --prefix tests/fixtures/client-support
+DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh node --test tests/client.runtime.test.mjs
+```
+
+可用 `DSH_CLIENT_TEST_ROOT` 指向另一支持环境目录。该目录锁定真实 shell seed、DOM、Markdown 与 RemoteMock 所需依赖；目标版官方 client-test-runtime 发布入口仍引用未交付的源码路径，不能直接 Node 导入，因此专项使用真实 ClientModuleSystem、renderer 和 shell seeds，只为 CSS 提供 Node hook，不替换 JS 实现。无需启动 Web 服务。测试文件：
 
 | 文件 | 覆盖重点 |
 |---|---|
@@ -402,6 +422,9 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh npm test
 | [tests/assembly.test.mjs](../tests/assembly.test.mjs) | 顶层 patch 的禁用/插入行；精确依赖；与已安装独立 bundle 的跨包稳定行/engine 行比对；预设无第二份 registry/wait |
 | [tests/bundled-skills.test.mjs](../tests/bundled-skills.test.mjs) | 技能目录集合、frontmatter、相对资源、NOTICE 与引用完整性 |
 | [tests/client.test.mjs](../tests/client.test.mjs) | 行页保存/冲突/只读；集成设置 tab 漫游与草稿保留、共享表单订阅、外部更新及连续保存 revision |
+| [tests/client.runtime.test.mjs](../tests/client.runtime.test.mjs) | 真实 next loader、全部 inject、SlotRegistry、ConfigForms、Modal、实际 Host YAML 保存与旧 revision CAS 拒绝 |
+| [tests/plan-review.runtime.test.mjs](../tests/plan-review.runtime.test.mjs) | standalone/Apollo 的真实计划审批等待、批准/继续/取消、剩余预算和外层取消 |
+| [tests/preset-compat.runtime.test.mjs](../tests/preset-compat.runtime.test.mjs) | eng/eng-ptc 同 profile 冷恢复：原 sessionId/header/history/title、预设投影驱动挂载、prompt 与工具可用性 |
 | [tests/config.test.mjs](../tests/config.test.mjs) | 常量、默认值与权限枚举、volatile 投影、normalize 规则、活配置读取 |
 | [tests/dsh-home.test.mjs](../tests/dsh-home.test.mjs) | `DSH_HOME` 的默认、绝对、`~`、相对与空白处理 |
 | [tests/exit-guard.test.mjs](../tests/exit-guard.test.mjs) | job-only 判断、终态过滤、source kind、SessionId 参数、fail-open、用户中断、无豁免 |
@@ -418,7 +441,7 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh npm test
 
 ### 真实宿主集成冒烟（无凭据、脚本化 LLM）
 
-[scripts/runtime-smoke.mjs](../scripts/runtime-smoke.mjs) 使用 [scripts/lib/profile.mjs](../scripts/lib/profile.mjs) 建临时 home/profile，按各包 `files` 清单复制 Apollo + 三个独立包，注册脚本化适配器（不启动真实 CLI、不需要模型凭据）：
+[scripts/runtime-smoke.mjs](../scripts/runtime-smoke.mjs) 使用 [scripts/lib/profile.mjs](../scripts/lib/profile.mjs) 建临时 home/profile，按各包 `files` 清单复制 Apollo + 五个独立包，注册脚本化适配器（不启动真实 CLI、不需要模型凭据）：
 
 ```sh
 DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh node scripts/runtime-smoke.mjs apollo
@@ -429,7 +452,7 @@ DSH_PACKAGE_ROOT=/path/to/node_modules/@deepseek-ai/dsh node scripts/runtime-smo
 |---|---|
 | `apollo` | 每个稳定行恰好一个实例；迁移旧行/旧预设配置并重载采用 engine 快照；真实 `eng` 回合与 prompt section；native `subagent` → `wait_subagent`；手动 `/compact` 经 better-compact 预设 engine；HTTP inspect；真实后台 job 退出守卫（启动 job → steer → 模型 job_kill → 回合收尾）；保存 compact 设置 → `requiresReload` → 重启 → `activeConfig` 更新 |
 | `standalone` | 只选两个独立 bundle；无 Apollo 行/预设；global 范围渲染 delegation；`wait_subagent`/host-plane engine/手动压缩/inspect |
-| `both` | Apollo + 两个独立 bundle 同时显式选中；每行一个实例；行可读但写入被拒（rc.2 只读限制）；单实例工具/提示词仍工作 |
+| `both` | Apollo + 两个独立 bundle 同时显式选中；每行一个实例；行可读但写入被拒（rc.1 只读限制）；单实例工具/提示词仍工作 |
 
 通过标准：输出 `APOLLO_INTEGRATION_SMOKE_PASSED` 且进程退出码为 0。脚本不会修改用户当前 profile，也不会启动 Web GUI。默认复制 `node_modules` 中的安装包；联合验证尚未发布的子插件时，可设置 `APOLLO_PLUGIN_SOURCE_ROOT=/path/to/dsh-apollo/plugins`，按包名从本地子仓库复制同样的发布文件布局。registry 安装验证应不设该变量。
 
@@ -446,7 +469,7 @@ APOLLO_PLUGIN_SOURCE_ROOT=/path/to/Code node scripts/ptc-smoke.mjs
 
 - 本仓库不运行真实 Codex/Claude CLI；两个子包各自的 `cli-smoke` / runtime smoke 负责真实 CLI 生命周期。
 - 真实模型摘要保真、缓存命中率、S3 可视化页面的 GUI 验收不在 Apollo 侧冒烟内。
-- 当前 GUI 已验证深浅主题、窄屏、集成与独立入口和真实对话组件；测试不保存用户配置、不修改真实会话。
+- 本轮未升级或重启当前 `http://127.0.0.1:3384` GUI；其旧宿主界面不计入 next 验收。客户端专项使用真实模块加载器与隔离 DOM，不等于浏览器/WebSocket E2E 或桌面实机。
 - 单元测试通过不等于 registry 发布/安装路径通过；每次 Release 后均需核对 registry 和干净安装。
 
 ## 历史兼容
@@ -470,7 +493,7 @@ APOLLO_PLUGIN_SOURCE_ROOT=/path/to/Code node scripts/ptc-smoke.mjs
 
 ### 版本范围
 
-`engines.dsh` 是 `>=0.2.1-rc.2 <0.3.0`。写法包含预发布版，因此后续 RC 可能落在范围内；这不等于逐版验证。升级 DSH 后应运行漂移测试：上游新增而 eng 没跟上的行会失败；被有意剔除/替换的原生行会先断言仍存在于上游，再被过滤；本地新增行、engine 替换和调参必须精确匹配白名单。
+`engines.dsh` 精确为 `0.2.2-rc.1`，Node `>=24.9.0`；Cordis `~4.1.0`、Schemastery `~3.19.0`。本轮只对该 next 发布包验收，不承诺其他 RC 或旧版本。升级 DSH 后仍须重新运行漂移与真实运行时测试，不能仅放宽版本声明。历史配置键、包名、row ID、预设 ID 和兼容 URL 别名保留，不等于维护旧宿主 API 分支。
 
 ## 实现入口、打包与发布
 

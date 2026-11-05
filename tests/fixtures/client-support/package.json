@@ -1,0 +1,43 @@
+{
+  "name": "apollo-client-test-support",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.9.0"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-client-store": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-remote-mock": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-util-code-language": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-util-file-drag": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-util-workspace-path": "0.2.2-rc.1",
+    "@shikijs/langs": "4.6.0",
+    "@tanstack/react-virtual": "3.14.26",
+    "anser": "2.3.5",
+    "clsx": "2.1.1",
+    "diff": "9.0.0",
+    "immer": "11.2.9",
+    "jsdom": "31.0.0",
+    "katex": "0.19.1",
+    "mdast-util-from-markdown": "2.1.0",
+    "mdast-util-gfm": "3.1.0",
+    "mdast-util-math": "3.0.0",
+    "micromark-core-commonmark": "2.0.4",
+    "micromark-extension-gfm": "3.0.0",
+    "micromark-extension-math": "3.1.0",
+    "micromark-factory-space": "2.1.0",
+    "micromark-util-character": "2.1.1",
+    "micromark-util-classify-character": "2.0.1",
+    "micromark-util-decode-string": "2.0.1",
+    "micromark-util-sanitize-uri": "2.0.1",
+    "micromark-util-symbol": "2.0.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "shiki": "4.6.0",
+    "simple-icons": "16.31.0",
+    "zustand": "5.0.16"
+  }
+}

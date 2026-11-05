@@ -58,11 +58,11 @@ export async function packageSources() {
     if (manifest.name !== name) throw new Error(`${dir} is not ${name}`)
   }
   const apolloManifest = apollo
-  if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.3.0'
-    || apolloManifest.dependencies[COMPACT_NAME] !== '0.2.0'
-    || apolloManifest.dependencies[GOAL_NAME] !== '0.3.0'
-    || apolloManifest.dependencies[ASK_NAME] !== '0.2.0'
-    || apolloManifest.dependencies[PTC_NAME] !== '0.1.1') {
+  if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.4.0'
+    || apolloManifest.dependencies[COMPACT_NAME] !== '0.3.0'
+    || apolloManifest.dependencies[GOAL_NAME] !== '0.4.0'
+    || apolloManifest.dependencies[ASK_NAME] !== '0.3.0'
+    || apolloManifest.dependencies[PTC_NAME] !== '0.2.0') {
     throw new Error('Apollo dependencies must pin the verification versions')
   }
   return {
@@ -125,10 +125,11 @@ export async function prepareProfile(options = {}) {
   process.env.DSH_HOME = resolve(home)
   process.env.DSH_TELEMETRY_DISABLED = '1'
   const appBoot = await import(hostPackage('dsh-app-boot/lib/index.js'))
+  const { PROFILE_TEMPLATES } = await import(hostPackage('dsh-official-bundles/lib/index.js'))
   const profile = options.profile ?? 'it'
   const dir = appBoot.resolveProfileDir(profile, home)
   const bundles = options.bundles ?? [sources.apollo.name]
-  appBoot.initProfile(dir, [...appBoot.PROFILE_TEMPLATES.headless.bundles, ...bundles])
+  appBoot.initProfile(dir, [...PROFILE_TEMPLATES.headless.bundles, ...bundles])
   await mkdir(join(dir, 'node_modules'), { recursive: true })
   const copied = new Map()
   for (const source of [sources.apollo, sources.goal, sources.subagent, sources.compact, sources.ask, sources.ptc]) {
@@ -148,7 +149,13 @@ export async function prepareProfile(options = {}) {
   for (const [name, target] of copied) manifest.dependencies[name] = `file:${target}`
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
   await writeFile(join(dir, 'cordis.yml'), '[]\n')
-  await writeFile(join(dir, 'cordis.patch.yml'), JSON.stringify(options.patch ?? [], null, 2))
+  // Tests disable the headless CLI parser. Replace its startup-dependent policy
+  // with an explicit temporary-workspace policy rather than leaving fs/PTC pending.
+  const patch = [
+    { id: 'sandbox-policy', inject: [], config: { mode: 'workspace-write', workspaceRoot: home, additionalWritableRoots: [] } },
+    ...(options.patch ?? []),
+  ]
+  await writeFile(join(dir, 'cordis.patch.yml'), JSON.stringify(patch, null, 2))
   return {
     home: resolve(home),
     dir,
@@ -163,7 +170,18 @@ export async function prepareProfile(options = {}) {
 /** Boot the prepared profile and return its host context. */
 export async function bootProfile(profileInfo) {
   const { runProfile } = await import(hostPackage('dsh/lib/profile-boot.js'))
+  // Resolve bundles from the prepared profile, not from ancestors of the DSH
+  // install (which may contain older Apollo/plugin packages).
+  const installAnchor = join(profileInfo.dir, 'package.json')
+  const profile = profileInfo.appBoot.loadProfile('dsh', profileInfo.profile, installAnchor, profileInfo.home)
+  const localNames = new Set(Object.values(profileInfo.sources).map((source) => source.name))
+  for (const layer of profile.layers) {
+    if (localNames.has(layer.packageName) && resolve(layer.packageDir) !== resolve(profileInfo.profilePackage(layer.packageName))) {
+      throw new Error(`Bundle ${layer.packageName} resolved outside the prepared profile: ${layer.packageDir}`)
+    }
+  }
   const booted = await runProfile({
+    resolvedProfile: { profile, installAnchor },
     profile: profileInfo.profile,
     patchFiles: [],
     args: [],

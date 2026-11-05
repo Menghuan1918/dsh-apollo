@@ -3,7 +3,7 @@
 # A copy of the eng plugins block (presets/eng.patch.yml — read that file for
 # the per-row rationale) with exactly the deltas the upstream `ptc` preset
 # applies to `standard`:
-#   - `tool-presentation { mode: ptc }`: every tool is reached through the
+#   - `tool-executor-ptc`: every tool is reached through the
 #     run_code TypeScript SDK (needs the host `ptc-runtime` row);
 #   - `workflow-ptc` and `tool-workflow` disabled: PTC fans out by calling
 #     subagent several times inside one run_code program instead;
@@ -51,6 +51,8 @@
 
           - id: tool-fs
             name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              applyPatch: false
 
           - id: tool-fs-search
             name: '@deepseek-ai/dsh-tool-fs-search'
@@ -119,15 +121,13 @@
               - id: tool-subagent-control
                 name: '@deepseek-ai/dsh-tool-subagent-control'
 
-              - id: tool-subagent-list-agents
-                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
-
               - id: tool-subagent
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: subagent
-                  modelSelectionSettings: true
+                  modelSelection: true
+                  modelDiscovery: true
 
               - id: tool-subagent-fork
                 name: '@deepseek-ai/dsh-tool-subagent'
@@ -159,10 +159,8 @@
               fetch: true
               searchTimeoutMs: 60000
 
-          - id: tool-presentation
-            name: '@deepseek-ai/dsh-agent-tool-presentation'
-            config:
-              mode: ptc
+          - id: tool-executor-ptc
+            name: '@deepseek-ai/dsh-tool-executor-ptc'
 
           - id: present
             name: '@deepseek-ai/dsh-tool-present'

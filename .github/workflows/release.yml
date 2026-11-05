@@ -7,9 +7,8 @@
 # with exactly the version in package.json.
 #
 # Release order (Apollo 0.5.0+): publish and verify the exact dependency
-# versions in the two child repositories FIRST —
-# the exact better-subagent / better-compact versions in package.json —
-# then tag Apollo. This workflow's `npm install` cannot resolve unpublished
+# versions in all five child repositories FIRST (PTC before its dependents),
+# then tag Apollo. This workflow's `npm ci` cannot resolve unpublished
 # exact dependencies; it is not a place to substitute file:/link: specs.
 name: release
 
@@ -42,7 +41,7 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Test
         run: npm test

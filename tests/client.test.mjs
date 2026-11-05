@@ -280,6 +280,7 @@ test('ready：只渲染 exitGuard 开关、样式表与迁移说明；不再有�
   assert.match(pageText(renderer), /deprecatedBody/)
   assert.equal(saveButton(renderer).props.disabled, true, '无改动时保存不可用')
   assert.equal(resetButton(renderer).props.disabled, true)
+  assert.equal(renderer.root.findByProps({ className: 'apollo-footer' }).props.hidden, true, '无改动时保存栏不占位')
 
   await page.update()
   assert.equal(byType(renderer, 'style').length, 1, '重渲染不重复注入样式')
@@ -291,6 +292,8 @@ test('切换开关 → 保存只提交 exitGuard set 操作并带当前 revision
   await page.run(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
   assert.equal(byId(renderer, 'apollo-exit-guard').props['aria-checked'], true)
   assert.equal(saveButton(renderer).props.disabled, false)
+  assert.equal(renderer.root.findByProps({ className: 'apollo-footer' }).props.hidden, false)
+  assert.equal(renderer.root.findByProps({ className: 'apollo-cfg' }).props['data-settings-dirty'], true)
 
   await page.run(async () => {
     saveButton(renderer).props.onClick()
@@ -346,6 +349,7 @@ test('挂起态：saving 且控件禁用；完成后恢复', async () => {
   await page.run(async () => { byId(renderer, 'apollo-exit-guard').props.onClick() })
   await page.run(async () => { saveButton(renderer).props.onClick() })
   assert.equal(textOf(saveButton(renderer).props.children), 'saving')
+  assert.equal(saveButton(renderer).props['aria-busy'], true)
   assert.equal(saveButton(renderer).props.disabled, true)
   assert.equal(byId(renderer, 'apollo-exit-guard').props.disabled, true)
   await page.run(async () => { pending.finish(true) })

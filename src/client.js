@@ -60,6 +60,7 @@ window.__ModuleLoader__.load({
 			summary: '后台任务退出守卫与兼容性说明',
 			title: '通用',
 			connectionTitle: '连接与访问',
+			guardTitle: '退出守卫',
 			ownsHostLabel: '将反代页面声明为可信宿主',
 			ownsHostHint: '仅在你控制访问权限的可信反向代理后启用。这会允许该页面写入宿主设置；不改变子代理 API 的可信地址列表。',
 			ownsHostReload: '保存后需重载 profile 并刷新页面。',
@@ -91,7 +92,12 @@ window.__ModuleLoader__.load({
 			hubTitle: 'Apollo',
 			hubEmpty: '暂无可用的子插件设置：子插件客户端尚未注册设置页，或本部署未组合设置服务。',
 			close: '关闭',
+			unsavedTitle: '有未保存的改动',
+			unsavedBody: '关闭将放弃各页面尚未保存的设置。',
+			keepEditing: '继续编辑',
+			discardClose: '放弃并关闭',
 			entryError: '此设置区加载失败：',
+			retry: '重新加载',
 			pluginApollo: '通用',
 			pluginSubagent: '子代理',
 			pluginCompact: '上下文压缩',
@@ -103,6 +109,7 @@ window.__ModuleLoader__.load({
 			summary: 'Background-job exit guard and compatibility notes',
 			title: 'General',
 			connectionTitle: 'Connection and access',
+			guardTitle: 'Exit guard',
 			ownsHostLabel: 'Trust this reverse-proxied page as the host',
 			ownsHostHint: 'Enable only behind a trusted proxy whose access you control. This allows the page to write host settings; it does not change the subagent API’s trusted authorities.',
 			ownsHostReload: 'Save, then reload the profile and refresh the page.',
@@ -134,7 +141,12 @@ window.__ModuleLoader__.load({
 			hubTitle: 'Apollo',
 			hubEmpty: 'No sub-plugin settings are available yet: the sub-plugin clients have not registered their pages, or this deployment does not compose the settings service.',
 			close: 'Close',
+			unsavedTitle: 'Unsaved changes',
+			unsavedBody: 'Closing discards unsaved settings on all pages.',
+			keepEditing: 'Keep editing',
+			discardClose: 'Discard and close',
 			entryError: 'This settings pane failed to load: ',
+			retry: 'Retry',
 			pluginApollo: 'General',
 			pluginSubagent: 'Subagents',
 			pluginCompact: 'Compaction',
@@ -150,95 +162,111 @@ window.__ModuleLoader__.load({
 		let t = (key, params) => interpolate(zh[key] ?? key, params);
 
 		const STYLE_ID = '@menghuan1918/dsh-apollo/settings.css';
-		const CSS = [
-			/* Apollo accent is scoped to these settings; host surfaces follow the active theme. */
-			'.apollo-cfg,.apollo-root,.apollo-hub,.apollo-modal,.apollo-modalCard,.apollo-button[data-apollo-hub=trigger]{--cfg-accent:#3388BB;--cfg-accent-fill:color-mix(in srgb,var(--cfg-accent) 85%,black);--cfg-accent-hover:color-mix(in srgb,var(--cfg-accent) 72%,black);--cfg-accent-fg:#fff;--cfg-accent-ink:color-mix(in srgb,var(--cfg-accent) 72%,var(--dsw-alias-label-primary));--cfg-accent-soft:color-mix(in srgb,var(--cfg-accent) 9%,transparent);--cfg-border:var(--dsw-alias-border-l2,color-mix(in srgb, currentColor 14%, transparent));--cfg-border-strong:var(--dsw-alias-border-l3,color-mix(in srgb, currentColor 22%, transparent));--cfg-surface:var(--dsw-alias-bg-layer-1,transparent);--cfg-surface-2:var(--dsw-alias-bg-layer-3,color-mix(in srgb, currentColor 4%, transparent));--cfg-ink:var(--dsw-alias-label-primary,currentColor);--cfg-ink-2:var(--dsw-alias-label-secondary,color-mix(in srgb, currentColor 74%, transparent));--cfg-ink-3:var(--dsw-alias-label-tertiary,color-mix(in srgb, currentColor 56%, transparent));--cfg-hover:var(--dsw-alias-interactive-bg-hover,color-mix(in srgb, currentColor 6%, transparent));--cfg-mono:var(--dsw-font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:14px;line-height:22px;color:var(--cfg-ink)}',
-			'.apollo-cfg{display:flex;flex-direction:column;gap:24px;max-width:1040px;min-width:0}',
-			'.apollo-pageTitle{margin:0;font-size:20px;font-weight:600;line-height:28px;letter-spacing:-.01em;color:var(--cfg-ink)}',
-			'.apollo-note{margin:0;padding:8px 10px;border-radius:6px;font-size:12px;line-height:17px;background:var(--cfg-surface-2);color:var(--cfg-ink-2)}',
-			'.apollo-note[data-tone=error]{background:color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);color:var(--dsw-alias-state-error-primary)}',
-			'.apollo-note[data-tone=warn]{background:var(--dsw-alias-state-warn-tertiary)}',
-			'.apollo-pulse{animation:apollo-pulse 2s cubic-bezier(.36,0,.64,1) infinite}',
-			'@keyframes apollo-pulse{0%{opacity:1}40%{opacity:.6}80%,to{opacity:1}}',
-			'.apollo-hint{margin:0;font-size:12px;line-height:17px;color:var(--cfg-ink-3)}',
-			'.apollo-mono{font-family:var(--cfg-mono);font-variant-numeric:tabular-nums}',
-			/* 兼容性等技术细节收进默认折叠的 details。 */
-			'.apollo-details{min-width:0;border-bottom:1px solid var(--cfg-border);padding:0 0 8px;font-size:13px;line-height:20px}',
-			'.apollo-details:last-of-type{border-bottom:0}.apollo-details>summary{display:flex;align-items:center;gap:10px;list-style:none;cursor:pointer;padding:10px 0;font-size:14px;line-height:22px;font-weight:500;color:var(--cfg-ink-2)}.apollo-details>summary::-webkit-details-marker{display:none}.apollo-details>summary:before{content:"";width:6px;height:6px;flex:none;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform 160ms ease}.apollo-details[open]>summary:before{transform:rotate(45deg)}.apollo-details>summary:hover{color:var(--cfg-ink)}',
-			'.apollo-details>summary:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:2px;border-radius:4px}',
-			'.apollo-detailsBody{display:flex;flex-direction:column;gap:12px;padding:8px 0 16px;color:var(--cfg-ink-2)}',
-			/* 设置行：标签/提示居左，控件居右。 */
-			'.apollo-row{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding:12px 0}',
-			'.apollo-rowText{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}',
-			'.apollo-rowTitle{font-size:14px;line-height:22px;font-weight:500;color:var(--cfg-ink)}',
-			'.apollo-rowDesc{max-width:560px;font-size:13px;line-height:20px;color:var(--cfg-ink-3)}',
-			'.apollo-pageHead{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}',
-			'.apollo-badge{display:inline-flex;align-items:center;padding:2px 8px;border:1px solid var(--cfg-border);border-radius:999px;background:var(--cfg-surface-2);font-size:11px;line-height:18px;color:var(--cfg-ink-3);white-space:nowrap}',
-			'.apollo-card{display:flex;flex-direction:column;gap:16px;min-width:0;padding:16px;border:1px solid var(--cfg-border);border-radius:12px;background:color-mix(in srgb,var(--cfg-ink) 2%,var(--cfg-surface))}',
-			'.apollo-rowLabel{display:flex;align-items:center;gap:6px;min-width:0}',
-			'.apollo-help{position:relative;flex:none;font-size:12px}',
-			'.apollo-help>summary{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;color:var(--cfg-ink-3);cursor:pointer;list-style:none}',
-			'.apollo-help>summary::-webkit-details-marker{display:none}',
-			'.apollo-help>summary:hover,.apollo-help[open]>summary{background:var(--cfg-hover);color:var(--cfg-ink)}',
-			'.apollo-help>p{position:absolute;right:0;top:26px;z-index:5;width:320px;max-width:min(320px,70vw);margin:0;padding:10px 12px;border:1px solid var(--cfg-border-strong);border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:var(--cfg-ink-2);font-size:12px;line-height:18px;font-weight:400}',
-			/* Switch：36x20 track，accent 实心 + 白点滑动。 */
-			'.apollo-switch{box-sizing:border-box;position:relative;flex:none;width:36px;height:20px;margin:2px 0 0;padding:2px;border:1px solid var(--cfg-border-strong);border-radius:10px;background:var(--cfg-surface-2);cursor:pointer;appearance:none;transition:background 140ms ease,border-color 140ms ease}',
-			'.apollo-switch:hover:not(:disabled){border-color:var(--cfg-ink-3)}',
-			'.apollo-switch[aria-checked=true]{border-color:var(--cfg-accent);background:var(--cfg-accent)}',
-			'.apollo-switch:disabled{opacity:.4;cursor:not-allowed}',
-			'.apollo-switchThumb{display:block;width:14px;height:14px;border-radius:50%;background:var(--cfg-ink-3);transition:transform 140ms ease,background 140ms ease}',
-			'.apollo-switch[aria-checked=true] .apollo-switchThumb{transform:translateX(16px);background:var(--cfg-accent-fg)}',
-			'.apollo-switch:before{content:"";position:absolute;inset:-11px 0 -11px -8px}',
-			'.apollo-switch:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:2px}',
-			/* 按钮：primary=accent 实心；outline=1px 边；hover 走中性填充。 */
-			'.apollo-button{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border:.5px solid transparent;border-radius:6px;font:inherit;font-size:13px;line-height:20px;font-weight:500;color:var(--cfg-ink);background:transparent;cursor:pointer;transition:background 140ms ease,border-color 140ms ease,color 140ms ease}',
-			'.apollo-button:disabled{opacity:.4;cursor:not-allowed}',
-			'.apollo-button[data-variant=primary]{background:var(--cfg-accent-fill);color:var(--cfg-accent-fg)}',
-			'.apollo-button[data-variant=primary]:hover:not(:disabled){background:var(--cfg-accent-hover)}',
-			'.apollo-button[data-variant=outline]{border-color:var(--cfg-border-strong)}',
-			'.apollo-button[data-variant=outline]:hover:not(:disabled),.apollo-button[data-variant=ghost]:hover:not(:disabled){background:var(--cfg-hover)}',
-			'.apollo-button:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:2px}',
-			'.apollo-input,.apollo-select{box-sizing:border-box;min-width:0;height:30px;padding:0 10px;border:1px solid var(--cfg-border);border-radius:6px;background:var(--cfg-surface-2);color:var(--cfg-ink);font:inherit;font-size:13px;line-height:20px}',
-			'.apollo-input:hover,.apollo-select:hover{border-color:var(--cfg-ink-3)}',
-			'.apollo-input:focus,.apollo-select:focus{outline:none;border-color:var(--cfg-accent)}',
-			'.apollo-input:focus-visible,.apollo-select:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:1px}',
-			'.apollo-input:disabled,.apollo-select:disabled{opacity:.4;cursor:not-allowed}',
-			'.apollo-input[aria-invalid=true]{border-color:var(--dsw-alias-state-error-primary)}',
-			'.apollo-select{appearance:none;padding-right:26px;background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\' viewBox=\'0 0 10 6\'%3E%3Cpath d=\'M1 1l4 4 4-4\' stroke=\'%23999\' stroke-width=\'1.5\' fill=\'none\' stroke-linecap=\'round\'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}',
-			'.apollo-footer{display:flex;align-items:center;gap:8px;padding-top:20px;margin-top:4px;border-top:1px solid var(--cfg-border)}',
-			'.apollo-status{flex:1;min-width:0;font-size:12px;line-height:18px;color:var(--cfg-ink-3)}',
-			'.apollo-status[data-tone=ok]{color:var(--dsw-alias-state-success-primary)}',
-			'.apollo-status[data-tone=error]{color:var(--dsw-alias-state-error-primary)}',
-			'.apollo-status[data-tone=warn]{color:var(--dsw-alias-state-warn-label,var(--cfg-ink-2))}',
-			/* ── 集成设置弹窗：中性侧栏 + 独立滚动内容区。 */
-			'.apollo-hubGlyph{flex:none;color:var(--cfg-ink-3)}',
-			/* ui-primitives Modal 加宽（双类提升优先级，同 better-sidebar 做法）。 */
-			'.apollo-modal.apollo-modal{width:min(1180px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding-bottom:0;border:1px solid var(--cfg-border);border-radius:12px}.apollo-hubModalContent>:first-child{margin:0;padding:16px 20px;border-bottom:1px solid var(--cfg-border)}.apollo-hubModalContent>:first-child h2{font-size:16px;line-height:24px;font-weight:500}.apollo-hubModalContent>:last-child{margin:0;padding:0}',
-			'.apollo-hub{display:flex;gap:0;height:min(760px,calc(100dvh - 96px));min-height:320px;width:100%;overflow:hidden}',
-			'.apollo-hubNav{box-sizing:border-box;flex:none;width:188px;display:flex;flex-direction:column;gap:2px;padding:16px 8px;border-right:1px solid var(--cfg-border);background:color-mix(in srgb,var(--cfg-ink) 2%,var(--cfg-surface));overflow-y:auto;scrollbar-width:thin}',
-			'.apollo-hubNavItem{display:flex;align-items:center;gap:8px;flex-shrink:0;min-height:36px;padding:8px 12px;border:0;border-radius:6px;background:transparent;font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer;color:var(--cfg-ink-2);transition:background 140ms ease,color 140ms ease;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-			'.apollo-hubNavItem:hover{background:var(--cfg-hover);color:var(--cfg-ink)}',
-			'.apollo-hubNavItem[data-active]{background:linear-gradient(90deg,var(--cfg-accent) 0 2px,var(--cfg-accent-soft) 2px);color:var(--cfg-accent-ink);font-weight:500}.apollo-hubNavItem svg{flex:none;opacity:.72}.apollo-hubNavItem[data-active] svg{opacity:1;color:var(--cfg-accent-ink)}',
-			'.apollo-hubNavItem:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:1px}',
-			'.apollo-hubContent{flex:1;min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:28px 36px 0;scrollbar-width:thin;scrollbar-gutter:stable}.apollo-hubContent .apollo-footer{position:sticky;bottom:0;background:var(--cfg-surface);padding-bottom:24px;z-index:1}.apollo-hubModalContent{padding:0!important;overflow:hidden}.apollo-hubPane{min-width:0;overflow-wrap:anywhere}',
-			'.apollo-hubPane[hidden]{display:none}',
-			'@media (max-width:800px){.apollo-help>p{position:static;width:auto;max-width:none;margin-top:6px}.apollo-hub{flex-direction:column;height:80dvh}.apollo-hubNav{width:auto;flex-direction:row;gap:4px;padding:8px;border-right:0;border-bottom:1px solid var(--cfg-border);overflow-x:auto}.apollo-hubNavItem{min-height:44px}.apollo-hubContent{padding:24px 20px 0}.apollo-cfg{gap:24px}.apollo-pageTitle{font-size:18px}.apollo-hubContent .apollo-footer{bottom:0}.apollo-mask{padding:12px}.apollo-modalCard{max-height:calc(100dvh - 24px)}}',
-			/* 自绘 overlay（ui-primitives 缺失时的兜底弹窗）。 */
-			'.apollo-mask{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:rgba(0,0,0,.4)}',
-			'.apollo-modalCard{display:flex;flex-direction:column;width:min(1180px,100%);max-height:calc(100vh - 64px);box-sizing:border-box;border:1px solid var(--cfg-border);border-radius:12px;background:var(--dsw-alias-bg-layer-1);box-shadow:0 12px 48px rgba(0,0,0,.22)}',
-			'.apollo-sectionTitle{margin:0;font-size:14px;line-height:20px;font-weight:500}.apollo-connectionSection{border-top:.5px solid var(--cfg-border);padding-top:24px}.apollo-guardSection{padding-bottom:0}.apollo-guardFlow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px;padding:16px 12px;border:.5px solid var(--cfg-border);border-radius:8px;background:color-mix(in srgb,var(--cfg-ink) 1.5%,var(--cfg-surface))}',
-			'.apollo-flowStep{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;text-align:center;color:var(--cfg-ink-2)}.apollo-flowStep svg{box-sizing:content-box;display:block;padding:6px;border:.5px solid var(--cfg-border);border-radius:8px;background:var(--cfg-surface)}.apollo-flowLabel{font-size:12px;line-height:18px;max-width:130px;overflow-wrap:normal}',
-			'.apollo-flowStep:not(:last-child):after{content:"";position:absolute;left:calc(50% + 24px);top:15px;width:calc(100% - 40px);border-top:1px solid var(--cfg-border)}',
-			'.apollo-guardFlow[data-enabled=true] .apollo-flowStep:last-child{color:var(--cfg-accent-ink)}.apollo-guardFlow[data-enabled=true] .apollo-flowStep:last-child svg{border-color:color-mix(in srgb,var(--cfg-accent) 35%,var(--cfg-border));background:var(--cfg-accent-soft)}',
-			'.apollo-modalHead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--cfg-border)}',
-			'.apollo-modalTitle{margin:0;font-size:15px;font-weight:500;line-height:22px}',
-			'.apollo-modalBody{flex:1;min-height:0;overflow:hidden;display:flex}',
-			'.apollo-iconBtn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:var(--cfg-ink-3);font-size:16px;line-height:1;cursor:pointer}',
-			'.apollo-iconBtn:hover{background:var(--cfg-hover);color:var(--cfg-ink)}',
-			'.apollo-iconBtn:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:1px}',
-			'@media (pointer:coarse),(max-width:640px){.apollo-iconBtn{width:44px;height:44px}}',
-			'@media (prefers-reduced-motion:reduce){.apollo-pulse{animation:none}.apollo-switch,.apollo-switchThumb,.apollo-button,.apollo-hubNavItem{transition:none}}',
-		].join('\n');
+		const CSS = `
+/* UI-KIT v1 — keep in sync with docs/UI-KIT.md. Flat surfaces, 1px lines, one accent. */
+.apollo-cfg,.apollo-root,.apollo-hub,.apollo-modal,.apollo-modalCard,.apollo-button[data-apollo-hub=trigger]{--cfg-accent:#3388BB;--cfg-accent-solid:#20709e;--cfg-accent-text:#14587f;--cfg-accent-fg:#fff;--cfg-accent-soft:color-mix(in srgb,var(--cfg-accent) 10%,transparent);--cfg-accent-ink:color-mix(in srgb,var(--cfg-accent) 70%,var(--dsw-alias-label-primary));--cfg-surface:var(--dsw-alias-bg-layer-1);--cfg-raised:var(--dsw-alias-bg-layer-2);--cfg-overlay:var(--dsw-alias-bg-layer-3);--cfg-sunken:color-mix(in srgb,var(--dsw-alias-label-primary) 4%,var(--cfg-surface));--cfg-ink:var(--dsw-alias-label-primary);--cfg-ink-2:var(--dsw-alias-label-secondary);--cfg-ink-3:color-mix(in srgb,var(--dsw-alias-label-tertiary) 80%,var(--dsw-alias-label-primary));--cfg-border:var(--dsw-alias-border-l2,color-mix(in srgb,currentColor 14%,transparent));--cfg-border-strong:var(--dsw-alias-border-l3,color-mix(in srgb,currentColor 22%,transparent));--cfg-line:var(--dsw-alias-border-l1,color-mix(in srgb,currentColor 8%,transparent));--cfg-hover:var(--dsw-alias-interactive-bg-hover,color-mix(in srgb,currentColor 6%,transparent));--cfg-danger:var(--dsw-alias-state-error-primary);--cfg-success:color-mix(in srgb,var(--dsw-alias-state-success-primary) 60%,var(--dsw-alias-label-primary));--cfg-warn:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 60%,var(--dsw-alias-label-primary));--cfg-mono:ui-monospace,SFMono-Regular,Menlo,monospace;--cfg-control:32px;--cfg-radius:8px;--cfg-dur:140ms;font-size:13px;line-height:20px;color:var(--cfg-ink);font-variant-numeric:tabular-nums}
+[data-ds-dark-theme] :is(.apollo-cfg,.apollo-root,.apollo-hub,.apollo-modal,.apollo-modalCard,.apollo-button[data-apollo-hub=trigger]){--cfg-accent:#4eb0e8;--cfg-accent-solid:#4eb0e8;--cfg-accent-text:#6fc0ee;--cfg-accent-fg:#0e1014;--cfg-accent-soft:color-mix(in srgb,var(--cfg-accent) 14%,transparent);--cfg-accent-ink:#6fc0ee}
+.apollo-cfg{display:flex;flex-direction:column;gap:24px;max-width:920px;width:100%;margin:0 auto;min-width:0}
+.apollo-pageHead{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.apollo-pageTitle{margin:0;font-size:20px;line-height:28px;font-weight:500;letter-spacing:-.01em;color:var(--cfg-ink)}
+.apollo-badge{display:inline-flex;align-items:center;height:20px;padding:0 8px;border:1px solid var(--cfg-border);border-radius:999px;background:var(--cfg-raised);font-size:11px;line-height:18px;color:var(--cfg-ink-3);white-space:nowrap}
+.apollo-note{margin:0;padding:8px 10px;border:1px solid var(--cfg-border);border-radius:8px;font-size:12px;line-height:18px;background:var(--cfg-sunken);color:var(--cfg-ink-2)}
+.apollo-note[data-tone=error]{border-color:color-mix(in srgb,var(--cfg-danger) 35%,var(--cfg-border));background:color-mix(in srgb,var(--cfg-danger) 8%,var(--cfg-surface));color:var(--cfg-danger)}
+.apollo-note[data-tone=warn]{border-color:color-mix(in srgb,var(--cfg-warn) 35%,var(--cfg-border));background:color-mix(in srgb,var(--cfg-warn) 7%,var(--cfg-surface));color:var(--cfg-ink-2)}
+.apollo-pulse{animation:apollo-pulse 2s cubic-bezier(.36,0,.64,1) infinite}
+@keyframes apollo-pulse{0%{opacity:1}40%{opacity:.6}80%,to{opacity:1}}
+.apollo-hint{margin:0;font-size:12px;line-height:18px;color:var(--cfg-ink-3)}
+.apollo-mono{font-family:var(--cfg-mono);font-variant-numeric:tabular-nums}
+.apollo-card{display:flex;flex-direction:column;gap:12px;min-width:0;padding:16px 0 0;border:0;border-top:1px solid var(--cfg-border);border-radius:0;background:transparent}
+.apollo-sectionTitle{margin:0;font-size:12px;line-height:18px;font-weight:500;color:var(--cfg-ink-3)}
+.apollo-row{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding:10px 0;min-width:0;border-bottom:1px solid var(--cfg-line)}
+.apollo-row:last-child{border-bottom:0;padding-bottom:0}
+.apollo-rowText{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.apollo-rowTitle{font-size:13px;line-height:20px;font-weight:500;color:var(--cfg-ink);cursor:default}
+.apollo-rowDesc{max-width:560px;font-size:12px;line-height:18px;color:var(--cfg-ink-3)}
+.apollo-rowLabel{display:flex;align-items:center;gap:6px;min-width:0}
+.apollo-help{position:relative;flex:none;font-size:12px}
+.apollo-help>button{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--cfg-ink-3);cursor:pointer;appearance:none}
+.apollo-help>button:hover,.apollo-help>button[aria-expanded=true]{background:var(--cfg-hover);color:var(--cfg-ink)}
+.apollo-help>button:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:2px}
+.apollo-help>p{position:absolute;left:0;top:26px;z-index:40;width:320px;max-width:min(320px,70vw);margin:0;padding:10px 12px;border:1px solid var(--cfg-border-strong);border-radius:8px;background:var(--cfg-overlay);color:var(--cfg-ink-2);font-size:12px;line-height:18px;font-weight:400;box-shadow:0 12px 32px -16px rgb(0 0 0/.45)}
+.apollo-help>p[hidden]{display:none}
+.apollo-switch{box-sizing:border-box;position:relative;flex:none;width:34px;height:20px;margin:1px 0 0;padding:2px;border:1px solid var(--cfg-border-strong);border-radius:999px;background:var(--cfg-sunken);cursor:pointer;appearance:none;transition:background var(--cfg-dur) ease,border-color var(--cfg-dur) ease}
+.apollo-switch:hover:not(:disabled){border-color:var(--cfg-ink-3)}
+.apollo-switch[aria-checked=true]{border-color:var(--cfg-accent);background:var(--cfg-accent-solid)}
+.apollo-switch:disabled{opacity:.4;cursor:not-allowed}
+.apollo-switchThumb{display:block;width:14px;height:14px;border-radius:50%;background:var(--cfg-ink-3);transition:transform var(--cfg-dur) ease,background var(--cfg-dur) ease}
+.apollo-switch[aria-checked=true] .apollo-switchThumb{transform:translateX(14px);background:var(--cfg-accent-fg)}
+.apollo-switch:before{content:"";position:absolute;inset:-11px 0 -11px -8px}
+.apollo-switch:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:2px}
+.apollo-button{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border:1px solid transparent;border-radius:8px;font:inherit;font-size:13px;line-height:20px;font-weight:500;color:var(--cfg-ink);background:transparent;cursor:pointer;transition:background var(--cfg-dur) ease,border-color var(--cfg-dur) ease,color var(--cfg-dur) ease}
+.apollo-button:disabled{opacity:.4;cursor:not-allowed}
+.apollo-button[data-variant=primary]{background:var(--cfg-accent-solid);color:var(--cfg-accent-fg)}
+.apollo-button[data-variant=primary]:hover:not(:disabled){background:color-mix(in srgb,var(--cfg-accent-solid) 88%,black)}
+.apollo-button[data-variant=outline]{border-color:var(--cfg-border-strong)}
+.apollo-button[data-variant=outline]:hover:not(:disabled),.apollo-button[data-variant=ghost]:hover:not(:disabled){background:var(--cfg-hover)}
+.apollo-button:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:2px}
+.apollo-input{box-sizing:border-box;min-width:0;height:32px;padding:0 10px;border:1px solid var(--cfg-border);border-radius:8px;background:var(--cfg-raised);color:var(--cfg-ink);font:inherit;font-size:13px;line-height:20px}
+.apollo-input:hover{border-color:var(--cfg-border-strong)}
+.apollo-input:focus{outline:none;border-color:var(--cfg-accent);box-shadow:0 0 0 2px var(--cfg-accent-soft)}
+.apollo-input:disabled{opacity:.4;cursor:not-allowed}
+.apollo-input[aria-invalid=true]{border-color:var(--cfg-danger)}
+.apollo-footer{position:sticky;bottom:0;z-index:10;display:flex;align-items:center;gap:8px;padding:12px 0;border-top:1px solid var(--cfg-border);background:var(--cfg-surface)}
+.apollo-status{flex:1;min-width:0;font-size:12px;line-height:18px;color:var(--cfg-ink-3)}
+.apollo-status[data-tone=ok]{color:var(--cfg-success)}
+.apollo-status[data-tone=error]{color:var(--cfg-danger)}
+.apollo-status[data-tone=warn]{color:var(--cfg-warn)}
+.apollo-details{min-width:0;border-top:1px solid var(--cfg-border);padding:8px 0 0;font-size:13px;line-height:20px}
+.apollo-details>summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;min-height:32px;padding:4px 0;font-size:13px;line-height:20px;font-weight:500;color:var(--cfg-ink-2)}
+.apollo-details>summary::-webkit-details-marker{display:none}
+.apollo-details>summary:before{content:"";width:6px;height:6px;flex:none;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(-45deg);transition:transform var(--cfg-dur) ease}
+.apollo-details[open]>summary:before{transform:rotate(45deg)}
+.apollo-details>summary:hover{color:var(--cfg-ink)}
+.apollo-details>summary:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:2px;border-radius:4px}
+.apollo-detailsBody{display:flex;flex-direction:column;gap:10px;padding:6px 0 4px;color:var(--cfg-ink-2)}
+.apollo-guardFlow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin:2px 0 0;padding:14px 12px;border:1px solid var(--cfg-border);border-radius:8px;background:var(--cfg-sunken)}
+.apollo-flowStep{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;text-align:center;color:var(--cfg-ink-2)}
+.apollo-flowStep svg{box-sizing:content-box;display:block;padding:6px;border:1px solid var(--cfg-border);border-radius:8px;background:var(--cfg-raised);color:var(--cfg-ink-2)}
+.apollo-flowLabel{font-size:12px;line-height:18px;max-width:130px;overflow-wrap:normal;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.apollo-flowStep:not(:last-child):after{content:"";position:absolute;left:calc(50% + 24px);top:15px;width:calc(100% - 40px);border-top:1px solid var(--cfg-border)}
+.apollo-guardFlow[data-enabled=true] .apollo-flowStep:last-child{color:var(--cfg-accent-text)}
+.apollo-guardFlow[data-enabled=true] .apollo-flowStep:last-child svg{border-color:color-mix(in srgb,var(--cfg-accent) 35%,var(--cfg-border));background:var(--cfg-accent-soft);color:var(--cfg-accent-text)}
+.apollo-hubGlyph{flex:none;color:var(--cfg-ink-3)}
+.apollo-closeConfirm{box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:16px;min-height:280px;width:100%;padding:32px}
+.apollo-closeConfirm p{margin:0;color:var(--cfg-ink-2);font-size:13px;line-height:20px}
+.apollo-closeActions{display:flex;justify-content:flex-end;gap:8px}
+.apollo-modal.apollo-modal{width:min(1240px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding-bottom:0;border:1px solid var(--cfg-border);border-radius:12px}
+.apollo-hubModalContent>:first-child{margin:0;padding:14px 20px;border-bottom:1px solid var(--cfg-border)}
+.apollo-hubModalContent>:first-child h2{font-size:15px;line-height:22px;font-weight:500}
+.apollo-hubModalContent>:last-child{margin:0;padding:0}
+.apollo-hub{display:flex;gap:0;height:min(760px,calc(100dvh - 96px));min-height:320px;width:100%;overflow:hidden}
+.apollo-hubNav{box-sizing:border-box;flex:none;width:200px;display:flex;flex-direction:column;gap:2px;padding:12px 8px;border-right:1px solid var(--cfg-border);background:color-mix(in srgb,var(--cfg-ink) 2%,var(--cfg-surface));overflow-y:auto;scrollbar-width:thin}
+.apollo-hubNavItem{display:flex;align-items:center;gap:10px;flex-shrink:0;min-height:36px;padding:0 10px;border:1px solid transparent;border-radius:8px;background:transparent;font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer;color:var(--cfg-ink-2);transition:background var(--cfg-dur) ease,color var(--cfg-dur) ease,border-color var(--cfg-dur) ease;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apollo-hubNavItem:hover{background:var(--cfg-hover);color:var(--cfg-ink)}
+.apollo-hubNavItem[data-active]{background:var(--cfg-accent-soft);border-color:color-mix(in srgb,var(--cfg-accent) 25%,var(--cfg-border));color:var(--cfg-accent-ink);font-weight:500}
+.apollo-hubNavItem svg{flex:none;opacity:.7}
+.apollo-hubNavItem[data-active] svg{opacity:1;color:var(--cfg-accent-ink)}
+.apollo-hubNavItem:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:1px}
+.apollo-hubContent{flex:1;min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:24px 32px 32px;scrollbar-width:thin;scrollbar-gutter:stable}
+.apollo-hubContent .apollo-footer{position:sticky;bottom:-1px;background:var(--cfg-surface);padding-bottom:12px;margin-top:auto}.apollo-hubPane{display:flex;flex-direction:column;min-height:100%}.apollo-hubPane>:first-child{flex:1 0 auto;min-height:0;display:flex;flex-direction:column}.apollo-root{flex:1;min-height:0;display:flex;flex-direction:column}.apollo-cfg{flex:1;min-height:0}.apollo-footer{margin-top:auto}
+.apollo-hubModalContent{padding:0!important;overflow:hidden}
+.apollo-hubPane{min-width:0;width:100%;overflow-wrap:anywhere}
+.apollo-modalBodyWrap{min-width:0;flex:1}
+.apollo-modalBodyWrap[hidden],.apollo-hubPane[hidden],.apollo-footer[hidden],.apollo-button[hidden]{display:none}
+.apollo-cfg button:active:not(:disabled){filter:brightness(.96)}
+.apollo-mask{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:rgb(0 0 0/.4)}
+.apollo-modalCard{display:flex;flex-direction:column;width:min(1240px,100%);max-height:calc(100vh - 64px);box-sizing:border-box;border:1px solid var(--cfg-border);border-radius:12px;background:var(--cfg-surface);box-shadow:0 12px 48px rgb(0 0 0/.22)}
+.apollo-modalHead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--cfg-border)}
+.apollo-modalTitle{margin:0;font-size:15px;font-weight:500;line-height:22px}
+.apollo-modalBody{flex:1;min-height:0;overflow:hidden;display:flex}
+.apollo-iconBtn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:var(--cfg-ink-3);font-size:16px;line-height:1;cursor:pointer}
+.apollo-iconBtn:hover{background:var(--cfg-hover);color:var(--cfg-ink)}
+.apollo-iconBtn:focus-visible{outline:2px solid var(--cfg-accent);outline-offset:1px}
+@media (max-width:800px){.apollo-help>p{position:static;width:auto;max-width:none;margin-top:6px}.apollo-hub{flex-direction:column;height:min(80dvh,calc(100dvh - 24px))}.apollo-hubNav{width:auto;flex-direction:row;gap:4px;padding:8px;border-right:0;border-bottom:1px solid var(--cfg-border);overflow-x:auto}.apollo-hubNavItem{min-height:44px;flex:none}.apollo-hubContent{padding:20px 16px 24px}.apollo-cfg{gap:24px}.apollo-pageTitle{font-size:18px}.apollo-hubContent .apollo-footer{bottom:0}.apollo-mask{padding:12px}.apollo-modalCard{max-height:calc(100dvh - 24px)}}
+@media (max-width:640px){.apollo-row{flex-direction:column;gap:8px}.apollo-row .apollo-switch{align-self:flex-start}.apollo-guardFlow{padding:10px 6px}.apollo-flowLabel{font-size:11px}.apollo-footer{flex-wrap:wrap}.apollo-status{flex-basis:100%}}
+@media (pointer:coarse),(max-width:640px){.apollo-iconBtn{width:44px;height:44px}.apollo-button{height:44px}}
+@media (prefers-reduced-motion:reduce){.apollo-pulse{animation:none}.apollo-switch,.apollo-switchThumb,.apollo-button,.apollo-hubNavItem,.apollo-help>button{transition:none}}
+		`.trim();
 
 		/** 宿主快照只投影当前仍生效的可编辑字段。 */
 		function shape(value) {
@@ -247,11 +275,18 @@ window.__ModuleLoader__.load({
 		}
 
 		function Help({ label, id, children }) {
-			return h('details', { className: 'apollo-help' },
-				h('summary', { 'aria-label': label + ' 说明', title: label },
+			const [open, setOpen] = useState(false);
+			return h('div', { className: 'apollo-help',
+				onBlur: (event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); },
+				onKeyDown: (event) => {
+					if (event.key !== 'Escape' || !open) return;
+					event.preventDefault(); event.stopPropagation(); setOpen(false);
+				},
+			},
+				h('button', { type: 'button', 'aria-label': label, title: label, 'aria-expanded': open, 'aria-controls': id, onClick: () => setOpen(!open) },
 					h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, 'aria-hidden': true },
 						h('circle', { cx: 12, cy: 12, r: 9 }), h('path', { d: 'M9.7 9.2a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1.1.9-1.1 1.7v.3M12 17h.01' }))),
-				h('p', { id }, children));
+				h('p', { id, hidden: !open, role: 'note' }, children));
 		}
 
 		function SwitchRow({ id, label, hint, checked, disabled, onChange }) {
@@ -280,6 +315,11 @@ window.__ModuleLoader__.load({
 			const [draft, setDraft] = useState(null);
 			const [busy, setBusy] = useState(false);
 			const [notice, setNotice] = useState(null);
+			useEffect(() => {
+				if (notice?.tone !== 'ok') return undefined;
+				const timer = setTimeout(() => setNotice(null), 4000);
+				return () => clearTimeout(timer);
+			}, [notice]);
 
 			if (state === undefined) {
 				// 官方页面在镜像读到该命名空间前不传 form：这是正常加载窗口，
@@ -326,12 +366,12 @@ window.__ModuleLoader__.load({
 				? h('span', { className: 'apollo-status', 'data-tone': notice.tone, role: notice.tone === 'error' ? 'alert' : 'status' }, notice.text)
 				: h('span', { className: 'apollo-status', role: 'status' }, writable ? '' : translate('readonlyNote'));
 
-			return h('div', { className: 'apollo-cfg' },
+			return h('div', { className: 'apollo-cfg', 'data-settings-dirty': dirty, 'data-settings-busy': busy },
 				h('div', { className: 'apollo-pageHead' },
-					h('h2', { className: 'apollo-pageTitle' }, translate('title')),
-					writable ? null : h('span', { className: 'apollo-badge' }, translate('readonlyNote'))),
-				writable ? null : h('p', { className: 'apollo-note', 'data-tone': 'warn' }, translate('readonly')),
+					h('h2', { className: 'apollo-pageTitle' }, translate('title'))),
+				writable ? null : h('p', { className: 'apollo-note', 'data-tone': 'warn' }, translate('readonlyNote')),
 				h('section', { className: 'apollo-card' },
+					h('h3', { className: 'apollo-sectionTitle' }, translate('guardTitle')),
 					h(SwitchRow, {
 						id: 'apollo-exit-guard',
 						label: translate('exitGuardLabel'),
@@ -361,15 +401,15 @@ window.__ModuleLoader__.load({
 						h('p', { className: 'apollo-hint' }, translate('migratedBody')),
 						h('p', { className: 'apollo-hint' }, translate('deprecatedBody')),
 						h('p', { className: 'apollo-hint' }, translate('reloadBody')))),
-				h('div', { className: 'apollo-footer' },
+				h('div', { className: 'apollo-footer', hidden: !dirty && !busy && notice === null },
 					status,
 					h('button', {
 						type: 'button', className: 'apollo-button', 'data-variant': 'ghost',
-						disabled: busy || !dirty, onClick: reset,
+						hidden: !dirty && !busy, disabled: busy || !dirty, onClick: reset,
 					}, translate('reset')),
 					h('button', {
 						type: 'button', className: 'apollo-button', 'data-variant': 'primary',
-						disabled: !writable || busy || !dirty, onClick: () => void save(),
+						hidden: !dirty && !busy, 'aria-busy': busy, disabled: !writable || busy || !dirty, onClick: () => void save(),
 					}, busy ? translate('saving') : translate('save'))));
 		}
 
@@ -481,8 +521,9 @@ window.__ModuleLoader__.load({
 			}
 			render() {
 				if (this.state.error !== null) {
-					return h('p', { className: 'apollo-note', 'data-tone': 'error', role: 'alert' },
-						t('entryError') + String(this.state.error?.message ?? this.state.error));
+					return h('div', { className: 'apollo-note', 'data-tone': 'error', role: 'alert' },
+						h('p', null, t('entryError') + String(this.state.error?.message ?? this.state.error)),
+						h('button', { type: 'button', className: 'apollo-button', 'data-variant': 'outline', onClick: () => this.setState({ error: null }) }, t('retry')));
 				}
 				return this.props.children;
 			}
@@ -497,7 +538,10 @@ window.__ModuleLoader__.load({
 				(listener) => (typeof describe?.subscribe === 'function' ? describe.subscribe(listener) : () => {}),
 				() => describe?.getSnapshot?.());
 			useEffect(() => { void describe?.ensure?.(); }, [describe]);
-			const [active, setActive] = useState(null);
+			const [active, setActive] = useState(() => {
+				const search = globalThis['window']?.location?.search;
+				return search ? new URLSearchParams(search).get('apolloTab') : null;
+			});
 			const tabRefs = useRef({});
 			const prefix = 'apollo-hub-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
 			const contentRef = useRef(null);
@@ -535,10 +579,18 @@ window.__ModuleLoader__.load({
 			const select = (rowId, moveFocus) => {
 				if (rowId !== current.rowId) contentRef.current?.scrollTo?.({ top: 0 });
 				setActive(rowId);
+				const win = globalThis['window'];
+				if (win?.location && win.history?.replaceState) {
+					const url = new URL(win.location.href);
+					url.searchParams.set('apolloTab', rowId);
+					win.history.replaceState(win.history.state, '', url);
+				}
 				if (moveFocus === true) focusTab(rowId);
+				tabRefs.current[rowId]?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
 			};
 			// 方向键漫游：上下为主，窄屏横排时左右同义；Home/End 跳到两端。
 			const onTabListKeyDown = (event) => {
+				if (event.defaultPrevented || event.repeat) return;
 				const count = items.length;
 				const at = Math.max(0, items.indexOf(current));
 				let next = null;
@@ -602,7 +654,7 @@ window.__ModuleLoader__.load({
 		 * a11y：aria-modal + 标题 labelledby，挂载时把焦点收进卡片、Tab 在卡内
 		 * 循环、卸载时把焦点还给打开前的元素；DOM 只在 effects/事件里读写。
 		 */
-		function FallbackModal({ onClose, children }) {
+		function FallbackModal({ onClose, children, title = t('hubTitle') }) {
 			const cardRef = useRef(null);
 			const restoreRef = useRef(null);
 			const titleId = 'apollo-modal-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
@@ -617,13 +669,13 @@ window.__ModuleLoader__.load({
 				const first = focusables()[0];
 				if (first !== undefined && typeof first.focus === 'function') first.focus();
 				else if (card !== null && typeof card.focus === 'function') card.focus();
-				const onKey = (event) => { if (event.key === 'Escape') closeRef.current(); };
+				const onKey = (event) => { if (event.key === 'Escape' && !event.defaultPrevented) closeRef.current(); };
 				doc.addEventListener('keydown', onKey);
 				return () => {
 					doc.removeEventListener('keydown', onKey);
 					const back = restoreRef.current;
 					restoreRef.current = null;
-					if (back !== null && typeof back.focus === 'function') back.focus();
+					if (back !== null && doc.contains(back) && typeof back.focus === 'function') back.focus();
 				};
 			}, []);
 			const onKeyDown = (event) => {
@@ -669,18 +721,41 @@ window.__ModuleLoader__.load({
 					onKeyDown,
 				},
 					h('div', { className: 'apollo-modalHead' },
-						h('h2', { className: 'apollo-modalTitle', id: titleId }, t('hubTitle')),
+						h('h2', { className: 'apollo-modalTitle', id: titleId }, title),
 						h('button', { type: 'button', className: 'apollo-iconBtn', 'aria-label': t('close'), onClick: onClose }, '×')),
 					h('div', { className: 'apollo-modalBody' }, children)));
 		}
 
 		function SettingsModal({ ctx, onClose }) {
-			const body = h(HubBody, { ctx });
-			if (Modal === null) return h(FallbackModal, { onClose }, body);
+			const bodyRef = useRef(null);
+			const keepRef = useRef(null);
+			const returnRef = useRef(null);
+			const [confirm, setConfirm] = useState(false);
+			useEffect(() => {
+				if (confirm) keepRef.current?.focus();
+				else if (returnRef.current?.isConnected) returnRef.current.focus();
+			}, [confirm]);
+			const requestClose = () => {
+				if (confirm) { setConfirm(false); return; }
+				if (bodyRef.current?.querySelector('[data-settings-busy=true]')) return;
+				if (bodyRef.current?.querySelector('[data-settings-dirty=true]')) {
+					returnRef.current = globalThis['document']?.activeElement;
+					setConfirm(true);
+				} else onClose();
+			};
+			const body = h(React.Fragment, null,
+				h('div', { className: 'apollo-modalBodyWrap', ref: bodyRef, hidden: confirm }, h(HubBody, { ctx })),
+				confirm ? h('div', { className: 'apollo-closeConfirm' },
+					h('p', null, t('unsavedBody')),
+					h('div', { className: 'apollo-closeActions' },
+						h('button', { type: 'button', className: 'apollo-button', 'data-variant': 'outline', ref: keepRef, onClick: () => setConfirm(false) }, t('keepEditing')),
+						h('button', { type: 'button', className: 'apollo-button', 'data-variant': 'primary', onClick: onClose }, t('discardClose')))) : null);
+			const title = t(confirm ? 'unsavedTitle' : 'hubTitle');
+			if (Modal === null) return h(FallbackModal, { onClose: requestClose, title }, body);
 			return h(Modal, {
 				open: true,
-				onClose,
-				title: t('hubTitle'),
+				onClose: requestClose,
+				title,
 				closeLabel: t('close'),
 				className: 'apollo-modal',
 				contentClassName: 'apollo-hubModalContent',
@@ -702,6 +777,8 @@ window.__ModuleLoader__.load({
 					className: 'apollo-button',
 					'data-variant': 'outline',
 					'data-apollo-hub': 'trigger',
+					'aria-haspopup': 'dialog',
+					'aria-expanded': open,
 					onClick: () => setOpen(true),
 				}, gearGlyph(), (props.t ?? t)('hubButton')),
 				open ? h(SettingsModal, { ctx: props.ctx, onClose: close }) : null);
