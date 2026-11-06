@@ -7,12 +7,12 @@ export function mountMigrationAdmission(ctx) {
   const assertReady = () => {
     if (report.status !== 'complete') {
       const detail = report.error ?? report.compact?.error ?? report.compact?.reason ?? report.subagent?.error
-      const error = new Error('Apollo 配置迁移尚未完成（' + report.status + '）。请检查迁移诊断，修复配置后重载 profile。' + (detail ? ' ' + detail : ''))
+      const error = new Error('Better DSH 配置迁移尚未完成（' + report.status + '）。请检查迁移诊断，修复配置后重载 profile。' + (detail ? ' ' + detail : ''))
       error.code = 'APOLLO_MIGRATION_PENDING'
       throw error
     }
     if (requiresReload) {
-      const error = new Error('Apollo 已迁移压缩配置，但当前引擎仍使用旧快照。请重载 profile 后继续；刷新网页不会应用压缩配置。')
+      const error = new Error('Better DSH 已迁移压缩配置，但当前引擎仍使用旧快照。请重载 profile 后继续；刷新网页不会应用压缩配置。')
       error.code = 'APOLLO_MIGRATION_RELOAD_REQUIRED'
       throw error
     }

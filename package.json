@@ -1,11 +1,11 @@
 {
-  "name": "@menghuan1918/dsh-apollo",
-  "version": "0.9.0",
-  "description": "DSH plugin bundle: workflow skills, engineering presets, independent better-goal / better-subagent / better-compact / better-ask-user integration, and a minimal job exit guard. Pure ESM, no build step.",
+  "name": "dsh-better-dsh",
+  "version": "0.10.0",
+  "description": "Better DSH: a DSH plugin bundle that installs workflow skills, engineering presets, and five independent plugins (goal, subagent, compact, ask-user, ptc). Pure ESM, no build step.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Menghuan1918/dsh-apollo.git"
+    "url": "git+https://github.com/omdsh-dev/dsh-better-dsh.git"
   },
   "type": "module",
   "main": "src/index.js",
@@ -27,6 +27,8 @@
   "files": [
     "src",
     "docs/DEVELOPMENT.md",
+    "docs/UI-KIT.md",
+    "docs/assets",
     "skills",
     "presets",
     "third-party",
@@ -39,6 +41,8 @@
     "dsh-plugin",
     "deepseek-harness",
     "deepseek-harness-plugin",
+    "better-dsh",
+    "omdsh-dev",
     "workflow",
     "orchestration",
     "agent-preset"
@@ -54,10 +58,10 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "~3.19.0",
-    "@menghuan1918/dsh-better-subagent": "0.4.0",
-    "dsh-better-ask-user": "0.3.0",
-    "dsh-better-compact": "0.3.0",
-    "dsh-better-goal": "0.4.0",
+    "@oh-my-dsh/dsh-better-subagent": "0.5.0",
+    "dsh-better-ask-user": "0.3.1",
+    "dsh-better-compact": "0.3.1",
+    "dsh-better-goal": "0.4.1",
     "dsh-better-ptc": "0.2.0"
   },
   "peerDependencies": {
@@ -79,5 +83,9 @@
       ],
       "platform": "web"
     }
+  },
+  "homepage": "https://github.com/omdsh-dev/dsh-better-dsh#readme",
+  "bugs": {
+    "url": "https://github.com/omdsh-dev/dsh-better-dsh/issues"
   }
 }

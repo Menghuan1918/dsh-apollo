@@ -188,7 +188,7 @@ function install() {
     configForms,
     declare() {
       const disposers = slots.declare('plugins.row.config')
-      assert.equal(slots.registrations.length, 2)
+      assert.equal(slots.registrations.length, 3)
       return { disposers, component: slots.registrations[0].component }
     },
   }
@@ -233,19 +233,20 @@ const pageText = (renderer) => textOf(renderer.toJSON())
 
 test('装载与 slot 注册：声明才注册、新键与旧键并排、塌缩回收、summary 只回一行', async () => {
   const { slots, effects, dicts, loaded, declare } = install()
-  assert.equal(loaded.entry.id, '@menghuan1918/dsh-apollo')
+  assert.equal(loaded.entry.id, 'dsh-better-dsh')
   assert.deepEqual(loaded.exports.inject, ['slots', 'locale'])
   assert.equal(SOURCE.includes('document.'), false)
   assert.equal(SOURCE.includes('/apollo/api/'), false, 'Apollo 不再读取或注册 /apollo/api/*')
 
   assert.deepEqual(slots.injected, ['plugins.row.config', 'plugins.detail.actions'])
   assert.equal(slots.registrations.length, 0)
-  assert.deepEqual(effects.map((effect) => effect.label), ['@menghuan1918/dsh-apollo: dictionaries', '@menghuan1918/dsh-apollo: row config page', '@menghuan1918/dsh-apollo: settings hub'])
+  assert.deepEqual(effects.map((effect) => effect.label), ['dsh-better-dsh: dictionaries', 'dsh-better-dsh: row config page', 'dsh-better-dsh: settings hub'])
   assert.deepEqual(dicts.map((entry) => entry.ns), [NS])
   assert.deepEqual(Object.keys(dicts[0].dictionaries.zh).sort(), Object.keys(dicts[0].dictionaries.en).sort())
 
   const declared = declare()
   assert.deepEqual(slots.registrations.map((entry) => entry.options), [
+    { name: 'plugins.row.config', key: 'dsh-better-dsh#apollo-skills', locale: NS },
     { name: 'plugins.row.config', key: '@menghuan1918/dsh-apollo#apollo-skills', locale: NS },
     { name: 'plugins.row.config', key: 'dsh-apollo#apollo-skills', locale: NS },
   ])
@@ -385,7 +386,7 @@ test('只读 / memory / 不可用 / 加载中状态分别可见且禁用写入',
 })
 
 test('没有对外部服务的隐式依赖：client.js 不引用新插件的页面键/网络', () => {
-  assert.equal(SOURCE.includes("'@menghuan1918/dsh-better-subagent#"), false)
+  assert.equal(SOURCE.includes("'@oh-my-dsh/dsh-better-subagent#"), false)
   assert.equal(SOURCE.includes("'dsh-better-compact#"), false)
   assert.equal(SOURCE.includes('fetch('), false)
 })
@@ -399,7 +400,7 @@ test('集成设置订阅共享表单：保存与外部更新后数值和 revisio
   const hub = setup.slots.registrations.find((entry) => entry.options.name === 'plugins.detail.actions')
   let renderer
   await act(async () => {
-    renderer = TestRenderer.create(createElement(hub.component, { subject: { kind: 'bundle', pkg: { name: '@menghuan1918/dsh-apollo' } }, t }))
+    renderer = TestRenderer.create(createElement(hub.component, { subject: { kind: 'bundle', pkg: { name: 'dsh-better-dsh' } }, t }))
   })
   const trigger = renderer.root.findAll((node) => host(node) && node.props['data-apollo-hub'] === 'trigger')[0]
   await act(async () => { trigger.props.onClick() })
@@ -425,7 +426,7 @@ test('集成设置：detail.actions 注册、仅 Apollo bundle 渲染按钮、�
   // 模拟一个子插件的 row.config entry（键以 #dsh-better-goal 结尾）。
   const goalFormStates = []
   slots.registrations.push({
-    options: { name: 'plugins.row.config', key: '@menghuan1918/dsh-apollo#dsh-better-goal', locale: 'better-goal' },
+    options: { name: 'plugins.row.config', key: 'dsh-better-dsh#dsh-better-goal', locale: 'better-goal' },
     component: (props) => {
       goalFormStates.push(props.form?.state?.status ?? 'noform')
       return createElement('div', { 'data-goal-pane': true }, 'goal-pane')
@@ -446,7 +447,7 @@ test('集成设置：detail.actions 注册、仅 Apollo bundle 渲染按钮、�
 
   // Apollo bundle subject → 按钮
   await act(async () => {
-    renderer.update(createElement(hub.component, { subject: { kind: 'bundle', pkg: { name: '@menghuan1918/dsh-apollo' } }, t }))
+    renderer.update(createElement(hub.component, { subject: { kind: 'bundle', pkg: { name: 'dsh-better-dsh' } }, t }))
   })
   const trigger = renderer.root.findAll((node) => host(node) && node.props['data-apollo-hub'] === 'trigger')[0]
   assert.ok(trigger)
@@ -484,7 +485,7 @@ test('集成设置弹窗：tab 语义、漫游焦点、面板全挂载保草稿�
   const edited = []
   for (const rowId of ['dsh-better-subagent', 'dsh-better-compact', 'dsh-better-goal', 'dsh-better-ask-user']) {
     slots.registrations.push({
-      options: { name: 'plugins.row.config', key: '@menghuan1918/dsh-apollo#' + rowId, locale: 'fake' },
+      options: { name: 'plugins.row.config', key: 'dsh-better-dsh#' + rowId, locale: 'fake' },
       component: (props) => {
         if (rowId === 'dsh-better-goal') edited.push(props.form?.state?.status ?? 'noform')
         return createElement('div', { 'data-fake-pane': rowId }, rowId + '-pane')
@@ -495,7 +496,7 @@ test('集成设置弹窗：tab 语义、漫游焦点、面板全挂载保草稿�
   const hub = slots.registrations.find((r) => r.options.name === 'plugins.detail.actions')
   let renderer
   await act(async () => {
-    renderer = TestRenderer.create(createElement(hub.component, { subject: { kind: 'bundle', pkg: { name: '@menghuan1918/dsh-apollo' } }, t }))
+    renderer = TestRenderer.create(createElement(hub.component, { subject: { kind: 'bundle', pkg: { name: 'dsh-better-dsh' } }, t }))
   })
   const trigger = renderer.root.findAll((node) => host(node) && node.props['data-apollo-hub'] === 'trigger')[0]
   await act(async () => { trigger.props.onClick() })

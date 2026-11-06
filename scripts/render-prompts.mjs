@@ -36,7 +36,7 @@ async function resolvePackage(name, envKey, sibling) {
 }
 
 const goalSource = await resolvePackage('dsh-better-goal', 'APOLLO_GOAL_SOURCE', 'dsh-better-goal')
-const subagentSource = await resolvePackage('@menghuan1918/dsh-better-subagent', 'APOLLO_SUBAGENT_SOURCE', 'dsh-better-subagent')
+const subagentSource = await resolvePackage('@oh-my-dsh/dsh-better-subagent', 'APOLLO_SUBAGENT_SOURCE', 'dsh-better-subagent')
 const compactSource = await resolvePackage('dsh-better-compact', 'APOLLO_COMPACT_SOURCE', 'dsh-better-compact')
 const askSource = await resolvePackage('dsh-better-ask-user', 'APOLLO_ASK_SOURCE', 'dsh-better-ask-user')
 const ptcSource = await resolvePackage('dsh-better-ptc', 'APOLLO_PTC_SOURCE', 'dsh-better-ptc')
@@ -45,14 +45,14 @@ const subagentName = JSON.parse(await readFile(join(subagentSource, 'package.jso
 const compactName = JSON.parse(await readFile(join(compactSource, 'package.json'), 'utf8')).name
 const askName = JSON.parse(await readFile(join(askSource, 'package.json'), 'utf8')).name
 const ptcName = JSON.parse(await readFile(join(ptcSource, 'package.json'), 'utf8')).name
-assert.equal(subagentName, '@menghuan1918/dsh-better-subagent')
+assert.equal(subagentName, '@oh-my-dsh/dsh-better-subagent')
 assert.equal(compactName, 'dsh-better-compact')
 assert.equal(askName, 'dsh-better-ask-user')
 assert.equal(ptcName, 'dsh-better-ptc')
-assert.equal(manifest.dependencies[subagentName], '0.4.0')
-assert.equal(manifest.dependencies[compactName], '0.3.0')
-assert.equal(manifest.dependencies[goalName], '0.4.0')
-assert.equal(manifest.dependencies[askName], '0.3.0')
+assert.equal(manifest.dependencies[subagentName], '0.5.0')
+assert.equal(manifest.dependencies[compactName], '0.3.1')
+assert.equal(manifest.dependencies[goalName], '0.4.1')
+assert.equal(manifest.dependencies[askName], '0.3.1')
 assert.equal(manifest.dependencies[ptcName], '0.2.0')
 
 /** Root row settings the rendered prompts use; tests re-render the Apollo section from the JSON block. */

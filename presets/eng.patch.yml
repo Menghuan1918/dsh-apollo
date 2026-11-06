@@ -10,7 +10,7 @@
 # `eng`: it is the preset identity historical sessions resume by.
 #
 # Preset-local plugin modules are referenced by bare package subpaths
-# (`@menghuan1918/dsh-apollo/presets/eng/plugins/...`): names inside `config.plugins`
+# (`dsh-better-dsh/presets/eng/plugins/...`): names inside `config.plugins`
 # resolve from the profile directory's node_modules (where this package is
 # installed or linked; `exports["./presets/*"]` maps the subpath), not from
 # the preset directory.
@@ -317,7 +317,7 @@
           # Apollo Config.exitGuard，默认关闭，每次事件读取当前值，设置保存后即时
           # 生效。监听器注册型插件，无服务发布，无需 realm。
           - id: eng-exit-guard
-            name: '@menghuan1918/dsh-apollo/presets/eng/plugins/exit-guard/index.js'
+            name: 'dsh-better-dsh/presets/eng/plugins/exit-guard/index.js'
 
           # ── mode instructions ────────────────────────────────────────────────────────
 
@@ -329,4 +329,4 @@
           # system-prompt section (order 1, right after the persona slot) and
           # re-rendered per request from the live Apollo config.
           - id: eng-mode-instructions
-            name: '@menghuan1918/dsh-apollo/presets/eng/plugins/mode-instructions/index.js'
+            name: 'dsh-better-dsh/presets/eng/plugins/mode-instructions/index.js'

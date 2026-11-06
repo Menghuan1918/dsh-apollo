@@ -1,12 +1,12 @@
 /**
- * Apollo's single host row registers bundled skills, its own minimal row
+ * Better DSH's single host row registers bundled skills, its own minimal row
  * settings, the one-time old-config migration into the independent
  * dsh-better-subagent / dsh-better-compact / dsh-better-ask-user rows. Presets
  * are still delivered by bundle patches. Browser code remains a no-build
  * closure factory. The PTC deadline exemption is owned by the independent
  * dsh-better-ptc singleton row, not this package.
  *
- * Apollo no longer implements subagent CLI protocols/routing, the wait tool,
+ * Better DSH no longer implements subagent CLI protocols/routing, the wait tool,
  * capability/model HTTP probes, tier/delegation prompt generation or the child
  * exit guard — those are owned by the standalone plugins and only assembled
  * here through the shared stable rows.
@@ -20,7 +20,7 @@ import { mountMigrationAdmission } from './admission.js'
 import { mountSettings } from './settings.js'
 export { Config } from './config.js'
 
-const PROVIDER_NAME = 'dsh-apollo'
+const PROVIDER_NAME = 'dsh-better-dsh'
 /** Rank of bundled contributions in the local-provider ladder (user roots override). */
 const BUNDLED_RANK = 600
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url))
@@ -73,7 +73,7 @@ async function discover(ctx) {
   try {
     entries = await readdir(SKILLS_DIR, { withFileTypes: true })
   } catch (error) {
-    ctx.logger.warn(`dsh-apollo: skills directory unreadable: ${error.message}`)
+    ctx.logger.warn(`dsh-better-dsh: skills directory unreadable: ${error.message}`)
     return { candidates, byLocator }
   }
   for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
@@ -81,11 +81,11 @@ async function discover(ctx) {
     const file = join(SKILLS_DIR, entry.name, 'SKILL.md')
     const parsed = await parseSkillFile(file)
     if (parsed === undefined) {
-      ctx.logger.warn(`dsh-apollo: skill file ${file} ignored: missing or invalid frontmatter`)
+      ctx.logger.warn(`dsh-better-dsh: skill file ${file} ignored: missing or invalid frontmatter`)
       continue
     }
     if (!SKILL_NAME.test(parsed.name)) {
-      ctx.logger.warn(`dsh-apollo: skill file ${file} ignored: name "${parsed.name}" is not kebab-case`)
+      ctx.logger.warn(`dsh-better-dsh: skill file ${file} ignored: name "${parsed.name}" is not kebab-case`)
       continue
     }
     const summary = {

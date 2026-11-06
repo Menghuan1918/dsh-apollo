@@ -1,7 +1,7 @@
 /**
- * dsh-apollo —— 设置装配（src/settings.js）。
+ * dsh-better-dsh —— 设置装配（src/settings.js）。
  *
- * 0.5.0 起 Apollo 不再注册任何 HTTP 路由：子代理能力/模型/路由探针与
+ * 0.5.0 起 Better DSH 不再注册任何 HTTP 路由：子代理能力/模型/路由探针与
  * `/apollo/api/*` 别名由 dsh-better-subagent 拥有，compact 诊断由
  * dsh-better-compact 拥有。重复注册同一 `(kind, path)` 会让 webServer 抛错，
  * 所以这里必须保持“零路由”。

@@ -1,5 +1,5 @@
 /**
- * dsh-apollo (npm: @menghuan1918/dsh-apollo) —— 正式插件配置（Config）与配置读取/规整。
+ * dsh-better-dsh (npm: dsh-better-dsh) —— 正式插件配置（Config）与配置读取/规整。
  *
  * 这里是本包「设置」的唯一事实源。宿主行 `apollo-skills` 由 `src/index.js`
  * 重新导出本文件的 `Config`（schemastery schema），DSH 据此校验并解析行配置：
@@ -43,12 +43,14 @@ import z from '@deepseek-ai/schemastery'
 /** 本包在 profile roster 里的行 id；也是 dsh-settings 的命名空间（= Loader entry id）。 */
 export const ENTRY_ID = 'apollo-skills'
 /** 包的 npm 名（scoped）。 */
-export const PACKAGE_NAME = '@menghuan1918/dsh-apollo'
+export const PACKAGE_NAME = 'dsh-better-dsh'
 /**
  * 旧 unscoped 包名。只用于旧 profile 的 config slot 兼容（浏览器半边并排注册
  * 旧键）；新的 bundle 行、模块 specifier 与 client closure id 一律用 PACKAGE_NAME。
  */
 export const LEGACY_PACKAGE_NAME = 'dsh-apollo'
+/** Previous scoped package name, retained for profile and browser compatibility. */
+export const LEGACY_SCOPED_PACKAGE_NAME = '@menghuan1918/dsh-apollo'
 /** 浏览器半边注册 `plugins.row.config` 用的键：`<包名>#<行 id>`。 */
 export const ROW_CONFIG_KEY = `${PACKAGE_NAME}#${ENTRY_ID}`
 /** 旧包名对应的行配置键；仅与 {@link ROW_CONFIG_KEY} 并排注册以兼容旧 profile。 */
@@ -148,7 +150,7 @@ export const Config = z.object({
   }),
   /**
    * @deprecated 0.5.0 起由 dsh-better-subagent 的 `trustedHosts` 拥有（只约束
-   * 该插件的只读接口）；这里只为旧 profile 装载与迁移保留，Apollo 不再注册
+   * 该插件的只读接口）；这里只为旧 profile 装载与迁移保留，Better DSH 不再注册
    * HTTP 路由，字段在运行时无效。
    */
   trustedHosts: z.array(z.string()).default([]),

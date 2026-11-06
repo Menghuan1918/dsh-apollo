@@ -24,8 +24,8 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url))
 const PATCH = join(ROOT, 'cordis.patch.yml')
 const ENG = join(ROOT, 'presets/eng.patch.yml')
 const PTC = join(ROOT, 'presets/eng-ptc.patch.yml')
-const PACKAGE_NAME = '@menghuan1918/dsh-apollo'
-const SUBAGENT_NAME = '@menghuan1918/dsh-better-subagent'
+const PACKAGE_NAME = 'dsh-better-dsh'
+const SUBAGENT_NAME = '@oh-my-dsh/dsh-better-subagent'
 const COMPACT_NAME = 'dsh-better-compact'
 const ENGINE_NAME = 'dsh-better-compact/engine'
 const manifest = () => JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
@@ -106,16 +106,16 @@ test('顶层 patch 禁用原生 goal 域与原生 compaction-basic，并插入�
   }
 })
 
-test('npm manifest：scoped 名、0.9.0、repository、publishConfig 与 license', () => {
+test('npm manifest：包名、0.10.0、repository、publishConfig 与 license', () => {
   const m = manifest()
   assert.equal(m.name, PACKAGE_NAME)
-  assert.equal(m.version, '0.9.0')
+  assert.equal(m.version, '0.10.0')
   assert.equal(m.license, 'Apache-2.0')
   const license = readFileSync(join(ROOT, 'LICENSE'), 'utf8')
   assert.equal(createHash('sha256').update(license).digest('hex'), 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30')
   assert.deepEqual(m.repository, {
     type: 'git',
-    url: 'git+https://github.com/Menghuan1918/dsh-apollo.git',
+    url: 'git+https://github.com/omdsh-dev/dsh-better-dsh.git',
   })
   assert.deepEqual(m.publishConfig, {
     registry: 'https://registry.npmjs.org/',
@@ -125,10 +125,10 @@ test('npm manifest：scoped 名、0.9.0、repository、publishConfig 与 license
 
 test('package.json 把五个独立插件声明为精确 npm 版本', () => {
   const dependencies = manifest().dependencies ?? {}
-  assert.equal(dependencies['dsh-better-goal'], '0.4.0', 'goal 依赖必须是精确 npm 版本')
-  assert.equal(dependencies[SUBAGENT_NAME], '0.4.0', 'better-subagent 依赖必须是精确 npm 版本')
-  assert.equal(dependencies[COMPACT_NAME], '0.3.0', 'better-compact 依赖必须是精确 npm 版本')
-  assert.equal(dependencies['dsh-better-ask-user'], '0.3.0', 'ask-user 依赖必须是精确 npm 版本')
+  assert.equal(dependencies['dsh-better-goal'], '0.4.1', 'goal 依赖必须是精确 npm 版本')
+  assert.equal(dependencies[SUBAGENT_NAME], '0.5.0', 'better-subagent 依赖必须是精确 npm 版本')
+  assert.equal(dependencies[COMPACT_NAME], '0.3.1', 'better-compact 依赖必须是精确 npm 版本')
+  assert.equal(dependencies['dsh-better-ask-user'], '0.3.1', 'ask-user 依赖必须是精确 npm 版本')
   assert.equal(dependencies['dsh-better-ptc'], '0.2.0', 'ptc 依赖必须是精确 npm 版本')
   for (const spec of [dependencies['dsh-better-goal'], dependencies[SUBAGENT_NAME], dependencies[COMPACT_NAME], dependencies['dsh-better-ask-user'], dependencies['dsh-better-ptc']]) {
     assert.doesNotMatch(spec, /^(?:github:|git\+|git:|file:|link:|workspace:|npm:|https?:)/)
@@ -209,20 +209,19 @@ function scopedPresetReferences() {
   return [...new Set(names)].sort()
 }
 
-test('scoped 安装布局：包根、client 与全部 preset 子路径真实解析', () => {
+test('包安装布局：包根、client 与全部 preset 子路径真实解析', () => {
   const expected = [
     `${PACKAGE_NAME}/presets/eng/plugins/exit-guard/index.js`,
     `${PACKAGE_NAME}/presets/eng/plugins/mode-instructions/index.js`,
   ].sort()
   assert.deepEqual(scopedPresetReferences(), expected)
 
-  // 复刻真实的 scoped node_modules 布局，让 Node 的 exports 解析器（DSH Loader
+  // 复刻真实的 node_modules 布局，让 Node 的 exports 解析器（DSH Loader
   // 也走同一解析器）验证 package.json 的 `./presets/*` 与 `./client` 映射。
-  const dir = mkdtempSync(join(tmpdir(), 'apollo-scoped-'))
+  const dir = mkdtempSync(join(tmpdir(), 'better-dsh-'))
   try {
-    const scope = join(dir, 'node_modules', '@menghuan1918')
-    mkdirSync(scope, { recursive: true })
-    symlinkSync(ROOT, join(scope, 'dsh-apollo'), process.platform === 'win32' ? 'junction' : 'dir')
+    mkdirSync(join(dir, 'node_modules'), { recursive: true })
+    symlinkSync(ROOT, join(dir, 'node_modules', PACKAGE_NAME), process.platform === 'win32' ? 'junction' : 'dir')
     writeFileSync(join(dir, 'package.json'), '{}\n')
     const require = createRequire(join(dir, 'package.json'))
     assert.equal(require.resolve(PACKAGE_NAME), join(ROOT, 'src/index.js'))

@@ -14,8 +14,8 @@ const PTC = join(ROOT, 'presets/eng-ptc.patch.yml')
 const PAIRS = [[ENG, 'standard.patch.yml'], [PTC, 'ptc.patch.yml']]
 const ownRows = [
   ['dsh-better-compact-engine', 'dsh-better-compact/engine'],
-  ['eng-exit-guard', '@menghuan1918/dsh-apollo/presets/eng/plugins/exit-guard/index.js'],
-  ['eng-mode-instructions', '@menghuan1918/dsh-apollo/presets/eng/plugins/mode-instructions/index.js'],
+  ['eng-exit-guard', 'dsh-better-dsh/presets/eng/plugins/exit-guard/index.js'],
+  ['eng-mode-instructions', 'dsh-better-dsh/presets/eng/plugins/mode-instructions/index.js'],
 ]
 const thresholds = { thresholdChars: [16384, 8192], headChars: [8192, 4096], tailChars: [2048, 1024] }
 // Deliberate removals from the upstream standard preset. The real-preset test

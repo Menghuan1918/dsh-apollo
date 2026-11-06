@@ -76,7 +76,7 @@ export async function createRuntime() {
   const pluginRoot = process.env.APOLLO_PLUGIN_SOURCE_ROOT
   const pluginRequire = createRequire(join(root, 'package.json'))
   const manifests = ['dsh-apollo', 'dsh-better-goal', 'dsh-better-subagent', 'dsh-better-compact', 'dsh-better-ask-user', 'dsh-better-ptc'].map(folder => {
-    const name = folder === 'dsh-better-subagent' ? '@menghuan1918/dsh-better-subagent' : folder
+    const name = folder === 'dsh-better-subagent' ? '@oh-my-dsh/dsh-better-subagent' : folder
     const dir = folder === 'dsh-apollo' ? root : pluginRoot ? join(pluginRoot, folder) : dirname(pluginRequire.resolve(name + '/package.json'))
     const manifest = json(join(dir, 'package.json'))
     if (manifest.dsh?.client) addPackage(manifest.name, dir)

@@ -12,7 +12,7 @@ import { prepareProfile, bootProfile, waitUntil } from '../scripts/lib/profile.m
 import { createRuntime, enabled, VERSION, importHost, json, hostRequire } from './fixtures/client-runtime.mjs'
 
 const options = { skip: enabled ? false : 'Set DSH_PACKAGE_ROOT to the installed 0.2.2-rc.1 host', timeout: 60000 }
-const APOLLO = '@menghuan1918/dsh-apollo'
+const APOLLO = 'dsh-better-dsh'
 const ROW = APOLLO + '#apollo-skills'
 
 // This deliberately runs the published closure files through ClientModuleSystem,

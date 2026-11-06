@@ -257,7 +257,7 @@ function basePatch(extra = []) {
 
 async function scenarioApollo() {
   const info = await prepareProfile({
-    bundles: ['@menghuan1918/dsh-apollo'],
+    bundles: ['dsh-better-dsh'],
     patch: basePatch([
       { id: 'apollo-skills', config: OLD_APOLLO },
       { id: 'dsh-better-subagent', config: TARGET_SUBAGENT },
@@ -471,7 +471,7 @@ async function scenarioStandalone() {
 
 async function scenarioBoth() {
   const info = await prepareProfile({
-    bundles: ['@menghuan1918/dsh-apollo', SUBAGENT_NAME, COMPACT_NAME],
+    bundles: ['dsh-better-dsh', SUBAGENT_NAME, COMPACT_NAME],
     patch: basePatch([
       { insert: [{ id: 'agent-preset-registry', name: '@deepseek-ai/dsh-agent-preset-registry', config: { default: 'eng' } }] },
     ]),

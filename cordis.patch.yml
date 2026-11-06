@@ -2,7 +2,7 @@
 # the profile roster. Applied as a profile bundle layer (the first entry of the
 # `dsh.bundle.patch` array in package.json — the eng/eng-ptc preset patches in
 # presets/ load after it); activate with
-# `dsh plugin --profile <name> add @menghuan1918/dsh-apollo`.
+# `dsh plugin --profile <name> add dsh-better-dsh`.
 #
 # Apollo 0.6.0 is an integration bundle. The subagent, compaction, question-wait
 # and PTC-exemption features are owned by independent plugins, and Apollo
@@ -10,7 +10,7 @@
 # transitive dependency's bundle patch (`dsh plugin add` only selects directly
 # installed bundles):
 #
-#   - `@menghuan1918/dsh-better-subagent` owns the Codex/Claude CLI subagents,
+#   - `@oh-my-dsh/dsh-better-subagent` owns the Codex/Claude CLI subagents,
 #     `wait_subagent`, the running-child exit guard, the subagent settings page
 #     and every subagent-specific prompt section;
 #   - `dsh-better-compact` (host companion) + `dsh-better-compact/engine`
@@ -71,7 +71,7 @@
 # come from the host tools.
 - insert:
     - id: dsh-better-subagent
-      name: '@menghuan1918/dsh-better-subagent'
+      name: '@oh-my-dsh/dsh-better-subagent'
 
 # ── question wait + PTC exemption: independent rows ─────────────────────────
 # The official Web card is disabled by the ask-user bundle; repeat the disable
@@ -90,7 +90,7 @@
 
 # ── Apollo host row ─────────────────────────────────────────────────────────
 # The apollo-skills row is one row on purpose. The row's module specifier must
-# be this package's npm name (`@menghuan1918/dsh-apollo`), not a short alias,
+# be this package's npm name (`dsh-better-dsh`), not a short alias,
 # because the browser half (`dsh.client` → exports "./client") is discovered
 # from the row's package manifest: `dsh-client-modules` accepts a bare or
 # two-segment scoped specifier, resolves the row to its manifest, and requires
@@ -129,4 +129,4 @@
 # `@deepseek-ai/dsh-agent-preset` row read straight from that file.
 - insert:
     - id: apollo-skills
-      name: '@menghuan1918/dsh-apollo'
+      name: 'dsh-better-dsh'

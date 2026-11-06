@@ -174,7 +174,7 @@
             disabled: true
 
           - id: eng-exit-guard
-            name: '@menghuan1918/dsh-apollo/presets/eng/plugins/exit-guard/index.js'
+            name: 'dsh-better-dsh/presets/eng/plugins/exit-guard/index.js'
 
           - id: eng-mode-instructions
-            name: '@menghuan1918/dsh-apollo/presets/eng/plugins/mode-instructions/index.js'
+            name: 'dsh-better-dsh/presets/eng/plugins/mode-instructions/index.js'

@@ -25,6 +25,7 @@ import {
   ENTRY_ID,
   LEGACY_PACKAGE_NAME,
   LEGACY_ROW_CONFIG_KEY,
+  LEGACY_SCOPED_PACKAGE_NAME,
   PACKAGE_NAME,
   ROW_CONFIG_KEY,
   currentConfig,
@@ -124,15 +125,16 @@ const liveSchema = new z(Config.toJSON())
 
 // ── 形状契约 ────────────────────────────────────────────────────────────────
 
-test('标识常量：行 id / scoped 包名 / 行配置键（含旧键）', () => {
+test('标识常量：行 id / 包名 / 行配置键（含旧键）', () => {
   assert.equal(ENTRY_ID, 'apollo-skills')
-  assert.equal(PACKAGE_NAME, '@menghuan1918/dsh-apollo')
+  assert.equal(PACKAGE_NAME, 'dsh-better-dsh')
   assert.equal(LEGACY_PACKAGE_NAME, 'dsh-apollo')
-  assert.equal(ROW_CONFIG_KEY, '@menghuan1918/dsh-apollo#apollo-skills')
+  assert.equal(LEGACY_SCOPED_PACKAGE_NAME, '@menghuan1918/dsh-apollo')
+  assert.equal(ROW_CONFIG_KEY, 'dsh-better-dsh#apollo-skills')
   assert.equal(LEGACY_ROW_CONFIG_KEY, 'dsh-apollo#apollo-skills')
 })
 
-test('scoped 包名在 manifest、config 与 client closure id/row 键之间一致', () => {
+test('包名在 manifest、config 与 client closure id/row 键之间一致', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
   const source = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8')
   assert.equal(PACKAGE_NAME, pkg.name)

@@ -10,7 +10,7 @@ for (const disabled of ['dsh-better-subagent', 'dsh-better-compact']) {
   test('real profile: explicitly disabled ' + disabled + ' is not an incomplete migration', {
     skip: enabled ? false : 'DSH_PACKAGE_ROOT is not set',
   }, async () => {
-    const info = await prepareProfile({ bundles: ['@menghuan1918/dsh-apollo'], prefix: 'apollo-disabled-', patch: [
+    const info = await prepareProfile({ bundles: ['dsh-better-dsh'], prefix: 'apollo-disabled-', patch: [
       { id: 'headless-startup', disabled: true }, { id: 'headless-runner', disabled: true },
       { id: 'workflow-ptc', disabled: true }, { id: 'tool-workflow', disabled: true },
       { id: 'credentials', disabled: false, config: { watch: false } },
@@ -47,7 +47,7 @@ test('real profile: migration that changes the engine blocks requests until a pr
     }] } },
     { insert: [{ id: 'agent-preset-registry', name: '@deepseek-ai/dsh-agent-preset-registry', config: { default: 'eng' } }] },
   ]
-  const info = await prepareProfile({ bundles: ['@menghuan1918/dsh-apollo'], patch, prefix: 'apollo-admission-' })
+  const info = await prepareProfile({ bundles: ['dsh-better-dsh'], patch, prefix: 'apollo-admission-' })
   let ctx
   try {
     ctx = await bootProfile(info)

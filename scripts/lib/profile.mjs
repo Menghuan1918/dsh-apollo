@@ -16,7 +16,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const APOLLO_ROOT = fileURLToPath(new URL('../../', import.meta.url))
-export const SUBAGENT_NAME = '@menghuan1918/dsh-better-subagent'
+export const SUBAGENT_NAME = '@oh-my-dsh/dsh-better-subagent'
 export const COMPACT_NAME = 'dsh-better-compact'
 export const GOAL_NAME = 'dsh-better-goal'
 export const ASK_NAME = 'dsh-better-ask-user'
@@ -58,12 +58,12 @@ export async function packageSources() {
     if (manifest.name !== name) throw new Error(`${dir} is not ${name}`)
   }
   const apolloManifest = apollo
-  if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.4.0'
-    || apolloManifest.dependencies[COMPACT_NAME] !== '0.3.0'
-    || apolloManifest.dependencies[GOAL_NAME] !== '0.4.0'
-    || apolloManifest.dependencies[ASK_NAME] !== '0.3.0'
+  if (apolloManifest.dependencies[SUBAGENT_NAME] !== '0.5.0'
+    || apolloManifest.dependencies[COMPACT_NAME] !== '0.3.1'
+    || apolloManifest.dependencies[GOAL_NAME] !== '0.4.1'
+    || apolloManifest.dependencies[ASK_NAME] !== '0.3.1'
     || apolloManifest.dependencies[PTC_NAME] !== '0.2.0') {
-    throw new Error('Apollo dependencies must pin the verification versions')
+    throw new Error('Better DSH dependencies must pin the verification versions')
   }
   return {
     apollo: { name: apolloManifest.name, dir: APOLLO_ROOT, manifest: apolloManifest },

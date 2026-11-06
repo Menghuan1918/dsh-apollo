@@ -1,5 +1,5 @@
 /**
- * dsh-apollo (npm: @menghuan1918/dsh-apollo) — 浏览器半边。
+ * dsh-better-dsh (npm: dsh-better-dsh) — 浏览器半边。
  *
  * 两块 UI：
  *
@@ -21,7 +21,7 @@
  */
 
 window.__ModuleLoader__.load({
-	id: '@menghuan1918/dsh-apollo',
+	id: 'dsh-better-dsh',
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
@@ -38,18 +38,19 @@ window.__ModuleLoader__.load({
 		const Modal = Primitives?.Modal ?? null;
 
 		const NS = 'apollo';
-		const PACKAGE_NAME = '@menghuan1918/dsh-apollo';
+		const PACKAGE_NAME = 'dsh-better-dsh';
+		const LEGACY_SCOPED_PACKAGE_NAME = '@menghuan1918/dsh-apollo';
 		const LEGACY_PACKAGE_NAME = 'dsh-apollo';
 		// 新键是 Plugins 页按“bundle 依赖名 + 行 id”算出的（= npm 包名 + #apollo-skills）；
 		// 旧键并排注册，只为仍把依赖槽记成旧 unscoped 名的 profile 保留配置入口。
-		const ROW_KEYS = ['@menghuan1918/dsh-apollo#apollo-skills', 'dsh-apollo#apollo-skills'];
+		const ROW_KEYS = ['dsh-better-dsh#apollo-skills', '@menghuan1918/dsh-apollo#apollo-skills', 'dsh-apollo#apollo-skills'];
 		const DETAIL_ACTIONS_SLOT = 'plugins.detail.actions';
 		const ROW_CONFIG_SLOT = 'plugins.row.config';
 		const HUB_ENTRY_ID = 'apollo-settings-hub';
 
 		/** 聚合弹窗展示的设置命名空间（= 行 id），按 nav 顺序排列。 */
 		const HUB_ROWS = [
-			{ rowId: 'apollo-skills', icon: 'M4 5h16M4 12h16M4 19h16M8 3v4m8 3v4M10 17v4', titleKey: 'pluginApollo' },
+			{ rowId: 'apollo-skills', icon: 'M4 5h16M4 12h16M4 19h16M8 3v4m8 3v4M10 17v4', titleKey: 'pluginBetterDsh' },
 			{ rowId: 'dsh-better-subagent', icon: 'M8 7V4h8v3M6 17H3v-6h6v6H6Zm12 0h-3v-6h6v6h-3ZM6 11V8h12v3M6 17v3m12-3v3', titleKey: 'pluginSubagent' },
 			{ rowId: 'dsh-better-compact', icon: 'M4 4h16v16H4ZM8 9l4 4 4-4M12 6v7M8 17h8', titleKey: 'pluginCompact' },
 			{ rowId: 'dsh-better-goal', icon: 'M12 8a4 4 0 1 0 4 4M12 3a9 9 0 1 0 9 9M12 12l8-8m-4 0h4v4', titleKey: 'pluginGoal' },
@@ -70,7 +71,7 @@ window.__ModuleLoader__.load({
 			guardContinue: '有任务则继续',
 			guardAllow: '允许结束',
 			compatTitle: '兼容性',
-			migratedBody: 'CLI 子代理、wait_subagent、运行中子代理守卫、模型分档与子代理设置页由 @menghuan1918/dsh-better-subagent 拥有；压缩模式与预算由 dsh-better-compact 拥有。请到 Plugins 中对应的行配置，或使用包详情页的集成设置弹窗。',
+			migratedBody: 'CLI 子代理、wait_subagent、运行中子代理守卫、模型分档与子代理设置页由 @oh-my-dsh/dsh-better-subagent 拥有；压缩模式与预算由 dsh-better-compact 拥有。请到 Plugins 中对应的行配置，或使用包详情页的集成设置弹窗。',
 			deprecatedBody: '旧 Apollo 行里的 tiers / subagents / trustedHosts 只为迁移旧 profile 保留，运行时不再生效；迁移在启动后自动补齐新插件的缺失值，目标行已有显式设置时不会被覆盖。',
 			reloadBody: '从 0.4.x 升级、或同时显式选中了独立 bundle 时，行可能显示为只读/不可寻址；请只保留一个显式入口并重载 profile。压缩设置的保存需要重载 profile 才会被引擎采用。',
 			loading: '正在读取配置…',
@@ -89,7 +90,7 @@ window.__ModuleLoader__.load({
 			readonlyNote: '只读：当前无法写入宿主配置。',
 			unavailableNote: '不可写：当前连接下该配置不可用。',
 			hubButton: '集成设置',
-			hubTitle: 'Apollo',
+			hubTitle: 'Better DSH',
 			hubEmpty: '暂无可用的子插件设置：子插件客户端尚未注册设置页，或本部署未组合设置服务。',
 			close: '关闭',
 			unsavedTitle: '有未保存的改动',
@@ -98,7 +99,7 @@ window.__ModuleLoader__.load({
 			discardClose: '放弃并关闭',
 			entryError: '此设置区加载失败：',
 			retry: '重新加载',
-			pluginApollo: '通用',
+			pluginBetterDsh: '核心',
 			pluginSubagent: '子代理',
 			pluginCompact: '上下文压缩',
 			pluginGoal: '目标',
@@ -119,7 +120,7 @@ window.__ModuleLoader__.load({
 			guardContinue: 'Continue if running',
 			guardAllow: 'Allow completion',
 			compatTitle: 'Compatibility',
-			migratedBody: 'CLI subagents, wait_subagent, the running-child guard, model tiers and the subagent settings page are owned by @menghuan1918/dsh-better-subagent; compaction modes and budgets are owned by dsh-better-compact. Configure their rows under Plugins, or use the integrated settings dialog on the package page.',
+			migratedBody: 'CLI subagents, wait_subagent, the running-child guard, model tiers and the subagent settings page are owned by @oh-my-dsh/dsh-better-subagent; compaction modes and budgets are owned by dsh-better-compact. Configure their rows under Plugins, or use the integrated settings dialog on the package page.',
 			deprecatedBody: 'The old Apollo tiers / subagents / trustedHosts fields are kept only so 0.4.x profiles load; they are inert at runtime. After boot the migration fills the new plugins’ missing values and never overwrites an explicit target setting.',
 			reloadBody: 'Upgrading from 0.4.x, or selecting both the standalone and Apollo bundles explicitly, can make the row read-only/unaddressable: keep a single explicit entry and reload the profile. Saved compaction settings take effect only after the profile reloads.',
 			loading: 'Loading configuration…',
@@ -138,7 +139,7 @@ window.__ModuleLoader__.load({
 			readonlyNote: 'Read-only: host configuration cannot be written.',
 			unavailableNote: 'Not writable: this configuration is unavailable on the current connection.',
 			hubButton: 'Integrated settings',
-			hubTitle: 'Apollo',
+			hubTitle: 'Better DSH',
 			hubEmpty: 'No sub-plugin settings are available yet: the sub-plugin clients have not registered their pages, or this deployment does not compose the settings service.',
 			close: 'Close',
 			unsavedTitle: 'Unsaved changes',
@@ -147,7 +148,7 @@ window.__ModuleLoader__.load({
 			discardClose: 'Discard and close',
 			entryError: 'This settings pane failed to load: ',
 			retry: 'Retry',
-			pluginApollo: 'General',
+			pluginBetterDsh: 'Core',
 			pluginSubagent: 'Subagents',
 			pluginCompact: 'Compaction',
 			pluginGoal: 'Goals',
@@ -161,7 +162,7 @@ window.__ModuleLoader__.load({
 
 		let t = (key, params) => interpolate(zh[key] ?? key, params);
 
-		const STYLE_ID = '@menghuan1918/dsh-apollo/settings.css';
+		const STYLE_ID = 'dsh-better-dsh/settings.css';
 		const CSS = `
 /* UI-KIT v1 — keep in sync with docs/UI-KIT.md. Flat surfaces, 1px lines, one accent. */
 .apollo-cfg,.apollo-root,.apollo-hub,.apollo-modal,.apollo-modalCard,.apollo-button[data-apollo-hub=trigger]{--cfg-accent:#3388BB;--cfg-accent-solid:#20709e;--cfg-accent-text:#14587f;--cfg-accent-fg:#fff;--cfg-accent-soft:color-mix(in srgb,var(--cfg-accent) 10%,transparent);--cfg-accent-ink:color-mix(in srgb,var(--cfg-accent) 70%,var(--dsw-alias-label-primary));--cfg-surface:var(--dsw-alias-bg-layer-1);--cfg-raised:var(--dsw-alias-bg-layer-2);--cfg-overlay:var(--dsw-alias-bg-layer-3);--cfg-sunken:color-mix(in srgb,var(--dsw-alias-label-primary) 4%,var(--cfg-surface));--cfg-ink:var(--dsw-alias-label-primary);--cfg-ink-2:var(--dsw-alias-label-secondary);--cfg-ink-3:color-mix(in srgb,var(--dsw-alias-label-tertiary) 80%,var(--dsw-alias-label-primary));--cfg-border:var(--dsw-alias-border-l2,color-mix(in srgb,currentColor 14%,transparent));--cfg-border-strong:var(--dsw-alias-border-l3,color-mix(in srgb,currentColor 22%,transparent));--cfg-line:var(--dsw-alias-border-l1,color-mix(in srgb,currentColor 8%,transparent));--cfg-hover:var(--dsw-alias-interactive-bg-hover,color-mix(in srgb,currentColor 6%,transparent));--cfg-danger:var(--dsw-alias-state-error-primary);--cfg-success:color-mix(in srgb,var(--dsw-alias-state-success-primary) 60%,var(--dsw-alias-label-primary));--cfg-warn:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 60%,var(--dsw-alias-label-primary));--cfg-mono:ui-monospace,SFMono-Regular,Menlo,monospace;--cfg-control:32px;--cfg-radius:8px;--cfg-dur:140ms;font-size:13px;line-height:20px;color:var(--cfg-ink);font-variant-numeric:tabular-nums}
@@ -766,7 +767,7 @@ window.__ModuleLoader__.load({
 		function HubEntry(props) {
 			const subject = props.subject;
 			const isApolloBundle = subject?.kind === 'bundle'
-				&& (subject.pkg?.name === PACKAGE_NAME || subject.pkg?.name === LEGACY_PACKAGE_NAME);
+				&& (subject.pkg?.name === PACKAGE_NAME || subject.pkg?.name === LEGACY_SCOPED_PACKAGE_NAME || subject.pkg?.name === LEGACY_PACKAGE_NAME);
 			const [open, setOpen] = useState(false);
 			const close = useCallback(() => setOpen(false), []);
 			if (!isApolloBundle) return null;
@@ -790,7 +791,7 @@ window.__ModuleLoader__.load({
 			try {
 				const dispose = ctx.locale.register(NS, { zh, en });
 				t = ctx.locale.bind(NS);
-				ctx.effect(() => dispose, '@menghuan1918/dsh-apollo: dictionaries');
+				ctx.effect(() => dispose, 'dsh-better-dsh: dictionaries');
 			} catch {
 				// locale 服务缺失时保持中文默认。
 			}
@@ -811,7 +812,7 @@ window.__ModuleLoader__.load({
 				return () => {
 					for (const dispose of disposers) dispose();
 				};
-			}), '@menghuan1918/dsh-apollo: row config page');
+			}), 'dsh-better-dsh: row config page');
 
 			// 集成设置弹窗依赖 configForms（读取各子插件命名空间的共享表单）；
 			// 服务缺失时仅弹窗缺席，行配置页照常工作。
@@ -825,7 +826,7 @@ window.__ModuleLoader__.load({
 							locale: NS,
 						}, (props) => h(HubEntry, { ctx: sctx, subject: props.subject, t: props.t ?? t })));
 					if (typeof sctx.effect === 'function') {
-						sctx.effect(register, '@menghuan1918/dsh-apollo: settings hub');
+						sctx.effect(register, 'dsh-better-dsh: settings hub');
 						return undefined;
 					}
 					return register();

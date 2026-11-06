@@ -1,8 +1,8 @@
-# dsh-apollo 开发与实现说明
+# dsh-better-dsh 开发与实现说明
 
 面向维护者、集成者和需要排查装配问题的用户。用户安装与配置请看 [README](../README.md)；本文保留 DSH 插件的实现细节、旧配置迁移、组合安装边界与验证方法。
 
-当前实现版本：`0.9.0`；npm 包名是 `@menghuan1918/dsh-apollo`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。
+当前实现版本：`0.10.0`；npm 包名是 `dsh-better-dsh`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。旧 `Apollo` 名称只保留在迁移、历史兼容和旧包 deprecate 说明里。
 
 ## 目录
 
@@ -33,12 +33,12 @@
 
 | 依赖 | 版本 | 所有权 |
 |---|---|---|
-| `dsh-better-goal` | `0.4.0` | 目标域（`questionTimeoutSeconds` 已弃用、仅保留读取） |
-| `@menghuan1918/dsh-better-subagent` | `0.4.0` | 子代理 CLI/等待/child guard/分档/设置页；注册 `wait_subagent` PTC 豁免 |
-| `dsh-better-compact` | `0.3.0` | 压缩 companion + engine + 设置页/诊断 |
-| `dsh-better-ask-user` | `0.3.0` | 官方 `ask_user_question` 入参/返回 + 插件超时等待 + 历史预览行；注册 PTC 豁免；旧 goal 等待迁移 |
+| `dsh-better-goal` | `0.4.1` | 目标域（`questionTimeoutSeconds` 已弃用、仅保留读取） |
+| `@oh-my-dsh/dsh-better-subagent` | `0.5.0` | 子代理 CLI/等待/child guard/分档/设置页；注册 `wait_subagent` PTC 豁免 |
+| `dsh-better-compact` | `0.3.1` | 压缩 companion + engine + 设置页/诊断 |
+| `dsh-better-ask-user` | `0.3.1` | 官方 `ask_user_question` 入参/返回 + 插件超时等待 + 历史预览行；注册 PTC 豁免；旧 goal 等待迁移 |
 | `dsh-better-ptc` | `0.2.0` | 单例 PTC deadline 豁免服务 |
-| `@deepseek-ai/schemastery` | `~3.19.0` | Apollo 行 Config |
+| `@deepseek-ai/schemastery` | `~3.19.0` | Better DSH 行 Config |
 | `react` | peer | 宿主提供 |
 
 发布前隔离验证使用本地 tarball；发布顺序中每个依赖在官方 registry 可取得后，再用 npm 重新生成真实 registry lock，并干净安装验证。manifest 始终保留精确 npm 版本，不伪造 registry URL。正式发布提交可直接运行：
@@ -47,7 +47,7 @@
 npm install
 ```
 
-发布顺序必须是先 PTC、再依赖它的子包及其余子包、最后 Apollo（见[发布](#实现入口打包与发布)）。
+发布顺序必须是先 PTC、再依赖它的子包及其余子包、最后 Better DSH（见[发布](#实现入口打包与发布)）。
 
 ### 顶层 patch 与稳定行
 
@@ -63,10 +63,10 @@ npm install
 - `dsh-better-goal` / `dsh-better-goal`；
 - `dsh-better-compact` / `dsh-better-compact`；
 - `dsh-better-compact-engine` / `dsh-better-compact/engine`；
-- `dsh-better-subagent` / `@menghuan1918/dsh-better-subagent`；
-- `apollo-skills` / `@menghuan1918/dsh-apollo`。
+- `dsh-better-subagent` / `@oh-my-dsh/dsh-better-subagent`；
+- `apollo-skills` / `dsh-better-dsh`。
 
-为什么 Apollo 要自己携带独立插件的行：DSH 只把**直接安装**的 bundle 加入 `dsh.profile.bundles`，不会自动应用传递依赖的 bundle patch。行 id 是 Loader 的去重键：两个 bundle 同时插入同名行时仍只激活一个实例；浏览器模块按包 manifest 的 name 解析，不能把 node/client 半边拆成两行。预设行不经过 node 插件加载，所以可以各自作为独立的 bundle patch。
+为什么 Better DSH 要自己携带独立插件的行：DSH 只把**直接安装**的 bundle 加入 `dsh.profile.bundles`，不会自动应用传递依赖的 bundle patch。行 id 是 Loader 的去重键：两个 bundle 同时插入同名行时仍只激活一个实例；浏览器模块按包 manifest 的 name 解析，不能把 node/client 半边拆成两行。预设行不经过 node 插件加载，所以可以各自作为独立的 bundle patch。
 
 [tests/assembly.test.mjs](../tests/assembly.test.mjs) 解析三份 patch 与已安装独立包的 patch，断言：
 
@@ -289,7 +289,7 @@ DSH_PACKAGE_ROOT="/…/node_modules/@deepseek-ai/dsh" npm run prompts
 ### 独立 bundle 与 Apollo 的关系
 
 - 行 id/name、浏览器页面键、CLI 身份路由都不因独立/集成而改变；
-- Apollo 集成槽别名由独立包注册（`@menghuan1918/dsh-apollo#<row>`、`dsh-apollo#<row>`），全部指向同一行同一份配置；
+- Better DSH 集成槽别名由独立包注册（`dsh-better-dsh#<row>`、旧 `@menghuan1918/dsh-apollo#<row>`、`dsh-apollo#<row>`），全部指向同一行同一份配置；
 - 独立安装不需要 Apollo 的 `eng` / `eng-ptc` 预设；better-subagent 在无这些预设时用 `subagents.global` 决定是否渲染/路由；
 - 不复制 CLI 身份 KV：命名空间仍是 `apollo_cli_<sha256(profile.dir)[:16]>`，包名变化不重命名、不复制、不清空。
 
@@ -319,7 +319,7 @@ DSH_PACKAGE_ROOT="/…/node_modules/@deepseek-ai/dsh" npm run prompts
 ### npm 安装
 
 ```sh
-dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.9.0
+dsh plugin --profile <profile> add dsh-better-dsh@0.10.0
 ```
 
 包发布后即可用此命令安装，并带入五个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。本轮版本与精确依赖见上述包清单；发布后需重新验证 registry 干净安装。
@@ -327,7 +327,7 @@ dsh plugin --profile <profile> add @menghuan1918/dsh-apollo@0.9.0
 ### GitHub 源码安装
 
 ```sh
-dsh plugin --profile <profile> add github:Menghuan1918/dsh-apollo
+dsh plugin --profile <profile> add github:omdsh-dev/dsh-better-dsh
 ```
 
 GitHub main 仍是源码安装选项。它同样按 `package.json` 解析精确依赖；五个子包在 registry 可取得前，源码安装会因依赖 404 失败。
@@ -368,7 +368,7 @@ dsh --profile <profile> --dump-config
 ### 卸载
 
 ```sh
-dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
+dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo   # 旧包；新包用 remove dsh-better-dsh
 ```
 
 旧 unscoped 安装使用 `remove dsh-apollo`。卸载 Apollo 后，Apollo 插入的 goal / subagent / compact 行也会消失；如果之前单独安装过独立 bundle，需要按各自说明处理。卸载不删除 CLI KV、goal 日志或原生压缩历史。
@@ -379,9 +379,9 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 
 五个子仓和 Apollo 都用 GitHub Release 触发 `.github/workflows/release.yml`，通过 npm trusted publishing（OIDC）发布，仓库里不存 npm token。tag 必须是 `v<package.json 的 version>`，CI 会先校验再跑测试和 `npm publish --provenance`。
 
-1. 先发布 `dsh-better-ptc@0.2.0`、`dsh-better-ask-user@0.3.0`、`@menghuan1918/dsh-better-subagent@0.4.0`、`dsh-better-goal@0.4.0`、`dsh-better-compact@0.3.0`（各自仓库的 Release）；
+1. 先发布 `dsh-better-ptc@0.2.0`、`dsh-better-ask-user@0.3.1`、`@oh-my-dsh/dsh-better-subagent@0.5.0`、`dsh-better-goal@0.4.1`、`dsh-better-compact@0.3.1`（各自仓库的 Release）；
 2. 在官方 registry（`https://registry.npmjs.org/`）确认五个版本可取得、可安装；
-3. 再把 Apollo 的精确依赖指向已发布版本，推已验证的发布提交及 tag 并发布 Apollo Release（本轮为 `v0.9.0`；`v0.8.0` 已被旧宿主版本占用，不移动该 tag）；
+3. 再把 Better DSH 的精确依赖指向已发布版本，推已验证的发布提交及 tag 并发布 Better DSH Release（本轮为 `v0.10.0`）；
 4. 子包版本可取得前，不要把指向它们的精确依赖推到 Apollo main，否则 `npm install` / GitHub 源码安装会 404。
 
 ## 测试与冒烟

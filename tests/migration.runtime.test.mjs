@@ -96,7 +96,7 @@ const PATCH = [
 ]
 
 test('真实 temp profile：旧 Apollo 子代理/压缩配置迁移到独立行', { skip: enabled ? false : 'DSH_PACKAGE_ROOT is not set' }, async () => {
-  const info = await prepareProfile({ bundles: ['@menghuan1918/dsh-apollo'], patch: PATCH, prefix: 'apollo-migration-' })
+  const info = await prepareProfile({ bundles: ['dsh-better-dsh'], patch: PATCH, prefix: 'apollo-migration-' })
   let ctx
   try {
     ctx = await bootProfile(info)
@@ -190,7 +190,7 @@ const SKIPPED_GUARD_PATCH = [
 ]
 
 test('真实 temp profile：旧 name: dsh-apollo 行被 Loader 跳过时仍迁移显式值', { skip: enabled ? false : 'DSH_PACKAGE_ROOT is not set' }, async () => {
-  const info = await prepareProfile({ bundles: ['@menghuan1918/dsh-apollo'], patch: SKIPPED_GUARD_PATCH, prefix: 'apollo-skipped-guard-' })
+  const info = await prepareProfile({ bundles: ['dsh-better-dsh'], patch: SKIPPED_GUARD_PATCH, prefix: 'apollo-skipped-guard-' })
   let ctx
   try {
     ctx = await bootProfile(info)
@@ -228,10 +228,10 @@ test('真实 temp profile：旧 name: dsh-apollo 行被 Loader 跳过时仍迁�
 
 test('真实 temp profile：job/child 目标显式 false 优先于被跳过的旧 true', { skip: enabled ? false : 'DSH_PACKAGE_ROOT is not set' }, async () => {
   const patch = SKIPPED_GUARD_PATCH.flatMap((row) => row.id === 'apollo-skills'
-    ? [{ id: 'apollo-skills', name: '@menghuan1918/dsh-apollo', config: { exitGuard: false } }, row]
+    ? [{ id: 'apollo-skills', name: 'dsh-better-dsh', config: { exitGuard: false } }, row]
     : [row])
   patch.push({ id: SUBAGENT_NS, config: { childExitGuard: false } })
-  const info = await prepareProfile({ bundles: ['@menghuan1918/dsh-apollo'], patch, prefix: 'apollo-explicit-guard-' })
+  const info = await prepareProfile({ bundles: ['dsh-better-dsh'], patch, prefix: 'apollo-explicit-guard-' })
   let ctx
   try {
     ctx = await bootProfile(info)
@@ -241,7 +241,7 @@ test('真实 temp profile：job/child 目标显式 false 优先于被跳过的�
     const result = await runMigration(ctx, { timeoutMs: 200, intervalMs: 10 })
     assert.equal(result.status, 'complete', JSON.stringify(result))
     const rows = await ctx.settings.describe()
-    assert.equal(rows.find((row) => row.ns === 'apollo-skills').value.exitGuard, false, 'current scoped job false wins')
+    assert.equal(rows.find((row) => row.ns === 'apollo-skills').value.exitGuard, false, 'current bundle job false wins')
     assert.equal(rows.find((row) => row.ns === SUBAGENT_NS).value.childExitGuard, false, 'explicit child false wins')
     const persisted = yaml.load(await readFile(info.patchPath, 'utf8'))
     assert.deepEqual(persisted.find((row) => row.id === 'apollo-skills' && row.name === 'dsh-apollo').config,

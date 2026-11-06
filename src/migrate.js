@@ -526,7 +526,7 @@ export async function migrateSubagent({ settings, configEditor, descriptors, sou
 
 /** Restore only the job switch lost to a historical Apollo name guard. */
 async function migrateJobExitGuard({ settings, descriptors, source, rawSource }) {
-  const target = descriptors.find((row) => row?.ns === APOLLO_NS)
+  let target = descriptors.find((row) => row?.ns === APOLLO_NS)
   // user also projects skipped overrides, so the active raw config is the
   // authority for an already configured job switch (including explicit false).
   if (hasOwn(rawSource, 'exitGuard')
@@ -535,11 +535,23 @@ async function migrateJobExitGuard({ settings, descriptors, source, rawSource })
     return { status: 'no-change' }
   }
   if (target === undefined) return { status: 'pending', error: 'Apollo namespace is not readable' }
-  try {
-    await settings.update(APOLLO_NS, { exitGuard: source.exitGuard }, target.revision)
-  } catch (error) {
-    return { status: 'pending', error: errorMessage(error) }
+  let lastError
+  // Registering the row-config aliases can bump the settings revision after the
+  // descriptors were captured. Re-read and retry a bounded number of times so a
+  // harmless revision race does not leave the one-time migration pending.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await settings.update(APOLLO_NS, { exitGuard: source.exitGuard }, target.revision)
+      lastError = undefined
+      break
+    } catch (error) {
+      lastError = error
+      const fresh = (await settings.describe()).find((row) => row?.ns === APOLLO_NS)
+      if (fresh === undefined) return { status: 'pending', error: errorMessage(error) }
+      target = fresh
+    }
   }
+  if (lastError !== undefined) return { status: 'pending', error: errorMessage(lastError) }
   const after = (await settings.describe()).find((row) => row?.ns === APOLLO_NS)
   return after?.value?.exitGuard === source.exitGuard
     ? { status: 'complete' }

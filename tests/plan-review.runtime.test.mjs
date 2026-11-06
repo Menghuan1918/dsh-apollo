@@ -27,7 +27,7 @@ for (const assembly of ['standalone', 'apollo']) {
     timeout: 60000,
   }, async (t) => {
     const info = await prepareProfile({
-      bundles: [assembly === 'apollo' ? '@menghuan1918/dsh-apollo' : 'dsh-better-ptc'],
+      bundles: [assembly === 'apollo' ? 'dsh-better-dsh' : 'dsh-better-ptc'],
       prefix: 'apollo-plan-review-',
       patch: [
         { id: 'headless-startup', disabled: true },

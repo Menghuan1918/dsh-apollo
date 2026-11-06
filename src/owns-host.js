@@ -1,17 +1,17 @@
 /**
- * Apollo's only remaining host-web helper: the `declareOwnsHost` index tap.
+ * Better DSH's only remaining host-web helper: the `declareOwnsHost` index tap.
  *
- * Why it still lives in Apollo: the flag lets the official client treat a
+ * Why it still lives in Better DSH: the flag lets the official client treat a
  * reverse-proxied page as loopback, which is what makes the *host* settings
- * mirror writable. It is a deployment flag of Apollo's own row
+ * mirror writable. It is a deployment flag of Better DSH's own row
  * (`declareOwnsHost`, off by default), not a subagent or compaction concern —
  * dsh-better-subagent and dsh-better-compact intentionally removed their own
- * trust switches, and Apollo must not turn its flag into a trust bypass for
+ * trust switches, and Better DSH must not turn its flag into a trust bypass for
  * them.
  *
  * The old capability/model/route probes and the `/apollo/api/*` handlers were
  * deleted in 0.5.0. dsh-better-subagent owns those routes (canonical
- * `/better-subagent/api/*` plus the `/apollo/api/*` read aliases), and Apollo
+ * `/better-subagent/api/*` plus the `/apollo/api/*` read aliases), and Better DSH
  * must not register the same prefix again: webServer throws on a duplicate
  * `(kind, path)` route.
  *
