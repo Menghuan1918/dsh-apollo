@@ -1,6 +1,6 @@
 # Spec Document Reviewer Prompt Template
 
-Use this template when dispatching a spec document reviewer via the `subagent` tool (fresh read-only child, quality tier).
+Only the top-level main agent serving the user uses this template to dispatch a spec document reviewer via the `subagent` tool (fresh read-only child, quality tier). Subagents return review requests to the main agent instead of dispatching reviewers.
 
 **Purpose:** Verify a master Spec or sub-Spec is complete, consistent, and ready for implementation.
 
@@ -8,7 +8,7 @@ Use this template when dispatching a spec document reviewer via the `subagent` t
 
 ```
 subagent(
-  prompt="You are a spec document reviewer. Verify this spec is complete and ready for implementation.
+  prompt="You are a spec document reviewer. Verify this spec is complete and ready for implementation. Perform the review directly; do not dispatch review nodes, even if another skill calls for it. Return findings and any further review needs to the main agent.
 
     **Spec to review:** [SPEC_FILE_PATH]
     **Spec type:** [master | sub]

@@ -26,14 +26,16 @@ All operations must happen inside the chosen worktree. After isolation, do not e
 6. After each logical step, run focused verification, self-review the diff, and commit when it is complete. Verification standard: run the command this round and confirm the output; never replace it with "it should pass".
 7. After implementation, run all required verification.
 8. When verification fails or review finds a bug, follow the `diagnosing-bugs` skill (bundled in this package): build a feedback loop to find the root cause first, then fix.
-9. Run the internal review loop (see below). Exception: when acting as an implementation/fix node for `/exec`, **skip this step** — `/exec` decides whether and when to request a sub-Spec review, and the node only implements, verifies, commits, and reports.
+9. Only the top-level main agent serving the user runs the internal review loop (see below). When acting as any implementation/fix subagent, **skip this step** — return the implementation and any review needs to the main agent, which owns all review dispatch.
 10. Commit all approved fixes and report to the caller.
 
 Keep it KISS. Prefer reusing existing patterns, small and complete changes, and only the targeted refactoring the Spec requires.
 
 ## Internal review loop
 
-After full verification, dispatch exactly one brand-new read-only reviewer subagent (quality tier):
+Only the top-level main agent may dispatch review or re-review nodes. Subagents never dispatch reviewers, even if invoked outside `/exec` or another skill calls for review.
+
+After full verification, the main agent dispatches exactly one brand-new read-only reviewer subagent (quality tier):
 
 ```
 subagent(
@@ -41,7 +43,8 @@ subagent(
          Spec: <path>
          Implementation summary: <brief>
          Changed files: <list>
-         Verification already run: <commands and results>"
+         Verification already run: <commands and results>
+         Perform the review directly; do not dispatch review nodes. Return any further review needs to the main agent."
 )
 ```
 
@@ -58,7 +61,7 @@ Before reporting completion, all of the following must hold:
 - All assigned acceptance criteria are implemented
 - Required verification ran and passed this round (backed by command output)
 - No uncommitted implementation changes
-- Internal review passed with no required fixes, except for `/exec` implementation/fix nodes whose review scheduling belongs to the orchestrator
+- Internal review passed with no required fixes, except for implementation/fix subagents whose review scheduling belongs to the top-level main agent
 - The final commit SHA is available
 
 Report blockers truthfully. Do not merge on your own; the caller owns integration and cleanup.

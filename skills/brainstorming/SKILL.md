@@ -9,6 +9,8 @@ Turn a large requirement into one approved master Spec and at least two executab
 
 **The end state is a handoff to `/exec`.** Do not implement features, create worktrees, or invoke development skills. Stop once the user approves the written Specs.
 
+Only the top-level main agent serving the user may dispatch review or re-review nodes. Subagents do their assigned work directly and return drafts, findings, or review requests to the main agent; they never dispatch reviewers, even if another skill calls for it.
+
 ## Process
 
 1. **Explore project context** — inspect files, docs, and current project state. Look up facts yourself; do not ask the user.
@@ -16,7 +18,7 @@ Turn a large requirement into one approved master Spec and at least two executab
 3. **Offer 2-3 options** — with tradeoffs and a recommendation, leading with the recommended option.
 4. **Present the design in sections** — scale each section's length to its complexity, and get the user's confirmation on each. When a split is needed, present it (master Spec + sub-Specs, dependency order, shared contracts, integration acceptance).
 5. **Write all Specs** — self-review after writing (placeholders, contradictions, ambiguity, over-detail) and fix inline. See self-review below.
-6. **Dispatch a spec-reviewer** — per [`spec-document-reviewer-prompt.md`](spec-document-reviewer-prompt.md), dispatch a fresh read-only `subagent` (quality tier) to review the master Spec and all sub-Specs; fix blockers and re-dispatch if needed.
+6. **Main agent dispatches a spec-reviewer** — per [`spec-document-reviewer-prompt.md`](spec-document-reviewer-prompt.md), dispatch a fresh read-only `subagent` (quality tier) to review the master Spec and all sub-Specs; fix blockers and re-dispatch if needed.
 7. **Ask the user to review** — revise per feedback until approved.
 8. **Hand off to `/exec`** — tell the user to invoke `/exec` with the master Spec path.
 

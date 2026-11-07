@@ -7,9 +7,11 @@ description: "Node contract for the DSH execution backend: prompt requirements, 
 
 This skill defines the execution backend's two node types. Wave orchestration (worktrees, merging, cleanup, review-loop scheduling) belongs to `/exec`; this skill must not create, merge, or delete worktrees. Subagents have no independent working directory and cannot see the orchestration session: every node input must come with the prompt (absolute worktree path, Spec path, shared contracts, verification commands; implementation/fix nodes also need the execution mode and assigned tier), with bash always using `workdir` and file tools always using absolute paths.
 
+Only the top-level main agent serving the user may dispatch review or re-review nodes. All subagents, including implementation/fix nodes and reviewers, perform their assigned work directly and return findings or review requests to the main agent. Never dispatch reviewers from a subagent, even when another skill calls for it.
+
 ## Implementation node (develop)
 
-An implementation subagent handles exactly one sub-Spec at the caller-selected tier, following `main-agent-driven-development` in prebuilt-worktree mode. In `/exec`, skip its internal review step: the orchestrator decides whether and when to request a sub-Spec review; implementation/fix nodes do not dispatch reviewers themselves. Carry the execution mode into any further implementation/fix delegations. Fixes normally reuse the active node; `/exec` may hand off a node after it has stopped writing, either to escalate fast to quality in Automatic mode or to honor a later explicit mode change. Never run two implementation nodes writing to the same Spec at once.
+An implementation subagent handles exactly one sub-Spec at the caller-selected tier, following `main-agent-driven-development` in prebuilt-worktree mode. In `/exec`, skip its internal review step: the top-level main agent decides whether and when to request a sub-Spec review. Carry the execution mode into any further implementation/fix delegations. Fixes normally reuse the active node; `/exec` may hand off a node after it has stopped writing, either to escalate fast to quality in Automatic mode or to honor a later explicit mode change. Never run two implementation nodes writing to the same Spec at once.
 
 Report format (JSON code block at the end of the closing message):
 
@@ -25,7 +27,7 @@ Report format (JSON code block at the end of the closing message):
 
 ## Review node (review-only)
 
-A brand-new read-only subagent (quality tier). The prompt supplies: absolute worktree path, diff range, Spec path, implementation summary, and verification already run. Four-state verdict format (JSON code block at the end of the closing message):
+A brand-new read-only subagent (quality tier), dispatched only by the top-level main agent. The reviewer performs the review directly and never delegates another review. The prompt supplies: absolute worktree path, diff range, Spec path, implementation summary, and verification already run. Four-state verdict format (JSON code block at the end of the closing message):
 
 ```js
 {

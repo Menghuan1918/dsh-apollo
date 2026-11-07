@@ -11,17 +11,17 @@ Run approved sub-Specs in isolated worktrees under `.worktrees/` in the target r
 
 - The master Spec indexes at least two sub-Specs.
 - Confirm a single target repo; the main workspace is on a named branch and its working tree is clean.
-- `.worktrees/` is covered by the target repo's `.gitignore`; if not, ask the user to add it first.
+- Ensure `.worktrees/` is covered by the target repo's `.gitignore`; if missing, add the rule yourself and commit the setup change before creating wave worktrees.
 
 ## Execution mode
 
-Before dispatching the first node, ask once with `ask_user_question` (single-select), unless the user already specified the mode for this run. Explain that the choice applies to implementation and fixes; **all code reviews use the quality tier**. Offer these options in order:
+Before dispatching the first node, use `ask_user_question` to ask for the execution mode, unless the user already specified it for this run. The choice applies to implementation and fixes; **all code reviews use the quality tier**. Offer:
 
 1. **Automatic (Recommended)** — use the fast tier by default; reserve the quality tier for particularly difficult tasks.
 2. **Quality only** — use the quality tier for every implementation and fix.
 3. **Fast only** — use the fast tier for every implementation and fix, without automatic escalation.
 
-Put Automatic first so the host's default answer selects it. State in the question that a timeout or skipped choice defaults to Automatic. If the host returns `autoSelected` or a timeout `pending`, continue in Automatic under this declared preference default; do not treat it as new task authorization. Use the host-configured wait duration (including unlimited waiting); omit the tool's `timeout` argument and do not change global settings. A later explicit answer applies to future implementation/fix turns; let running turns finish. If the next fix requires a different tier, use the stopped-node handoff below instead of resuming the old route.
+Default to Automatic if the question times out or the user skips the choice; use the host's normal question waiting behavior. A later explicit answer applies to future implementation/fix turns; let running turns finish. If the next fix requires a different tier, use the stopped-node handoff below instead of resuming the old route.
 
 Keep the mode in session context and pass it to implementation/fix nodes and any further implementation delegations. In Automatic, ordinary implementation and routine fixes use fast; use quality only when the task demands unusually difficult reasoning or evidence shows the fast node cannot converge. Implementation work alone is not a reason to choose quality.
 
@@ -35,21 +35,21 @@ Resolve fast/quality from the current system prompt's configured routes and pass
 
 ## Wave execution: subagent + wait_subagent
 
-The main agent orchestrates each wave; node contracts (prompt elements, report format, failure semantics) are in the `dev` skill.
+The main agent orchestrates each wave; node contracts (prompt elements, report format, failure semantics) are in the `dev` skill. Only the top-level main agent serving the user may dispatch any review or re-review node. All subagents, including reviewers, must do their assigned work directly and return findings or review requests to the main agent; they never dispatch reviewers, even if another skill instructs them to.
 
 1. **Dispatch**: in a single message, call `subagent` once per sub-Spec in this wave using the execution mode, and record "Spec → active subagent id and tier". Implementation-node prompt template:
 
    ```
    You work in the isolated worktree <worktree absolute path>: always run bash with workdir=<worktree>, and use absolute paths for file tools.
    Execution mode: <Automatic / Quality only / Fast only>; assigned tier: <fast / quality>. Carry the mode into any implementation/fix delegations.
-   Follow the main-agent-driven-development skill in prebuilt-worktree mode (skip its internal review step; /exec decides whether and when to request a sub-Spec review).
+   Follow the main-agent-driven-development skill in prebuilt-worktree mode (skip its internal review step; the top-level main agent decides whether and when to request a sub-Spec review). Do not dispatch review nodes; report any review needs to the main agent.
    Implement only <sub-Spec path> and obey the shared contracts: <contracts>. Run verification: <verification command>.
    After committing, report in the dev skill's implementation-node format. Do not merge or delete the worktree; if blocked, set status=blocked and fill in blocker.
    ```
 
 2. **Collect**: pass every id in this wave to `wait_subagent` in one call; reports arrive with the settlement notice. A Spec with a missing report, `blocked`, or no commit is recorded as `node-failed` and does not affect the other Specs in the wave.
 3. **Choose sub-Spec reviews**: the orchestrator decides whether and when each completed Spec needs an independent code review, based on complexity, shared-contract impact, risk, and verification evidence. Ordinary low-risk changes can rely on the mandatory final integrated review. Briefly record the decision and reason in session context. For a selected review:
-   - Dispatch a brand-new read-only reviewer (quality tier): `Read-only review of the full diff of worktree <worktree> against the baseline (always run bash with workdir=<worktree>). Spec: <path>. Implementation summary: <summary>. Verification already run: <verification>. List issues by severity, each with file and line number; judge with the dev skill's four-state format. Do not edit, commit, or merge.`
+   - Dispatch a brand-new read-only reviewer (quality tier): `Read-only review of the full diff of worktree <worktree> against the baseline (always run bash with workdir=<worktree>). Spec: <path>. Implementation summary: <summary>. Verification already run: <verification>. List issues by severity, each with file and line number; judge with the dev skill's four-state format. Perform the review directly; do not dispatch reviewers. Do not edit, commit, or merge.`
    - `CHANGES_REQUIRED` → send the findings to the active implementation subagent with `send_message` (preserving its context), and require it to fix each real issue, explain false positives, rerun verification, commit, and report again; then wait and dispatch a brand-new quality reviewer. Apply the execution mode and escalation rules to fixes.
    - At most 5 rounds; if still failing, record `review-exhausted`.
 4. **Merge eligibility**: committed, verified, in-scope Specs may proceed without a separate sub-Spec review when the orchestrator chose to omit it. A selected review must reach `APPROVED` / `APPROVED_WITH_NOTES`; never bypass required findings or a `BLOCKED` / exhausted review by changing the review decision.
@@ -81,7 +81,7 @@ subagent(
   prompt="Read-only review of the <base>..HEAD diff in <workspace> (always run bash with workdir=<workspace>).
          Master Spec: <path> | all sub-Specs | shared contracts | changed files | implementation summary | verification results.
          List issues by severity, each with file and line number.
-         Return APPROVED / APPROVED_WITH_NOTES / CHANGES_REQUIRED / BLOCKED. Do not edit, commit, or merge."
+         Return APPROVED / APPROVED_WITH_NOTES / CHANGES_REQUIRED / BLOCKED. Perform the review directly; do not dispatch reviewers. Do not edit, commit, or merge."
 )
 ```
 

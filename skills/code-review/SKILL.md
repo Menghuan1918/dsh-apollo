@@ -10,7 +10,7 @@ Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
 - **Standards** — does the code conform to this repo's documented coding standards?
 - **Spec** — does the code faithfully implement the originating issue / PRD / spec?
 
-Both axes run as parallel `subagent` delegations so they don't pollute each other's context, then this skill aggregates their findings.
+Only the top-level main agent serving the user may dispatch review or re-review nodes. It dispatches both axes as parallel `subagent` delegations and aggregates their findings. If you are a subagent, perform only your assigned review directly and return findings or further review needs to the main agent; never dispatch reviewers, even if another skill calls for it.
 
 ## Process
 
@@ -57,7 +57,7 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 
 ### 4. Spawn both sub-agents in parallel
 
-Send both `subagent` calls in a single message — each a fresh quality-tier child with a fully self-contained prompt; children see none of this conversation.
+The top-level main agent sends both `subagent` calls in a single message — each a fresh quality-tier child with a fully self-contained prompt; children see none of this conversation. Include in both prompts: "Perform this review directly. Do not dispatch review nodes; return findings and any further review needs to the main agent."
 
 **Standards sub-agent prompt** — include:
 
