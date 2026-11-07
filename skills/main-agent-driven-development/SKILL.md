@@ -14,7 +14,7 @@ Choose exactly one:
 - **Prebuilt mode** — when the caller already provided an isolated worktree and owns its lifecycle, use it directly; do not create, merge, or delete worktrees.
 - **Standalone mode** — otherwise, identify the target repo, require the baseline to be on a named branch, record the starting SHA, and create a worktree under the repo's `.worktrees/`.
 
-All operations must happen inside the chosen worktree. After isolation, do not edit the original checkout.
+All operations must happen inside the chosen worktree. After isolation, do not edit the original checkout. When called by `/exec`, follow the assigned execution mode and tier, including in any further implementation/fix delegations; report blockers to the orchestrator rather than changing your own tier.
 
 ## Flow
 
@@ -26,7 +26,7 @@ All operations must happen inside the chosen worktree. After isolation, do not e
 6. After each logical step, run focused verification, self-review the diff, and commit when it is complete. Verification standard: run the command this round and confirm the output; never replace it with "it should pass".
 7. After implementation, run all required verification.
 8. When verification fails or review finds a bug, follow the `diagnosing-bugs` skill (bundled in this package): build a feedback loop to find the root cause first, then fix.
-9. Run the internal review loop (see below). Exception: when acting as an implementation node in an `/exec` wave, **skip this step** — the review loop is run by `/exec`, and the node only implements, verifies, commits, and reports.
+9. Run the internal review loop (see below). Exception: when acting as an implementation/fix node for `/exec`, **skip this step** — `/exec` decides whether and when to request a sub-Spec review, and the node only implements, verifies, commits, and reports.
 10. Commit all approved fixes and report to the caller.
 
 Keep it KISS. Prefer reusing existing patterns, small and complete changes, and only the targeted refactoring the Spec requires.
@@ -47,7 +47,7 @@ subagent(
 
 Require file and line numbers, and one status: `APPROVED` / `APPROVED_WITH_NOTES` / `CHANGES_REQUIRED` / `BLOCKED`.
 
-Wait for the review with `wait_subagent`. Once results arrive, fix all necessary correctness errors, Spec gaps, security issues, integration risks, and verification gaps directly — no need to ask the user. After verifying and committing the fixes, dispatch a brand-new reviewer with `subagent` again. Repeat until `APPROVED` or only non-blocking suggestions remain.
+Wait for the review with `wait_subagent` and `timeout_ms: 1800000` (30 minutes) or longer; early completion returns immediately. If the reviewer is still running after a wait timeout, continue long waits without status nudges or replacing it merely because time elapsed. Once results arrive, fix all necessary correctness errors, Spec gaps, security issues, integration risks, and verification gaps directly — no need to ask the user. After verifying and committing the fixes, dispatch a brand-new reviewer with `subagent` again. Repeat until `APPROVED` or only non-blocking suggestions remain.
 
 Never self-approve, and never reuse an old reviewer.
 
@@ -58,7 +58,7 @@ Before reporting completion, all of the following must hold:
 - All assigned acceptance criteria are implemented
 - Required verification ran and passed this round (backed by command output)
 - No uncommitted implementation changes
-- Internal review passed with no required fixes
+- Internal review passed with no required fixes, except for `/exec` implementation/fix nodes whose review scheduling belongs to the orchestrator
 - The final commit SHA is available
 
 Report blockers truthfully. Do not merge on your own; the caller owns integration and cleanup.
