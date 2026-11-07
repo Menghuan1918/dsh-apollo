@@ -55,17 +55,17 @@
 
 ```sh
 # npm
-dsh plugin --profile <profile> add dsh-better-dsh@0.10.0
+dsh plugin --profile <profile> add dsh-better-dsh@0.10.1
 
 # 或从 GitHub tag 安装
-dsh plugin --profile <profile> add github:omdsh-dev/dsh-better-dsh#v0.10.0
+dsh plugin --profile <profile> add github:omdsh-dev/dsh-better-dsh#v0.10.1
 ```
 
 > 安装、升级或换包后必须**重启对应 profile**；只刷新网页不够。
 >
 > 不要同时显式添加 Better DSH 和独立插件 bundle：行实例仍只有一个，但 DSH 0.2.2-rc.1 会把同一 id 的配置写入拒绝为只读。只保留一个显式入口。
 
-本轮版本：**Better DSH `0.10.0`**，搭配 goal `0.4.1`、subagent `0.5.0`、compact `0.3.1`、ask-user `0.3.1`、ptc `0.2.0`。
+本轮版本：**Better DSH `0.10.1`**，搭配 goal `0.4.1`、subagent `0.5.0`、compact `0.3.1`、ask-user `0.3.1`、ptc `0.2.0`。
 
 ## 架构
 
@@ -183,7 +183,7 @@ Better DSH 包详情里的「集成设置」按 Core、Subagents、Compaction、
 # 旧入口
 dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo
 # 新入口
-dsh plugin --profile <profile> add dsh-better-dsh@0.10.0
+dsh plugin --profile <profile> add dsh-better-dsh@0.10.1
 # subagent 独立安装的用户
 dsh plugin --profile <profile> remove @menghuan1918/dsh-better-subagent
 dsh plugin --profile <profile> add @oh-my-dsh/dsh-better-subagent@0.5.0
@@ -249,7 +249,7 @@ dsh plugin --profile <profile> add dsh-better-ask-user@0.3.1 dsh-better-ptc@0.2.
 3. `dsh-better-compact@0.3.1`
 4. `dsh-better-goal@0.4.1`
 5. `@oh-my-dsh/dsh-better-subagent@0.5.0`
-6. `dsh-better-dsh@0.10.0`
+6. `dsh-better-dsh@0.10.1`
 
 各仓库使用 npm trusted publishing（OIDC）；创建对应 GitHub Release 会发布 tag 指向的版本。旧包 `@menghuan1918/dsh-apollo` 与 `@menghuan1918/dsh-better-subagent` 已标记 deprecate，仅作为历史入口保留。
 </details>

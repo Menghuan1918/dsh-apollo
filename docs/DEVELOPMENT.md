@@ -2,7 +2,7 @@
 
 面向维护者、集成者和需要排查装配问题的用户。用户安装与配置请看 [README](../README.md)；本文保留 DSH 插件的实现细节、旧配置迁移、组合安装边界与验证方法。
 
-当前实现版本：`0.10.0`；npm 包名是 `dsh-better-dsh`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。旧 `Apollo` 名称只保留在迁移、历史兼容和旧包 deprecate 说明里。
+当前实现版本：`0.10.1`；npm 包名是 `dsh-better-dsh`。纯 ESM，无构建步骤；宿主浏览器半边是直接加载的闭包工厂。旧 `Apollo` 名称只保留在迁移、历史兼容和旧包 deprecate 说明里。
 
 ## 目录
 
@@ -319,7 +319,7 @@ DSH_PACKAGE_ROOT="/…/node_modules/@deepseek-ai/dsh" npm run prompts
 ### npm 安装
 
 ```sh
-dsh plugin --profile <profile> add dsh-better-dsh@0.10.0
+dsh plugin --profile <profile> add dsh-better-dsh@0.10.1
 ```
 
 包发布后即可用此命令安装，并带入五个精确依赖、应用三份 bundle patch。安装后需要重启对应 profile 的 DSH 进程。本轮版本与精确依赖见上述包清单；发布后需重新验证 registry 干净安装。
@@ -381,7 +381,7 @@ dsh plugin --profile <profile> remove @menghuan1918/dsh-apollo   # 旧包；新�
 
 1. 先发布 `dsh-better-ptc@0.2.0`、`dsh-better-ask-user@0.3.1`、`@oh-my-dsh/dsh-better-subagent@0.5.0`、`dsh-better-goal@0.4.1`、`dsh-better-compact@0.3.1`（各自仓库的 Release）；
 2. 在官方 registry（`https://registry.npmjs.org/`）确认五个版本可取得、可安装；
-3. 再把 Better DSH 的精确依赖指向已发布版本，推已验证的发布提交及 tag 并发布 Better DSH Release（本轮为 `v0.10.0`）；
+3. 再把 Better DSH 的精确依赖指向已发布版本，推已验证的发布提交及 tag 并发布 Better DSH Release（本轮为 `v0.10.1`）；
 4. 子包版本可取得前，不要把指向它们的精确依赖推到 Apollo main，否则 `npm install` / GitHub 源码安装会 404。
 
 ## 测试与冒烟

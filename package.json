@@ -1,6 +1,6 @@
 {
   "name": "dsh-better-dsh",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Better DSH: a DSH plugin bundle that installs workflow skills, engineering presets, and five independent plugins (goal, subagent, compact, ask-user, ptc). Pure ESM, no build step.",
   "license": "Apache-2.0",
   "repository": {

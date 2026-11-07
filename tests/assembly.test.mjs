@@ -106,10 +106,10 @@ test('顶层 patch 禁用原生 goal 域与原生 compaction-basic，并插入�
   }
 })
 
-test('npm manifest：包名、0.10.0、repository、publishConfig 与 license', () => {
+test('npm manifest：包名、0.10.1、repository、publishConfig 与 license', () => {
   const m = manifest()
   assert.equal(m.name, PACKAGE_NAME)
-  assert.equal(m.version, '0.10.0')
+  assert.equal(m.version, '0.10.1')
   assert.equal(m.license, 'Apache-2.0')
   const license = readFileSync(join(ROOT, 'LICENSE'), 'utf8')
   assert.equal(createHash('sha256').update(license).digest('hex'), 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30')
